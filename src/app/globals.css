@@ -1,0 +1,351 @@
+/* Values copied from design/Main.dc.html and design/Phone.dc.html. */
+:root {
+  --ground: #F4F1EA;
+  --surface: #FFFDF8;
+  --ink: #1B2230;
+  --muted: #4A5261;
+  --muted-2: #5A6170;
+  --muted-3: #6B6457;
+  --line: #DDD6C8;
+  --line-2: #ECE6DA;
+  --field-line: #CFC7B7;
+  --accent: #C2410C;
+  --accent-ink: #9A330A;
+  --accent-deep: #7A2808;
+  --accent-wash: #FBEDE5;
+  --positive: #1F6F4A;
+  --positive-wash: #EEF6F1;
+  --positive-line: #BFD8CB;
+  --link: #1E3A8A;
+  --chip: #E9E3D6;
+  --quote: #EFEAE0;
+  --warn-wash: #F4EEE3;
+  --warn-ink: #8A4B12;
+  --danger: #B42318;
+}
+
+* { -webkit-tap-highlight-color: transparent; }
+
+/* Waypoint is a single warm-paper palette by design, with no dark variant. Say
+   so, or the browser dark-ifies inputs, textareas and the page background under
+   prefers-color-scheme: dark and the whole thing turns unreadable. */
+html { color-scheme: light; }
+
+html, body { height: 100%; background: #F4F1EA; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: 'IBM Plex Sans', 'Helvetica Neue', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent-ink); }
+a:hover { color: var(--accent-deep); }
+button, input, textarea, select { font-family: inherit; color: inherit; font-size: inherit; }
+button { cursor: pointer; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+
+@keyframes wpflash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(194, 65, 12, 0.55); }
+  60% { box-shadow: 0 0 0 10px rgba(194, 65, 12, 0); }
+}
+.flash { animation: wpflash 1.6s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; border-color: var(--accent); } }
+
+.mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.display { font-family: 'Bricolage Grotesque', Georgia, serif; }
+
+.label {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-3);
+  margin: 0;
+}
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- shell ---------- */
+
+.shell { display: flex; min-height: 100dvh; }
+
+.sidebar {
+  width: 264px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  padding: 28px 18px;
+  gap: 28px;
+  box-sizing: border-box;
+  height: 100dvh;
+  position: sticky;
+  top: 0;
+  overflow-y: auto;
+}
+
+.wordmark { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; padding: 0 10px; }
+
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  height: 44px; padding: 0 12px;
+  border: 0; border-radius: 8px;
+  text-align: left; font-size: 16px;
+  background: transparent; width: 100%;
+}
+.nav-item[data-on='true'] { background: var(--chip); font-weight: 600; }
+
+.badge {
+  min-width: 24px; height: 24px; border-radius: 12px;
+  background: var(--accent); color: #FFFFFF; font-size: 13px;
+  display: flex; align-items: center; justify-content: center; padding: 0 6px;
+}
+
+.country-row {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 44px; padding: 0 12px;
+  border: 0; border-radius: 8px; background: transparent;
+  text-align: left; width: 100%;
+}
+.country-box { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--ink); flex-shrink: 0; }
+
+.avatar {
+  width: 40px; height: 40px; border-radius: 20px;
+  background: var(--ink); color: var(--ground);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600; flex-shrink: 0;
+}
+.avatar-light { background: var(--chip); color: var(--ink); }
+.avatar-sm { width: 36px; height: 36px; border-radius: 18px; font-size: 13px; }
+
+.main { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* Desktop matches the design's fixed-height frame: the page itself never
+   scrolls, the job list and the detail pane each scroll on their own. On phone
+   the frame is dropped so the document scrolls normally under the tab bar. */
+@media (min-width: 1024px) {
+  body { overflow: hidden; }
+  .main { height: 100dvh; overflow: hidden; }
+  .screen-head, .filters { flex-shrink: 0; }
+}
+
+.screen-head { padding: 24px 36px 20px; border-bottom: 1px solid var(--line); }
+.screen-head h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
+.screen-head .sub { font-size: 14px; color: var(--muted-2); }
+
+/* ---------- controls ---------- */
+
+.field {
+  height: 44px; border-radius: 8px;
+  border: 1px solid var(--field-line); background: var(--surface);
+  padding: 0 14px; font-size: 15px; box-sizing: border-box;
+}
+
+.btn {
+  height: 44px; padding: 0 16px; border-radius: 8px;
+  border: 1px solid var(--ink); background: transparent;
+  font-size: 15px; font-weight: 500;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  text-decoration: none; color: var(--ink);
+}
+.btn:disabled, .btn-accent:disabled, .chip:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-dark { border: 0; background: var(--ink); color: var(--ground); }
+.btn-accent { border: 0; background: var(--accent); color: #FFFFFF; height: 48px; font-size: 16px; font-weight: 600; width: 100%; }
+
+.chip {
+  height: 34px; padding: 0 12px; border-radius: 17px; font-size: 14px;
+  border: 1px solid var(--field-line); background: var(--surface); color: var(--ink);
+}
+.chip[data-on='true'] { border-color: var(--ink); background: var(--ink); color: var(--ground); }
+
+.tag { font-size: 13px; padding: 3px 8px; border-radius: 4px; background: var(--chip); }
+.tag-dark { background: var(--ink); color: var(--ground); }
+.tag-green { background: var(--positive); color: #FFFFFF; }
+.tag-outline { background: transparent; border: 1px solid var(--line); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 32px; }
+
+.stack { display: flex; flex-direction: column; }
+.row { display: flex; align-items: center; }
+.grow { flex-grow: 1; }
+
+/* ---------- jobs ---------- */
+
+.filters {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px;
+  padding: 0 36px 16px; border-bottom: 1px solid var(--line);
+}
+.filter-group { display: flex; align-items: center; gap: 6px; }
+.filter-group > .label { margin-right: 4px; letter-spacing: 0.08em; }
+
+.jobs-split { flex-grow: 1; min-height: 0; display: flex; }
+.jobs-list {
+  width: 452px; flex-shrink: 0; overflow-y: auto;
+  padding: 20px 20px 40px 36px; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.jobs-detail { flex-grow: 1; min-width: 0; overflow-y: auto; padding: 24px 36px 48px 16px; box-sizing: border-box; }
+
+.job-card {
+  display: flex; flex-direction: column; gap: 8px;
+  width: 100%; text-align: left; padding: 16px 18px;
+  border-radius: 10px; border: 1px solid var(--line); background: transparent;
+}
+.job-card[data-on='true'] { border-color: var(--ink); background: var(--surface); }
+.job-card .role { font-size: 17px; font-weight: 600; line-height: 1.3; }
+
+.empty { padding: 28px; border: 1px dashed var(--field-line); border-radius: 10px; font-size: 15px; color: var(--muted); line-height: 1.5; }
+
+.req { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; font-size: 15px; }
+.req[data-ok='true'] { background: var(--positive-wash); }
+.req[data-ok='false'] { background: var(--warn-wash); }
+.req .mark { font-size: 12px; }
+.req[data-ok='true'] .mark { color: var(--positive); }
+.req[data-ok='false'] .mark { color: var(--warn-ink); }
+
+.contact { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+.contact[data-best='true'] { border-color: var(--ink); }
+
+.note-area {
+  min-height: 132px; resize: vertical; border-radius: 8px;
+  border: 1px solid var(--field-line); background: #FFFFFF;
+  padding: 12px; font-size: 15px; line-height: 1.5; box-sizing: border-box; width: 100%;
+}
+
+.must { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 10px; background: var(--accent-wash); }
+.must .dash { color: var(--accent-ink); }
+
+.two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+.two-col-tight { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.three-col { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+
+/* ---------- pending ---------- */
+
+.board {
+  flex-grow: 1; min-height: 0;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px; padding: 20px 36px 36px; overflow-y: auto; align-items: start;
+}
+.column { display: flex; flex-direction: column; gap: 10px; }
+.column-head { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
+
+.pend-card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.pend-card[data-needs='true'] { border: 1.5px solid var(--accent); }
+.quote { margin: 0; font-size: 14px; line-height: 1.5; padding: 10px; border-radius: 8px; background: var(--quote); }
+.sent-body { margin: 0; font-size: 14px; line-height: 1.5; padding: 10px; border-radius: 8px; border: 1px solid var(--positive-line); background: var(--positive-wash); }
+
+/* ---------- phone ---------- */
+
+.tabbar { display: none; }
+.sheet { display: none; }
+/* Each utility only ever *hides*, scoped to its own breakpoint. Nothing forces a
+   display value back on, so an element keeps whatever layout its own class or
+   inline style gives it. */
+@media (min-width: 1024px) { .mobile-only { display: none !important; } }
+
+@media (max-width: 1023px) {
+  .shell { flex-direction: column; }
+  .sidebar { display: none; }
+  .desktop-only { display: none !important; }
+
+  .main { padding-bottom: 72px; }
+
+  .screen-head { padding: 20px 16px 12px; border-bottom: 0; }
+  .screen-head h1 { font-size: 28px; }
+
+  .filters { display: none; }
+
+  .jobs-split { flex-direction: column; }
+  .jobs-list { width: 100%; padding: 4px 16px 24px; gap: 10px; overflow: visible; }
+  .jobs-detail { padding: 0 16px 28px; overflow: visible; }
+  .job-card { background: var(--surface); padding: 14px; }
+  .job-card .role { font-size: 16px; }
+
+  .panel { padding: 0; border: 0; background: transparent; border-radius: 0; }
+  .two-col, .two-col-tight, .three-col { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+
+  .board { display: flex; flex-direction: column; gap: 14px; padding: 4px 16px 28px; }
+
+  .tabbar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: 72px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    border-top: 1px solid var(--line); background: var(--surface); z-index: 20;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tab {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    border: 0; background: transparent; font-size: 12px; color: var(--muted-3);
+    padding: 0 2px; min-width: 0;
+  }
+  /* Five tabs at 375px leaves ~75px a column; the longest label must not wrap
+     the row taller than the bar. */
+  .tab > .row { max-width: 100%; }
+  .tab[data-on='true'] { font-weight: 600; color: var(--ink); }
+  .tab-bar-mark { width: 22px; height: 3px; border-radius: 2px; background: transparent; }
+  .tab[data-on='true'] .tab-bar-mark { background: var(--ink); }
+  .tab .badge { min-width: 18px; height: 18px; border-radius: 9px; font-size: 11px; }
+
+  .sheet {
+    position: fixed; inset: 0; z-index: 30;
+    background: rgba(27, 34, 48, 0.45);
+    display: flex; flex-direction: column; justify-content: flex-end;
+  }
+  .sheet-body {
+    background: var(--ground); border-radius: 16px 16px 0 0;
+    padding: 20px 16px calc(24px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 16px;
+    max-height: 86dvh; overflow-y: auto;
+  }
+  .sheet .chip { height: 40px; padding: 0 14px; border-radius: 20px; }
+
+  /* Phone design leads with the CV rules; the import panel drops below them. */
+  .resume-rules { order: 1; }
+  .resume-import { order: 2; }
+
+  .note-area { font-size: 16px; min-height: 150px; } /* 16px stops iOS zooming on focus */
+  .field { font-size: 16px; }
+}
+
+/* ---------- sign in ---------- */
+
+.login { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 100dvh; }
+.login-left { padding: 72px 88px; display: flex; flex-direction: column; gap: 40px; }
+.login-left h1 { margin: 0; font-size: 68px; line-height: 1.02; font-weight: 700; letter-spacing: -0.035em; text-wrap: balance; }
+.login-lede { margin: 0; font-size: 19px; line-height: 1.55; color: var(--muted); max-width: 520px; }
+.login-right {
+  background: var(--ink); color: var(--ground);
+  padding: 72px 88px; display: flex; flex-direction: column; justify-content: center; gap: 32px;
+}
+.login-cta {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  height: 64px; border-radius: 10px; border: 0;
+  background: var(--ground); color: var(--ink); font-size: 19px; font-weight: 600;
+}
+.login-note { margin: 0; font-size: 15px; line-height: 1.55; color: #C9C2B3; border-top: 1px solid #3A4252; padding-top: 24px; }
+
+@media (max-width: 1023px) {
+  .login { grid-template-columns: minmax(0, 1fr); }
+  .login-left { padding: 40px 20px 28px; gap: 20px; }
+  .login-left h1 { font-size: 40px; line-height: 1.04; letter-spacing: -0.03em; }
+  .login-lede { font-size: 16px; }
+  .login-right { padding: 28px 20px 40px; gap: 20px; }
+  .login-cta { height: 56px; font-size: 17px; }
+}
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: 24px; z-index: 50;
+  background: var(--ink); color: var(--ground);
+  padding: 12px 18px; border-radius: 10px;
+  font-size: 15px; line-height: 1.4; max-width: min(520px, calc(100vw - 32px));
+  box-shadow: 0 8px 24px rgba(27, 34, 48, 0.25);
+}
+@media (max-width: 1023px) { .toast { bottom: 88px; } }

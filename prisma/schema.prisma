@@ -1,0 +1,166 @@
+// SQLite so the app runs with no infrastructure. Switching to Postgres is a
+// provider + DATABASE_URL change; nothing below is SQLite-specific except the
+// JSON-as-String columns.
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  picture   String?
+  linkedin  String?
+  createdAt DateTime @default(now())
+
+  countries    CountryPref[]
+  positions    Position[]
+  educations   Education[]
+  projects     ProjectItem[]
+  skills       Skill[]
+  contacts     Contact[]
+  applications Application[]
+  imports      ProfileImport[]
+}
+
+model CountryPref {
+  id     String  @id @default(cuid())
+  userId String
+  cc     String
+  rank   Int
+  on     Boolean @default(true)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cc])
+}
+
+model ProfileImport {
+  id        String   @id @default(cuid())
+  userId    String
+  filename  String
+  counts    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Position {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  company   String
+  location  String?
+  startedAt DateTime?
+  endedAt   DateTime?
+  summary   String?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Education {
+  id      String @id @default(cuid())
+  userId  String
+  school  String
+  degree  String?
+  field   String?
+  years   String?
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ProjectItem {
+  id          String  @id @default(cuid())
+  userId      String
+  title       String
+  org         String?
+  description String?
+  url         String?
+  tags        String  @default("")
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Skill {
+  id     String @id @default(cuid())
+  userId String
+  name   String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// One row per 1st-degree LinkedIn connection, from the data export.
+model Contact {
+  id          String    @id @default(cuid())
+  userId      String
+  firstName   String
+  lastName    String
+  company     String?
+  position    String?
+  profileUrl  String?
+  connectedAt DateTime?
+  degree      Int       @default(1)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, company])
+}
+
+model Job {
+  id          String   @id @default(cuid())
+  externalId  String   @unique
+  source      String
+  role        String
+  company     String
+  city        String
+  cc          String
+  url         String
+  mode        String   @default("On-site")
+  field       String   @default("Backend")
+  level       String   @default("Mid")
+  sponsor     Boolean  @default(false)
+  visa        String   @default("Sponsorship not stated")
+  description String   @default("")
+  postedAt    DateTime @default(now())
+  fetchedAt   DateTime @default(now())
+  analysis    String?
+
+  applications Application[]
+
+  @@index([cc, postedAt])
+}
+
+model Application {
+  id        String   @id @default(cuid())
+  userId    String
+  jobId     String
+  status    String   @default("draft")
+  note      String   @default("")
+  match     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job      Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  outreach OutreachEvent[]
+
+  @@unique([userId, jobId])
+}
+
+// Append-only log: every state change of an application keeps its timestamp,
+// which is what drives "flash when something changed" in Pending.
+model OutreachEvent {
+  id            String   @id @default(cuid())
+  applicationId String
+  kind          String
+  contactName   String?
+  contactInit   String?
+  contactUrl    String?
+  org           String?
+  body          String   @default("")
+  incoming      String?
+  reason        String?
+  certain       Boolean  @default(false)
+  handled       Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}

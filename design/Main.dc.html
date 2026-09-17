@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #F4F1EA; color: #1B2230; font-family: 'IBM Plex Sans', 'Helvetica Neue', system-ui, sans-serif; }
+    a { color: #9A330A; } a:hover { color: #7A2808; }
+    button, input, textarea, select { font-family: inherit; color: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #1E3A8A; outline-offset: 2px; }
+    @keyframes wpflash { 0%, 100% { box-shadow: 0 0 0 0 rgba(194, 65, 12, 0.55); } 60% { box-shadow: 0 0 0 10px rgba(194, 65, 12, 0); } }
+    .flash { animation: wpflash 1.6s ease-out infinite; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+    .display { font-family: 'Bricolage Grotesque', Georgia, serif; }
+  </style>
+</helmet>
+<div style="width: 1440px; height: 1024px; display: flex; flex-direction: column; overflow: hidden; background: #F4F1EA;">
+
+  <sc-if value="{{isLogin}}" hint-placeholder-val="{{false}}">
+    
+  </sc-if>
+
+  <sc-if value="{{isApp}}" hint-placeholder-val="{{true}}">
+    <div style="display: {{dApp}}; height: 1024px; min-height: 0;">
+
+      <aside style="width: 264px; flex-shrink: 0; border-right: 1px solid #DDD6C8; display: flex; flex-direction: column; padding: 28px 18px; gap: 28px; box-sizing: border-box;">
+        <div class="display" style="font-size: 24px; font-weight: 700; letter-spacing: -0.02em; padding: 0 10px;">Waypoint</div>
+        <nav style="display: flex; flex-direction: column; gap: 4px;">
+          <sc-for list="{{nav}}" as="n" hint-placeholder-count="4">
+            <button onClick="{{n.go}}" style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; border: 0; border-radius: 8px; text-align: left; font-size: 16px; font-weight: {{n.weight}}; background: {{n.bg}};">
+              <span style="flex-grow: 1;">{{n.label}}</span>
+              <sc-if value="{{n.hasBadge}}" hint-placeholder-val="{{false}}">
+                <span class="flash mono" style="min-width: 24px; height: 24px; border-radius: 12px; background: #C2410C; color: #FFFFFF; font-size: 13px; display: flex; align-items: center; justify-content: center;">{{n.badge}}</span>
+              </sc-if>
+            </button>
+          </sc-for>
+        </nav>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div class="mono" style="font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6457; padding: 0 12px 6px;">Countries, in your order</div>
+          <sc-for list="{{countries}}" as="c" hint-placeholder-count="7">
+            <button onClick="{{c.toggle}}" aria-pressed="{{c.on}}" style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; text-align: left;">
+              <span style="width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid #1B2230; background: {{c.box}}; flex-shrink: 0;"></span>
+              <span style="flex-grow: 1; font-size: 15px; color: {{c.ink}};">{{c.name}}</span>
+              <span class="mono" style="font-size: 12px; color: #6B6457;">{{c.count}}</span>
+            </button>
+          </sc-for>
+        </div>
+        <div style="margin-top: auto; display: flex; align-items: center; gap: 12px; padding: 12px; border-top: 1px solid #DDD6C8;">
+          <span style="width: 40px; height: 40px; border-radius: 20px; background: #1B2230; color: #F4F1EA; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600;">SA</span>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-size: 15px; font-weight: 600;">Shivoy Arora</span>
+            <span style="font-size: 13px; color: #5A6170;">Signed in with LinkedIn</span>
+          </div>
+        </div>
+      </aside>
+
+      <main style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column;">
+
+        <sc-if value="{{isJobs}}" hint-placeholder-val="{{true}}">
+          <div style="display: {{dJobs}}; flex-direction: column; height: 1024px;">
+            <header style="display: flex; align-items: center; gap: 20px; padding: 24px 36px 16px;">
+              <div style="display: flex; flex-direction: column; flex-grow: 1;">
+                <h1 class="display" style="margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em;">Jobs</h1>
+                <span style="font-size: 14px; color: #5A6170;">{{jobCountLabel}} · sample listings, live feeds load here</span>
+              </div>
+              <label for="wp-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden;">Search roles</label>
+              <input id="wp-search" type="search" placeholder="Search role, company, city" value="{{q}}" onChange="{{onSearch}}" style="width: 320px; height: 44px; border-radius: 8px; border: 1px solid #CFC7B7; background: #FFFDF8; padding: 0 14px; font-size: 15px; box-sizing: border-box;">
+              <button style="height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #1B2230; background: transparent; font-size: 15px; font-weight: 500;">Refresh feeds</button>
+            </header>
+
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px; padding: 0 36px 16px; border-bottom: 1px solid #DDD6C8;">
+              <sc-for list="{{filterGroups}}" as="g" hint-placeholder-count="4">
+                <div role="group" aria-label="{{g.label}}" style="display: flex; align-items: center; gap: 6px;">
+                  <span class="mono" style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #6B6457; margin-right: 4px;">{{g.label}}</span>
+                  <sc-for list="{{g.options}}" as="o" hint-placeholder-count="4">
+                    <button onClick="{{o.pick}}" aria-pressed="{{o.on}}" style="height: 34px; padding: 0 12px; border-radius: 17px; font-size: 14px; border: 1px solid {{o.border}}; background: {{o.bg}}; color: {{o.ink}};">{{o.label}}</button>
+                  </sc-for>
+                </div>
+              </sc-for>
+              <button onClick="{{toggleSponsor}}" aria-pressed="{{sponsorOnly}}" style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 17px; font-size: 14px; border: 1px solid {{sponsorBorder}}; background: {{sponsorBg}}; color: {{sponsorInk}};">Sponsors visa</button>
+            </div>
+
+            <div style="flex-grow: 1; min-height: 0; display: flex;">
+              <div style="width: 452px; flex-shrink: 0; overflow-y: auto; padding: 20px 20px 40px 36px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px;">
+                <sc-if value="{{noJobs}}" hint-placeholder-val="{{false}}">
+                  <div style="padding: 28px; border: 1px dashed #CFC7B7; border-radius: 10px; font-size: 15px; color: #4A5261; line-height: 1.5;">No roles match these filters. Loosen a filter or turn a country back on.</div>
+                </sc-if>
+                <sc-for list="{{jobs}}" as="j" hint-placeholder-count="5">
+                  <button onClick="{{j.pick}}" style="display: flex; flex-direction: column; gap: 8px; width: 100%; text-align: left; padding: 16px 18px; border-radius: 10px; border: 1px solid {{j.border}}; background: {{j.bg}};">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span class="mono" style="font-size: 12px; color: #4A5261; flex-grow: 1;">{{j.place}} · {{j.mode}}</span>
+                      <span class="mono" style="font-size: 12px; color: #1F6F4A; font-weight: 500;">{{j.matchLabel}}</span>
+                    </div>
+                    <span style="font-size: 17px; font-weight: 600; line-height: 1.3;">{{j.role}}</span>
+                    <span style="font-size: 14px; color: #4A5261;">{{j.company}} · {{j.field}} · {{j.level}}</span>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                      <span style="font-size: 13px; padding: 3px 8px; border-radius: 4px; background: #E9E3D6;">{{j.path}}</span>
+                      <sc-if value="{{j.isSent}}" hint-placeholder-val="{{false}}">
+                        <span style="font-size: 13px; padding: 3px 8px; border-radius: 4px; background: #1B2230; color: #F4F1EA;">In pending</span>
+                      </sc-if>
+                      <sc-if value="{{j.isApplied}}" hint-placeholder-val="{{false}}">
+                        <span style="font-size: 13px; padding: 3px 8px; border-radius: 4px; background: #1F6F4A; color: #FFFFFF;">Applied</span>
+                      </sc-if>
+                      <span class="mono" style="font-size: 12px; color: #6B6457; margin-left: auto;">{{j.posted}}</span>
+                    </div>
+                  </button>
+                </sc-for>
+              </div>
+
+              <sc-if value="{{hasSel}}" hint-placeholder-val="{{true}}">
+                <section style="flex-grow: 1; min-width: 0; overflow-y: auto; padding: 24px 36px 48px 16px; box-sizing: border-box;">
+                  <div style="background: #FFFDF8; border: 1px solid #DDD6C8; border-radius: 14px; padding: 32px; display: flex; flex-direction: column; gap: 28px;">
+                    <div style="display: flex; gap: 24px; align-items: flex-start;">
+                      <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 8px;">
+                        <span class="mono" style="font-size: 13px; color: #4A5261;">{{sel.place}} · {{sel.mode}} · {{sel.visa}}</span>
+                        <h2 class="display" style="margin: 0; font-size: 34px; line-height: 1.1; font-weight: 700; letter-spacing: -0.02em;">{{sel.role}}</h2>
+                        <span style="font-size: 16px; color: #4A5261;">{{sel.company}} · found on {{sel.sourceList}}</span>
+                      </div>
+                      <div style="display: flex; gap: 8px; flex-shrink: 0;">
+                        <a href="https://www.linkedin.com/jobs/" style="display: flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #1B2230; color: #1B2230; text-decoration: none; font-size: 15px; font-weight: 500;">Open posting</a>
+                        <button onClick="{{sel.markApplied}}" style="height: 44px; padding: 0 16px; border-radius: 8px; border: 0; background: #1B2230; color: #F4F1EA; font-size: 15px; font-weight: 500;">{{sel.appliedLabel}}</button>
+                      </div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                      <h3 class="mono" style="margin: 0; font-size: 12px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6457;">What the description asks for</h3>
+                      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;">
+                        <sc-for list="{{sel.reqs}}" as="r" hint-placeholder-count="4">
+                          <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: {{r.bg}}; font-size: 15px;">
+                            <span style="flex-grow: 1;">{{r.t}}</span>
+                            <span class="mono" style="font-size: 12px; color: {{r.ink}};">{{r.mark}}</span>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px;">
+                      <div style="display: flex; flex-direction: column; gap: 14px;">
+                        <h3 class="mono" style="margin: 0; font-size: 12px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6457;">Referral route</h3>
+                        <sc-for list="{{sel.contacts}}" as="c" hint-placeholder-count="2">
+                          <div style="display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 10px; border: 1px solid {{c.border}};">
+                            <span style="width: 40px; height: 40px; border-radius: 20px; background: #E9E3D6; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; flex-shrink: 0;">{{c.init}}</span>
+                            <div style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0;">
+                              <span style="font-size: 15px; font-weight: 600;">{{c.name}}</span>
+                              <span style="font-size: 13px; color: #4A5261;">{{c.role}}</span>
+                              <span style="font-size: 13px; color: #1E3A8A;">{{c.why}}</span>
+                            </div>
+                            <sc-if value="{{c.best}}" hint-placeholder-val="{{false}}">
+                              <span class="mono" style="font-size: 11px; padding: 3px 6px; border-radius: 4px; background: #1B2230; color: #F4F1EA;">BEST</span>
+                            </sc-if>
+                          </div>
+                        </sc-for>
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                          <div style="display: flex; align-items: baseline;">
+                            <label for="wp-note" style="font-size: 14px; font-weight: 600; flex-grow: 1;">Connection note, written from the description</label>
+                            <span class="mono" style="font-size: 12px; color: {{noteInk}};">{{noteLen}}/300</span>
+                          </div>
+                          <textarea id="wp-note" value="{{selNote}}" onChange="{{onNote}}" style="height: 132px; resize: vertical; border-radius: 8px; border: 1px solid #CFC7B7; background: #FFFFFF; padding: 12px; font-size: 15px; line-height: 1.5; box-sizing: border-box;"></textarea>
+                        </div>
+                        <sc-if value="{{sel.notSent}}" hint-placeholder-val="{{true}}">
+                          <button onClick="{{sel.send}}" style="height: 48px; border-radius: 8px; border: 0; background: #C2410C; color: #FFFFFF; font-size: 16px; font-weight: 600;">Send connect request to {{sel.bestName}}</button>
+                        </sc-if>
+                        <sc-if value="{{sel.isSent}}" hint-placeholder-val="{{false}}">
+                          <div style="padding: 12px 14px; border-radius: 8px; background: #1B2230; color: #F4F1EA; font-size: 14px; line-height: 1.5;">Request sent. This job is in Pending and will flash when {{sel.bestName}} accepts; the referral message is drafted and ready.</div>
+                        </sc-if>
+                      </div>
+
+                      <div style="display: flex; flex-direction: column; gap: 14px;">
+                        <h3 class="mono" style="margin: 0; font-size: 12px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6457;">Your CV for this role</h3>
+                        <div style="display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 10px; background: #FBEDE5;">
+                          <span style="font-size: 14px; font-weight: 600; color: #9A330A;">Must be on it</span>
+                          <sc-for list="{{sel.must}}" as="m" hint-placeholder-count="3">
+                            <div style="font-size: 14px; line-height: 1.45; display: flex; gap: 8px;"><span style="color: #9A330A;">—</span><span>{{m}}</span></div>
+                          </sc-for>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                          <span style="font-size: 14px; font-weight: 600;">Projects to lead with</span>
+                          <sc-for list="{{sel.projects}}" as="p" hint-placeholder-count="3">
+                            <div style="display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECE6DA;">
+                              <span class="mono" style="font-size: 13px; color: #6B6457; width: 18px;">{{p.rank}}</span>
+                              <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <span style="font-size: 15px; font-weight: 500;">{{p.n}}</span>
+                                <span style="font-size: 13px; color: #4A5261; line-height: 1.4;">{{p.why}}</span>
+                              </div>
+                            </div>
+                          </sc-for>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{isPipeline}}" hint-placeholder-val="{{false}}">
+          <div style="display: {{dPipeline}}; flex-direction: column; height: 1024px;">
+            <header style="padding: 24px 36px 20px; border-bottom: 1px solid #DDD6C8;">
+              <h1 class="display" style="margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em;">Pending applications</h1>
+              <span style="font-size: 14px; color: #5A6170;">Cards flash when someone accepts or replies. Replies send themselves only when the answer is certain.</span>
+            </header>
+            <div style="flex-grow: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 20px 36px 36px; overflow-y: auto; align-items: start;">
+
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600; flex-grow: 1;">Needs you</span><span class="mono" style="font-size: 13px; color: #9A330A;">{{needsCount}}</span></div>
+                <sc-for list="{{needs}}" as="n" hint-placeholder-count="2">
+                  <article class="{{n.flashClass}}" style="background: #FFFDF8; border: 1.5px solid {{n.border}}; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+                    <span class="mono" style="font-size: 12px; color: #9A330A;">{{n.kind}} · {{n.when}}</span>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                      <span style="width: 36px; height: 36px; border-radius: 18px; background: #E9E3D6; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0;">{{n.init}}</span>
+                      <div style="display: flex; flex-direction: column;"><span style="font-size: 15px; font-weight: 600;">{{n.who}}</span><span style="font-size: 13px; color: #4A5261;">{{n.org}}</span></div>
+                    </div>
+                    <span style="font-size: 13px; color: #4A5261;">{{n.role}}</span>
+                    <sc-if value="{{n.hasQuote}}" hint-placeholder-val="{{false}}">
+                      <p style="margin: 0; font-size: 14px; line-height: 1.5; padding: 10px; border-radius: 8px; background: #EFEAE0;">“{{n.quote}}”</p>
+                    </sc-if>
+                    <span style="font-size: 12px; font-weight: 600; color: #4A5261;">{{n.draftLabel}}</span>
+                    <p style="margin: 0; font-size: 14px; line-height: 1.5;">{{n.draft}}</p>
+                    <sc-if value="{{n.hasReason}}" hint-placeholder-val="{{false}}">
+                      <span style="font-size: 13px; line-height: 1.45; color: #9A330A;">{{n.reason}}</span>
+                    </sc-if>
+                    <sc-if value="{{n.open}}" hint-placeholder-val="{{true}}">
+                      <div style="display: flex; gap: 8px;">
+                        <button onClick="{{n.act}}" style="flex-grow: 1; height: 44px; border-radius: 8px; border: 0; background: #C2410C; color: #FFFFFF; font-size: 15px; font-weight: 600;">{{n.action}}</button>
+                        <button style="height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid #1B2230; background: transparent; font-size: 15px;">Edit</button>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{n.isDone}}" hint-placeholder-val="{{false}}">
+                      <span style="font-size: 14px; font-weight: 600; color: #1F6F4A;">Sent · watching for a reply</span>
+                    </sc-if>
+                  </article>
+                </sc-for>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600; flex-grow: 1;">Waiting to accept</span><span class="mono" style="font-size: 13px; color: #6B6457;">{{awaitCount}}</span></div>
+                <sc-for list="{{awaiting}}" as="a" hint-placeholder-count="2">
+                  <article style="background: #FFFDF8; border: 1px solid #DDD6C8; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                      <span style="width: 36px; height: 36px; border-radius: 18px; background: #E9E3D6; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0;">{{a.init}}</span>
+                      <div style="display: flex; flex-direction: column;"><span style="font-size: 15px; font-weight: 600;">{{a.who}}</span><span style="font-size: 13px; color: #4A5261;">{{a.org}}</span></div>
+                    </div>
+                    <span style="font-size: 13px; color: #4A5261;">{{a.role}}</span>
+                    <span class="mono" style="font-size: 12px; color: #6B6457;">{{a.when}} · {{a.why}}</span>
+                  </article>
+                </sc-for>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600; flex-grow: 1;">Replied for you</span><span class="mono" style="font-size: 13px; color: #6B6457;">{{autoCount}}</span></div>
+                <sc-for list="{{auto}}" as="r" hint-placeholder-count="1">
+                  <article style="background: #FFFDF8; border: 1px solid #DDD6C8; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                      <span style="width: 36px; height: 36px; border-radius: 18px; background: #E9E3D6; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0;">{{r.init}}</span>
+                      <div style="display: flex; flex-direction: column;"><span style="font-size: 15px; font-weight: 600;">{{r.who}}</span><span style="font-size: 13px; color: #4A5261;">{{r.org}}</span></div>
+                    </div>
+                    <p style="margin: 0; font-size: 14px; line-height: 1.5; padding: 10px; border-radius: 8px; background: #EFEAE0;">“{{r.quote}}”</p>
+                    <p style="margin: 0; font-size: 14px; line-height: 1.5; padding: 10px; border-radius: 8px; border: 1px solid #BFD8CB; background: #EEF6F1;">{{r.sent}}</p>
+                    <span style="font-size: 13px; line-height: 1.45; color: #1F6F4A;">{{r.why}}</span>
+                  </article>
+                </sc-for>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600; flex-grow: 1;">Applied</span><span class="mono" style="font-size: 13px; color: #6B6457;">{{appliedCount}}</span></div>
+                <sc-if value="{{noApplied}}" hint-placeholder-val="{{true}}">
+                  <div style="padding: 14px; border: 1px dashed #CFC7B7; border-radius: 10px; font-size: 14px; line-height: 1.5; color: #4A5261;">Nothing yet. Mark a job applied and it moves here.</div>
+                </sc-if>
+                <sc-for list="{{appliedList}}" as="p" hint-placeholder-count="0">
+                  <article style="background: #FFFDF8; border: 1px solid #DDD6C8; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 4px;">
+                    <span style="font-size: 15px; font-weight: 600;">{{p.role}}</span>
+                    <span style="font-size: 13px; color: #4A5261;">{{p.company}} · {{p.city}}</span>
+                  </article>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{isResume}}" hint-placeholder-val="{{false}}">
+          <div style="display: {{dResume}}; flex-direction: column; height: 1024px;">
+            <header style="padding: 24px 36px 20px; border-bottom: 1px solid #DDD6C8;">
+              <h1 class="display" style="margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em;">Resume</h1>
+              <span style="font-size: 14px; color: #5A6170;">Imported from LinkedIn and checked against every saved job</span>
+            </header>
+            <div style="flex-grow: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; padding: 24px 36px 48px; align-items: start;">
+              <div style="background: #FFFDF8; border: 1px solid #DDD6C8; border-radius: 14px; padding: 28px; display: flex; flex-direction: column; gap: 22px;">
+                <div style="display: flex; align-items: center;"><h2 class="display" style="margin: 0; font-size: 22px; font-weight: 700; flex-grow: 1;">From your LinkedIn</h2><button style="height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid #1B2230; background: transparent; font-size: 14px;">Re-import</button></div>
+                <sc-for list="{{profile}}" as="sec" hint-placeholder-count="3">
+                  <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <h3 class="mono" style="margin: 0; font-size: 12px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: #6B6457;">{{sec.label}}</h3>
+                    <sc-for list="{{sec.items}}" as="it" hint-placeholder-count="2">
+                      <div style="display: flex; flex-direction: column; gap: 2px; padding-bottom: 10px; border-bottom: 1px solid #ECE6DA;">
+                        <span style="font-size: 16px; font-weight: 600;">{{it.t}}</span>
+                        <span style="font-size: 14px; color: #4A5261;">{{it.o}}</span>
+                        <span style="font-size: 14px; line-height: 1.45;">{{it.d}}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 20px;">
+                <div style="background: #FBEDE5; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 10px;">
+                  <h2 class="display" style="margin: 0; font-size: 22px; font-weight: 700; color: #7A2808;">Mandatory on every CV you send</h2>
+                  <sc-for list="{{always}}" as="m" hint-placeholder-count="4">
+                    <div style="font-size: 15px; line-height: 1.5; display: flex; gap: 10px;"><span style="color: #9A330A;">—</span><span>{{m}}</span></div>
+                  </sc-for>
+                </div>
+                <div style="background: #FFFDF8; border: 1px solid #DDD6C8; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 6px;">
+                  <h2 class="display" style="margin: 0 0 8px; font-size: 22px; font-weight: 700;">Which project leads, by role</h2>
+                  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 8px 0; border-bottom: 1px solid #1B2230;">
+                    <span class="mono" style="font-size: 12px; color: #6B6457;">ROLE</span><span class="mono" style="font-size: 12px; color: #6B6457;">LEAD WITH</span><span class="mono" style="font-size: 12px; color: #6B6457;">THEN</span>
+                  </div>
+                  <sc-for list="{{picks}}" as="p" hint-placeholder-count="4">
+                    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECE6DA; font-size: 14px; line-height: 1.4;">
+                      <span style="font-weight: 600;">{{p.role}}</span><span>{{p.lead}}</span><span style="color: #4A5261;">{{p.then}}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{isSources}}" hint-placeholder-val="{{false}}">
+          <div style="display: {{dSources}}; flex-direction: column; height: 1024px;">
+            <header style="padding: 24px 36px 20px; border-bottom: 1px solid #DDD6C8;">
+              <h1 class="display" style="margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em;">Countries and job boards</h1>
+              <span style="font-size: 14px; color: #5A6170;">Ranked by your Passport Clock list · every board is searched for each country you keep on</span>
+            </header>
+            <div style="flex-grow: 1; min-height: 0; overflow-y: auto; padding: 24px 36px 48px; display: flex; flex-direction: column; gap: 20px;">
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <span class="mono" style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #6B6457;">All countries</span>
+                <sc-for list="{{globalSites}}" as="s" hint-placeholder-count="6">
+                  <span style="font-size: 14px; padding: 6px 10px; border-radius: 6px; background: #E9E3D6;">{{s}}</span>
+                </sc-for>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+                <sc-for list="{{countries}}" as="c" hint-placeholder-count="7">
+                  <div style="background: #FFFDF8; border: 1px solid #DDD6C8; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 12px; opacity: {{c.opacity}};">
+                    <div style="display: flex; align-items: baseline; gap: 12px;">
+                      <span class="mono" style="font-size: 13px; color: #6B6457;">{{c.rank}}</span>
+                      <span class="display" style="font-size: 24px; font-weight: 700; flex-grow: 1;">{{c.name}}</span>
+                      <button onClick="{{c.toggle}}" aria-pressed="{{c.on}}" style="height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid #1B2230; background: {{c.box}}; color: {{c.btnInk}}; font-size: 13px;">{{c.onLabel}}</button>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 2px; font-size: 14px;">
+                      <span>{{c.settle}}</span>
+                      <span style="color: #4A5261;">{{c.bar}}</span>
+                    </div>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                      <sc-for list="{{c.sites}}" as="s" hint-placeholder-count="4">
+                        <span style="font-size: 13px; padding: 4px 8px; border-radius: 4px; border: 1px solid #DDD6C8;">{{s}}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+      </main>
+    </div>
+  </sc-if>
+<div style="flex-grow: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); height: 1024px">
+      <div style="padding: 72px 88px; display: flex; flex-direction: column; gap: 40px;">
+        <div class="display" style="font-size: 24px; font-weight: 700; letter-spacing: -0.02em;">Waypoint</div>
+        <h1 class="display" style="margin: 0; font-size: 68px; line-height: 1.02; font-weight: 700; letter-spacing: -0.035em; text-wrap: balance;">Eight countries. One warm introduction at a time.</h1>
+        <p style="margin: 0; font-size: 19px; line-height: 1.55; color: #4A5261; max-width: 520px;">Jobs from the best boards in each country on your list, a referral route through people you already share something with, and a CV tuned to every description.</p>
+        <div style="display: flex; flex-direction: column; border-top: 1px solid #DDD6C8;">
+          <sc-for list="{{countries}}" as="c" hint-placeholder-count="7">
+            <div style="display: flex; align-items: center; gap: 20px; padding: 12px 0; border-bottom: 1px solid #DDD6C8;">
+              <span class="mono" style="font-size: 13px; color: #6B6457; width: 24px;">{{c.rank}}</span>
+              <span style="font-size: 17px; font-weight: 500; flex-grow: 1;">{{c.name}}</span>
+              <span class="mono" style="font-size: 13px; color: #4A5261;">{{c.settle}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="background: #1B2230; color: #F4F1EA; padding: 72px 88px; display: flex; flex-direction: column; justify-content: center; gap: 32px;">
+        <div class="mono" style="font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: #C9C2B3;">Sign in</div>
+        <button onClick="{{signIn}}" style="display: flex; align-items: center; justify-content: center; gap: 12px; height: 64px; border-radius: 10px; border: 0; background: #F4F1EA; color: #1B2230; font-size: 19px; font-weight: 600;">Continue with LinkedIn</button>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="font-size: 15px; color: #C9C2B3;">What Waypoint reads from your profile</div>
+          <sc-for list="{{reads}}" as="r" hint-placeholder-count="5">
+            <div style="display: flex; gap: 14px; align-items: flex-start; font-size: 17px; line-height: 1.4;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E7835A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><path d="M5 12l5 5L20 7"></path></svg>
+              <span>{{r}}</span>
+            </div>
+          </sc-for>
+        </div>
+        <p style="margin: 0; font-size: 15px; line-height: 1.55; color: #C9C2B3; border-top: 1px solid #3A4252; padding-top: 24px;">Replies go out on their own only when the answer is certain. Anything else waits for you in Pending.</p>
+      </div>
+    </div></div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1440,"height":1024}}'>
+var COUNTRIES = [
+  { cc: 'DE', name: 'Germany', rank: '01', settle: 'Settled status in 21 months (B1 German)', bar: 'Blue Card, shortage role: €45,934', sites: ['StepStone', 'LinkedIn', 'XING', 'Indeed DE', 'Arbeitnow', 'Make it in Germany'] },
+  { cc: 'NL', name: 'Netherlands', rank: '02', settle: 'Settled status in 5 years', bar: 'Highly Skilled Migrant: €5,942/mo at 30+', sites: ['LinkedIn', 'Indeed NL', 'IamExpat Jobs', 'Undutchables'] },
+  { cc: 'IE', name: 'Ireland', rank: '03', settle: 'Stamp 4 in 21 months', bar: 'Critical Skills Permit: €40,904', sites: ['IrishJobs.ie', 'Jobs.ie', 'LinkedIn', 'Indeed IE'] },
+  { cc: 'BE', name: 'Belgium', rank: '04', settle: 'Settled status in 5 years', bar: 'Brussels threshold: €3,703/mo', sites: ['StepStone BE', 'Jobat', 'ICTjob.be', 'LinkedIn'] },
+  { cc: 'LU', name: 'Luxembourg', rank: '05', settle: 'Settled status in 5 years', bar: 'Blue Card: €65,652', sites: ['Jobs.lu', 'Moovijob', 'LinkedIn'] },
+  { cc: 'PL', name: 'Poland', rank: '06', settle: 'Settled status in 5 years', bar: 'Threshold: PLN 13,355/mo', sites: ['Just Join IT', 'No Fluff Jobs', 'Pracuj.pl'] },
+  { cc: 'PT', name: 'Portugal', rank: '07', settle: 'Settled 5 years, citizenship 10', bar: 'Pay 40–50% below Germany or NL', sites: ['Landing.jobs', 'ITJobs.pt', 'Net-Empregos'] },
+  { cc: 'IN', name: 'India', rank: '08', settle: 'Home country: no work permit needed', bar: 'Pune, Hyderabad, Chennai, Bengaluru', sites: ['Naukri', 'LinkedIn', 'Instahyre', 'Wellfound', 'Cutshort', 'foundit'] }
+];
+var LINKEDIN_LEVELS = ['Entry', 'Mid'];
+var GLOBAL_SITES = ['LinkedIn Jobs', 'eFinancialCareers', 'Glassdoor', 'Welcome to the Jungle', 'Relocate.me', 'EURES'];
+var SETTLE_SHORT = { DE: 'Settled in 21 mo', NL: 'Settled in 5 yr', IE: 'Stamp 4 in 21 mo', BE: 'Settled in 5 yr', LU: 'Settled in 5 yr', PL: 'Settled in 5 yr', PT: 'Citizenship in 10 yr', IN: 'Home, no visa' };
+var FILTERS = [
+  { key: 'field', label: 'Field', options: ['All', 'Finance tech', 'Backend', 'Trading', 'ML & NLP', 'Robotics'] },
+  { key: 'mode', label: 'Work mode', options: ['Any', 'Remote', 'Hybrid', 'On-site'] },
+  { key: 'level', label: 'Level', options: ['Any', 'From LinkedIn', 'Entry', 'Mid', 'Senior'] },
+  { key: 'posted', label: 'Posted', options: ['Any time', 'This week'] }
+];
+var JOBS = [
+  { id: 'gs-fra', role: 'Software Engineer, Securities Finance', company: 'Goldman Sachs Bank Europe SE', city: 'Frankfurt', cc: 'DE', field: 'Finance tech', mode: 'Hybrid', level: 'Mid', sponsor: true, days: 2, visa: 'EU Blue Card', sources: ['LinkedIn', 'eFinancialCareers'], posted: '2 days ago', match: 91, path: '1st-degree colleague',
+    reqs: [{ t: 'Securities lending or financing domain', ok: true }, { t: 'Production systems in a bank', ok: true }, { t: 'Java and Spring', ok: false }, { t: 'German B1, listed as a plus', ok: false }],
+    contacts: [{ init: 'AR', name: 'Ananya R.', role: 'VP, Engineering · Frankfurt', why: '1st-degree · same Global Banking & Markets org', best: true }, { init: 'JK', name: 'Jonas K.', role: 'Associate · Securities Division', why: '2nd-degree · 6 mutual connections', best: false }],
+    note: 'Hi Ananya, I work on securities lending technology at Goldman Sachs in Bengaluru and saw the Securities Finance engineering role in Frankfurt. It maps closely to the systems I build today. Would you be open to referring me?',
+    must: ['A work authorisation line: “Will require EU Blue Card sponsorship”', 'Your German level, even if A1, since the posting lists B1', 'Degree title exactly as on your certificate, for Blue Card recognition'],
+    projects: [{ n: 'Securities lending platform, Goldman Sachs', why: 'Direct domain match; add the volumes or latency you improved' }, { n: 'Any Java or Spring work you have done', why: 'Not on your LinkedIn yet, and the posting names it twice' }, { n: 'ROS 2 SLAM maze solver', why: 'One line only: shows algorithm depth' }] },
+  { id: 'optiver-ams', role: 'Software Engineer, Trading Platforms', company: 'Optiver', city: 'Amsterdam', cc: 'NL', field: 'Trading', mode: 'On-site', level: 'Mid', sponsor: true, days: 4, visa: 'Highly Skilled Migrant', sources: ['LinkedIn', 'Indeed NL'], posted: '4 days ago', match: 80, path: 'IIIT Delhi alum',
+    reqs: [{ t: 'Strong algorithms and maths', ok: true }, { t: 'Systems used in trading', ok: true }, { t: 'C++ or Java', ok: false }, { t: 'Linux performance tuning', ok: false }],
+    contacts: [{ init: 'KM', name: 'Karan M.', role: 'Software Engineer · Amsterdam', why: 'IIIT Delhi alum · CSAM', best: true }, { init: 'EV', name: 'Eva V.', role: 'Technical Recruiter · Amsterdam', why: 'Posted this role', best: false }],
+    note: 'Hi Karan, fellow IIIT Delhi CSAM grad here. I build securities lending systems at Goldman Sachs, and the Trading Platforms role at Optiver asks for the maths and systems depth I enjoy most. Would you be open to a referral?',
+    must: ['Applied Mathematics in the degree line: the posting asks for strong maths', 'A work authorisation line: “Will require HSM sponsorship”', 'No photo, date of birth or marital status: not expected in the Netherlands'],
+    projects: [{ n: 'ROS 2 SLAM maze solver', why: 'ICP, KD-trees and pose-graph optimisation show algorithm depth' }, { n: 'Securities lending platform, Goldman Sachs', why: 'Production systems next to trading' }, { n: 'RecipeBERT rating prediction', why: 'Leave off: ML is not in this posting' }] },
+  { id: 'stripe-dub', role: 'Backend Engineer, Ledger', company: 'Stripe', city: 'Dublin', cc: 'IE', field: 'Backend', mode: 'Hybrid', level: 'Mid', sponsor: true, days: 7, visa: 'Critical Skills Permit', sources: ['IrishJobs.ie', 'LinkedIn'], posted: '1 week ago', match: 76, path: 'Replied to you',
+    reqs: [{ t: 'Financial correctness at scale', ok: true }, { t: 'Distributed systems', ok: false }, { t: 'API design', ok: false }, { t: 'Ruby, Java or Go', ok: false }],
+    contacts: [{ init: 'AD', name: 'Aoife D.', role: 'Engineering Manager · Dublin', why: 'Ex-Goldman Sachs · 3 mutual connections', best: true }],
+    note: 'Hi Aoife, I saw you moved from Goldman Sachs to Stripe. I build securities lending systems there now, and the Ledger team’s focus on money-movement correctness is close to my day job. Could I ask for a referral?',
+    must: ['A work authorisation line: “Will require a Critical Skills Permit”', 'One line on reconciliation or correctness work, with a number', 'Two pages at most'],
+    projects: [{ n: 'Securities lending platform, Goldman Sachs', why: 'Books-and-records correctness is the ledger problem' }, { n: 'ROS 2 SLAM maze solver', why: 'Shows you build outside work' }, { n: 'RecipeBERT rating prediction', why: 'Optional, one line' }] },
+  { id: 'euroclear-bru', role: 'Java Developer, Collateral Management', company: 'Euroclear', city: 'Brussels', cc: 'BE', field: 'Finance tech', mode: 'Hybrid', level: 'Mid', sponsor: true, days: 3, visa: 'EU Blue Card', sources: ['StepStone BE', 'ICTjob.be'], posted: '3 days ago', match: 87, path: 'Ex-Goldman Sachs',
+    reqs: [{ t: 'Collateral and securities lending flows', ok: true }, { t: 'Capital markets back office', ok: true }, { t: 'Java', ok: false }, { t: 'French or Dutch, a plus', ok: false }],
+    contacts: [{ init: 'PV', name: 'Pieter V.', role: 'Lead Developer · Brussels', why: 'Ex-Goldman Sachs, securities division', best: true }],
+    note: 'Hi Pieter, I noticed you were at Goldman Sachs before Euroclear. I work on securities lending tech there now, and the Collateral Management role sits right beside that. Would you be open to a quick referral?',
+    must: ['A work authorisation line: “Will require EU Blue Card sponsorship”', 'Any French or Dutch you have, with CEFR level', 'Collateral or lending terms from the posting, used where true'],
+    projects: [{ n: 'Securities lending platform, Goldman Sachs', why: 'Collateral is the other half of lending' }, { n: 'ROS 2 SLAM maze solver', why: 'One line' }, { n: 'RecipeBERT rating prediction', why: 'Leave off' }] },
+  { id: 'clearstream-lux', role: 'Software Engineer, Securities Lending', company: 'Clearstream', city: 'Luxembourg', cc: 'LU', field: 'Finance tech', mode: 'On-site', level: 'Senior', sponsor: true, days: 5, visa: 'EU Blue Card', sources: ['Jobs.lu', 'Moovijob'], posted: '5 days ago', match: 89, path: 'Accepted your request',
+    reqs: [{ t: 'Securities lending programme', ok: true }, { t: 'Lender and borrower matching', ok: true }, { t: 'Java', ok: false }, { t: 'French, a plus', ok: false }],
+    contacts: [{ init: 'LS', name: 'Lena S.', role: 'Product Owner, Lending · Luxembourg', why: '2nd-degree · 4 mutual connections in lending', best: true }],
+    note: 'Hi Lena, I work on securities lending technology at Goldman Sachs and saw Clearstream’s Securities Lending engineer role. The lender–borrower matching work is close to mine. Could we connect? I would value a referral.',
+    must: ['A work authorisation line: “Will require EU Blue Card sponsorship”', 'Years of experience stated plainly: the role is senior', 'French level, if any'],
+    projects: [{ n: 'Securities lending platform, Goldman Sachs', why: 'Exact domain match' }, { n: 'ROS 2 SLAM maze solver', why: 'Optimisation background for matching' }, { n: 'RecipeBERT rating prediction', why: 'Leave off' }] },
+  { id: 'gs-waw', role: 'Engineering Analyst, Securities', company: 'Goldman Sachs', city: 'Warsaw', cc: 'PL', field: 'Finance tech', mode: 'Hybrid', level: 'Entry', sponsor: true, days: 6, visa: 'Internal mobility', sources: ['LinkedIn'], posted: '6 days ago', match: 84, path: 'Replied to you',
+    reqs: [{ t: 'Securities domain', ok: true }, { t: 'Same firm, same title', ok: true }, { t: 'Polish, not required', ok: true }, { t: 'Relocation within the firm', ok: true }],
+    contacts: [{ init: 'MN', name: 'Marta N.', role: 'VP, Securities Engineering · Warsaw', why: '1st-degree · same division', best: true }],
+    note: 'Hi Marta, I am an Engineering Analyst on securities lending tech in Bengaluru and saw the Securities role on the Warsaw campus. Would you be open to referring me for internal mobility?',
+    must: ['Your current team and manager approval status for internal mobility', 'Same title, so lead with scope you have added', 'Polish is not required: leave it off'],
+    projects: [{ n: 'Securities lending platform, Goldman Sachs', why: 'The whole case' }, { n: 'ROS 2 SLAM maze solver', why: 'One line' }, { n: 'RecipeBERT rating prediction', why: 'One line' }] },
+  { id: 'wandel-remote', role: 'Robotics Software Engineer, ROS 2', company: 'Wandelbots', city: 'Dresden', cc: 'DE', field: 'Robotics', mode: 'Remote', level: 'Mid', sponsor: false, days: 9, visa: 'Sponsorship not stated', sources: ['Arbeitnow', 'Welcome to the Jungle'], posted: '9 days ago', match: 72, path: 'Shared interest: ROS 2',
+    reqs: [{ t: 'ROS 2', ok: true }, { t: 'SLAM and point clouds', ok: true }, { t: 'C++ in production', ok: false }, { t: 'Industrial robot arms', ok: false }],
+    contacts: [{ init: 'TB', name: 'Tobias B.', role: 'Robotics Engineer · Dresden', why: 'Follows the same ROS 2 SLAM repos you starred', best: true }],
+    note: 'Hi Tobias, I have been building a ROS 2 SLAM maze solver (ICP, pose-graph optimisation) alongside my job at Goldman Sachs. The ROS 2 role at Wandelbots is where I want to take that. Open to a referral?',
+    must: ['A work authorisation line: remote roles still need German residence', 'A link to the ROS 2 repository', 'The SLAM methods by name: ICP, pose-graph, Gauss-Newton'],
+    projects: [{ n: 'ROS 2 SLAM maze solver', why: 'The strongest match on your profile' }, { n: 'RecipeBERT rating prediction', why: 'Shows research output' }, { n: 'Securities lending platform, Goldman Sachs', why: 'Production engineering discipline' }] },
+  { id: 'deepl-cgn', role: 'Machine Learning Engineer, Language Models', company: 'DeepL', city: 'Cologne', cc: 'DE', field: 'ML & NLP', mode: 'Remote', level: 'Senior', sponsor: true, days: 1, visa: 'EU Blue Card', sources: ['StepStone', 'LinkedIn'], posted: '1 day ago', match: 64, path: 'IIIT Delhi alum',
+    reqs: [{ t: 'Fine-tuning transformer models', ok: true }, { t: 'Research publications', ok: true }, { t: 'Large-scale training', ok: false }, { t: 'PyTorch in production', ok: false }],
+    contacts: [{ init: 'NS', name: 'Neha S.', role: 'Research Engineer · Cologne', why: 'IIIT Delhi alum', best: true }],
+    note: 'Hi Neha, fellow IIIT Delhi alum here. I fine-tuned RecipeBERT for review rating prediction, with a paper aimed at EMNLP 2026, and would love to bring that to DeepL’s language model team. Open to a referral?',
+    must: ['The paper with its status: “submitted to EMNLP 2026”', 'Model, dataset size and metric for RecipeBERT', 'Work authorisation line for the Blue Card'],
+    projects: [{ n: 'RecipeBERT rating prediction', why: 'Direct match: fine-tuning a BERT model' }, { n: 'ROS 2 SLAM maze solver', why: 'Maths and optimisation depth' }, { n: 'Securities lending platform, Goldman Sachs', why: 'Production experience' }] },
+  { id: 'ati-blr', role: 'Robotics Software Engineer, Autonomy', company: 'Ati Motors', city: 'Bengaluru', cc: 'IN', field: 'Robotics', mode: 'On-site', level: 'Mid', sponsor: true, days: 3, visa: 'No visa needed', sources: ['Naukri', 'Wellfound'], posted: '3 days ago', match: 74, path: 'IIIT Delhi alum',
+    reqs: [{ t: 'ROS 2', ok: true }, { t: 'SLAM and localisation', ok: true }, { t: 'C++ in production', ok: false }, { t: 'Field testing on robots', ok: false }],
+    contacts: [{ init: 'RP', name: 'Rahul P.', role: 'Autonomy Engineer · Bengaluru', why: 'IIIT Delhi alum', best: true }],
+    note: 'Hi Rahul, fellow IIIT Delhi alum here. I have been building a ROS 2 SLAM maze solver (ICP, pose-graph optimisation) next to my job at Goldman Sachs, and the Autonomy role at Ati Motors is where I want to take it. Open to a referral?',
+    must: ['A link to the ROS 2 repository', 'The SLAM methods by name: ICP, pose-graph, Gauss-Newton', 'Notice period, which Indian employers ask for up front'],
+    projects: [{ n: 'ROS 2 SLAM maze solver', why: 'The strongest match on your profile' }, { n: 'Securities lending platform, Goldman Sachs', why: 'Production engineering discipline' }, { n: 'RecipeBERT rating prediction', why: 'One line: research output' }] }
+];
+var NEEDS = [
+  { id: 'n1', kind: 'Accepted', init: 'LS', who: 'Lena S.', org: 'Clearstream · Luxembourg', role: 'Software Engineer, Securities Lending', when: '14 min ago', quote: '', draftLabel: 'Referral message, drafted from the posting', draft: 'Thanks for connecting, Lena! The role centres on lender–borrower matching for the lending programme, which is the core of what I have built at Goldman Sachs for [X] years. Would you be comfortable referring me? I can send my CV and the job ID.', reason: '', action: 'Send referral' },
+  { id: 'n2', kind: 'Replied', init: 'AD', who: 'Aoife D.', org: 'Stripe · Dublin', role: 'Backend Engineer, Ledger', when: '1 h ago', quote: 'Happy to refer you. Would you also be open to a Payments Infra role? That one sits in London.', draftLabel: 'Suggested reply', draft: 'Thank you, Aoife! Dublin is my first choice, so I would love the referral for the Ledger role. [Your answer on London]', reason: 'Held for you: London is not on your country list, so that answer is yours to give.', action: 'Send reply' }
+];
+var AWAIT_BASE = [{ init: 'PV', who: 'Pieter V.', org: 'Euroclear · Brussels', role: 'Java Developer, Collateral Management', when: 'Sent 3 days ago', why: 'Ex-Goldman Sachs' }];
+var AUTO = [{ init: 'MN', who: 'Marta N.', org: 'Goldman Sachs · Warsaw', quote: 'Sure, send me your CV and the job ID.', sent: 'Thank you, Marta! My CV is attached, and the job ID is [JOB ID]. I really appreciate it.', why: 'Sent on its own: she asked for two things already on file.' }];
+var PROFILE = [
+  { label: 'Experience', items: [{ t: 'Engineering Analyst', o: 'Goldman Sachs Services · Bengaluru', d: 'Global Banking & Markets: design, build, test and maintain securities lending systems' }] },
+  { label: 'Education', items: [{ t: 'Computer Science and Applied Mathematics', o: 'IIIT Delhi', d: '[Degree and years]' }] },
+  { label: 'Projects', items: [{ t: 'ROS 2 SLAM maze solver', o: 'Personal project', d: 'ICP point-cloud registration, KD-trees, pose-graph SLAM with Gauss-Newton optimisation' }, { t: 'RecipeBERT rating prediction', o: 'Research paper · targeting EMNLP 2026', d: 'Fine-tuned RecipeBERT to predict ratings from recipe reviews' }] }
+];
+var ALWAYS = [
+  'A one-line work authorisation status: every country abroad on your list checks it first',
+  'Numbers for the lending platform: volumes, latency or users [ADD YOURS]',
+  'Languages with CEFR levels: English, plus any German, Dutch or French started',
+  'A link to the ROS 2 repository and the paper, once public',
+  'Two pages at most; no photo for the Netherlands or Ireland'
+];
+var PICKS = [
+  { role: 'Finance tech', lead: 'Securities lending platform', then: 'ROS 2 SLAM, one line' },
+  { role: 'Trading, low latency', lead: 'ROS 2 SLAM maze solver', then: 'Securities lending platform' },
+  { role: 'ML and NLP', lead: 'RecipeBERT paper', then: 'ROS 2 SLAM maze solver' },
+  { role: 'Robotics', lead: 'ROS 2 SLAM maze solver', then: 'RecipeBERT paper' }
+];
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { screen: 'jobs', sel: 'gs-fra', q: '', off: {}, f: { field: 'All', mode: 'Any', level: 'Any', posted: 'Any time' }, sponsorOnly: false, sent: { 'euroclear-bru': true, 'clearstream-lux': true, 'stripe-dub': true, 'gs-waw': true }, applied: {}, done: {}, notes: {} };
+  }
+  renderVals() {
+    var s = this.state;
+    var self = this;
+    var go = function (k) { return function () { self.setState({ screen: k }); }; };
+    var visible = JOBS.filter(function (j) {
+      if (s.off[j.cc]) return false;
+      if (s.f.field !== 'All' && j.field !== s.f.field) return false;
+      if (s.f.mode !== 'Any' && j.mode !== s.f.mode) return false;
+      if (s.f.level === 'From LinkedIn') { if (LINKEDIN_LEVELS.indexOf(j.level) < 0) return false; } else if (s.f.level !== 'Any' && j.level !== s.f.level) return false;
+      if (s.f.posted === 'This week' && j.days > 7) return false;
+      if (s.sponsorOnly && !j.sponsor) return false;
+      if (s.q) { var h = (j.role + ' ' + j.company + ' ' + j.city).toLowerCase(); if (h.indexOf(s.q.toLowerCase()) < 0) return false; }
+      return true;
+    });
+    var selJob = visible.filter(function (j) { return j.id === s.sel; })[0] || visible[0] || null;
+    var jobs = visible.map(function (j) {
+      var on = selJob && j.id === selJob.id;
+      return Object.assign({}, j, { place: j.cc + ' · ' + j.city, matchLabel: j.match + '% match', isSent: !!s.sent[j.id], isApplied: !!s.applied[j.id], border: on ? '#1B2230' : '#DDD6C8', bg: on ? '#FFFDF8' : 'transparent', pick: function () { self.setState({ sel: j.id }); } });
+    });
+    var sel = null;
+    var selNote = '';
+    if (selJob) {
+      selNote = s.notes[selJob.id] != null ? s.notes[selJob.id] : selJob.note;
+      var best = selJob.contacts[0];
+      sel = Object.assign({}, selJob, {
+        place: selJob.cc + ' · ' + selJob.city,
+        sourceList: selJob.sources.join(' and '),
+        bestName: best.name,
+        isSent: !!s.sent[selJob.id], notSent: !s.sent[selJob.id],
+        appliedLabel: s.applied[selJob.id] ? 'Applied' : 'Mark applied',
+        reqs: selJob.reqs.map(function (r) { return { t: r.t, mark: r.ok ? 'ON PROFILE' : 'NOT ON PROFILE', bg: r.ok ? '#EEF6F1' : '#F4EEE3', ink: r.ok ? '#1F6F4A' : '#8A4B12' }; }),
+        contacts: selJob.contacts.map(function (c) { return Object.assign({}, c, { border: c.best ? '#1B2230' : '#DDD6C8' }); }),
+        projects: selJob.projects.map(function (p, i) { return Object.assign({}, p, { rank: String(i + 1) }); }),
+        send: function () { var n = Object.assign({}, s.sent); n[selJob.id] = true; self.setState({ sent: n }); },
+        markApplied: function () { var a = Object.assign({}, s.applied); a[selJob.id] = !a[selJob.id]; self.setState({ applied: a }); }
+      });
+    }
+    var needs = NEEDS.map(function (n) {
+      var isDone = !!s.done[n.id];
+      return Object.assign({}, n, { isDone: isDone, open: !isDone, hasQuote: !!n.quote, hasReason: !!n.reason && !isDone, flashClass: isDone ? '' : 'flash', border: isDone ? '#DDD6C8' : '#C2410C', act: function () { var d = Object.assign({}, s.done); d[n.id] = true; self.setState({ done: d }); } });
+    });
+    var openNeeds = needs.filter(function (n) { return !n.isDone; }).length;
+    var awaiting = AWAIT_BASE.concat(JOBS.filter(function (j) { return s.sent[j.id] && ['euroclear-bru', 'clearstream-lux', 'stripe-dub', 'gs-waw'].indexOf(j.id) < 0; }).map(function (j) { var c = j.contacts[0]; return { init: c.init, who: c.name, org: j.company + ' · ' + j.city, role: j.role, when: 'Sent just now', why: j.path }; }));
+    var appliedList = JOBS.filter(function (j) { return s.applied[j.id]; });
+    var navDefs = [['jobs', 'Jobs'], ['pipeline', 'Pending'], ['resume', 'Resume'], ['sources', 'Countries and boards']];
+    var nav = navDefs.map(function (d) { var on = s.screen === d[0]; return { label: d[1], go: go(d[0]), bg: on ? '#E9E3D6' : 'transparent', weight: on ? '600' : '400', hasBadge: d[0] === 'pipeline' && openNeeds > 0, badge: String(openNeeds) }; });
+    var countries = COUNTRIES.map(function (c) {
+      var on = !s.off[c.cc];
+      return Object.assign({}, c, { on: on, box: on ? '#1B2230' : 'transparent', ink: on ? '#1B2230' : '#6B6457', btnInk: on ? '#F4F1EA' : '#1B2230', onLabel: on ? 'Searching' : 'Paused', opacity: on ? '1' : '0.6', count: String(JOBS.filter(function (j) { return j.cc === c.cc; }).length), settle: c.settle,
+        toggle: function () { var o = Object.assign({}, s.off); o[c.cc] = !o[c.cc]; self.setState({ off: o }); } });
+    });
+    var loginCountries = COUNTRIES.map(function (c) { return { rank: c.rank, name: c.name, settle: SETTLE_SHORT[c.cc] }; });
+    var filterGroups = FILTERS.map(function (g) {
+      return { label: g.label, options: g.options.map(function (o) {
+        var on = s.f[g.key] === o;
+        return { label: o, on: on, border: on ? '#1B2230' : '#CFC7B7', bg: on ? '#1B2230' : '#FFFDF8', ink: on ? '#F4F1EA' : '#1B2230', pick: function () { var f = Object.assign({}, s.f); f[g.key] = o; self.setState({ f: f }); } };
+      }) };
+    });
+    return {
+      isLogin: s.screen === 'login', isApp: s.screen !== 'login',
+      dApp: s.screen !== 'login' ? 'flex' : 'none', dJobs: s.screen === 'jobs' ? 'flex' : 'none', dPipeline: s.screen === 'pipeline' ? 'flex' : 'none', dResume: s.screen === 'resume' ? 'flex' : 'none', dSources: s.screen === 'sources' ? 'flex' : 'none',
+      isJobs: s.screen === 'jobs', isPipeline: s.screen === 'pipeline', isResume: s.screen === 'resume', isSources: s.screen === 'sources',
+      signIn: go('jobs'),
+      reads: ['Profile and headline', 'Experience at Goldman Sachs', 'Education at IIIT Delhi', 'Projects and publications', 'Connections, shared schools and past employers'],
+      countries: s.screen === 'login' ? loginCountries : countries,
+      nav: nav, jobs: jobs, noJobs: jobs.length === 0, hasSel: !!sel, sel: sel,
+      jobCountLabel: jobs.length + (jobs.length === 1 ? ' role' : ' roles'),
+      q: s.q, onSearch: function (e) { self.setState({ q: e.target.value }); },
+      filterGroups: filterGroups,
+      sponsorOnly: s.sponsorOnly, sponsorBorder: s.sponsorOnly ? '#1B2230' : '#CFC7B7', sponsorBg: s.sponsorOnly ? '#1B2230' : '#FFFDF8', sponsorInk: s.sponsorOnly ? '#F4F1EA' : '#1B2230',
+      toggleSponsor: function () { self.setState({ sponsorOnly: !s.sponsorOnly }); },
+      selNote: selNote, noteLen: String(selNote.length), noteInk: selNote.length > 300 ? '#B42318' : '#6B6457',
+      onNote: function (e) { if (!selJob) return; var n = Object.assign({}, s.notes); n[selJob.id] = e.target.value; self.setState({ notes: n }); },
+      needs: needs, needsCount: String(openNeeds), awaiting: awaiting, awaitCount: String(awaiting.length), auto: AUTO, autoCount: String(AUTO.length),
+      appliedList: appliedList, noApplied: appliedList.length === 0, appliedCount: String(appliedList.length),
+      profile: PROFILE, always: ALWAYS, picks: PICKS, globalSites: GLOBAL_SITES
+    };
+  }
+}
+</script>
+</body>
+</html>

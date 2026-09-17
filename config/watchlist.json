@@ -1,0 +1,145 @@
+{
+  "_comment": "Companies whose openings Waypoint pulls straight from their applicant-tracking system. Greenhouse, Lever, Ashby and Workable each publish these endpoints so a company's own jobs can be republished, which is why they are the reliable source — unlike LinkedIn, Indeed, StepStone or Glassdoor, which forbid it. 'token' is the board slug in the careers URL, e.g. boards.greenhouse.io/<token>, jobs.lever.co/<token>, jobs.ashbyhq.com/<token>, apply.workable.com/<token>. Every board listed here was probed and had live postings at the time it was added; a token that later stops resolving is reported by name in the Refresh feeds toast rather than failing the whole fetch. Add your own targets the same way — this is the highest-quality source in the app, because the descriptions and posting dates come from the employer.",
+  "companies": [
+    {
+      "company": "IMC Trading",
+      "ats": "greenhouse",
+      "token": "imc"
+    },
+    {
+      "company": "Flow Traders",
+      "ats": "greenhouse",
+      "token": "flowtraders"
+    },
+    {
+      "company": "Adyen",
+      "ats": "greenhouse",
+      "token": "adyen"
+    },
+    {
+      "company": "Mollie",
+      "ats": "ashby",
+      "token": "mollie"
+    },
+    {
+      "company": "N26",
+      "ats": "greenhouse",
+      "token": "n26"
+    },
+    {
+      "company": "Trade Republic",
+      "ats": "greenhouse",
+      "token": "traderepublic"
+    },
+    {
+      "company": "Wise",
+      "ats": "greenhouse",
+      "token": "wise"
+    },
+    {
+      "company": "Monzo",
+      "ats": "greenhouse",
+      "token": "monzo"
+    },
+    {
+      "company": "SumUp",
+      "ats": "greenhouse",
+      "token": "sumup"
+    },
+    {
+      "company": "Databricks",
+      "ats": "greenhouse",
+      "token": "databricks"
+    },
+    {
+      "company": "Datadog",
+      "ats": "greenhouse",
+      "token": "datadog"
+    },
+    {
+      "company": "GitLab",
+      "ats": "greenhouse",
+      "token": "gitlab"
+    },
+    {
+      "company": "Intercom",
+      "ats": "greenhouse",
+      "token": "intercom"
+    },
+    {
+      "company": "Flexport",
+      "ats": "greenhouse",
+      "token": "flexport"
+    },
+    {
+      "company": "Contentful",
+      "ats": "greenhouse",
+      "token": "contentful"
+    },
+    {
+      "company": "Docplanner",
+      "ats": "ashby",
+      "token": "docplanner"
+    },
+    {
+      "company": "Sereact",
+      "ats": "ashby",
+      "token": "sereact"
+    },
+    {
+      "company": "Bird (MessageBird)",
+      "ats": "greenhouse",
+      "token": "bird"
+    },
+    {
+      "company": "Elastic",
+      "ats": "greenhouse",
+      "token": "elastic"
+    },
+    {
+      "company": "Stripe",
+      "ats": "greenhouse",
+      "token": "stripe"
+    },
+    {
+      "company": "Workhuman",
+      "ats": "ashby",
+      "token": "workhuman"
+    },
+    {
+      "company": "Showpad",
+      "ats": "greenhouse",
+      "token": "showpad"
+    },
+    {
+      "company": "Feedzai",
+      "ats": "greenhouse",
+      "token": "feedzai"
+    },
+    {
+      "company": "Sword Health",
+      "ats": "greenhouse",
+      "token": "swordhealth"
+    },
+    {
+      "company": "Brainly",
+      "ats": "ashby",
+      "token": "brainly"
+    },
+    {
+      "company": "Ramp",
+      "ats": "ashby",
+      "token": "ramp"
+    },
+    {
+      "company": "Udemy",
+      "ats": "greenhouse",
+      "token": "udemy"
+    },
+    {
+      "company": "CRED",
+      "ats": "lever",
+      "token": "cred"
+    }
+  ]
+}
