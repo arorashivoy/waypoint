@@ -1,7 +1,7 @@
 import { db } from './db';
 import { COUNTRIES, GLOBAL_SITES, ALWAYS_ON_CV, PROJECT_PICKS } from './countries';
 import { makeJobViewer } from './analysis';
-import { detectMode } from './claude';
+import { detectMode, claudeAuthFailure, claudeQuotaFailure } from './claude';
 import { analysisProgress } from './queue';
 import { profileSummary } from './user';
 
@@ -177,7 +177,7 @@ export async function buildState(userId: string) {
       linkedin: user.linkedin,
       headline: profile.headline,
     },
-    claude,
+    claude: { ...claude, authFailure: claudeAuthFailure(), quotaFailure: claudeQuotaFailure() },
     countries: COUNTRIES.map((c) => {
       const pref = prefs.find((p) => p.cc === c.cc);
       return { ...c, on: pref ? pref.on : true, count: String(counts.get(c.cc) || 0) };

@@ -122,6 +122,49 @@ export default function Waypoint() {
       </aside>
 
       <main className="main">
+        {(state.claude?.authFailure || state.claude?.quotaFailure) && (
+          <div
+            role="alert"
+            style={{
+              margin: '12px 16px 0',
+              padding: '10px 14px',
+              border: '1px solid #b45309',
+              background: '#fef3c7',
+              color: '#78350f',
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              fontSize: 14,
+            }}
+          >
+            <span className="grow">
+              {state.claude.authFailure ? (
+                <>
+                  <strong>Claude authentication failed.</strong> {state.claude.authFailure.message}
+                </>
+              ) : (
+                <>
+                  <strong>Claude is out of usage.</strong> {state.claude.quotaFailure.message}
+                </>
+              )}
+            </span>
+            <button
+              className="btn"
+              onClick={async () => {
+                try {
+                  await api('/api/claude');
+                  await refresh();
+                  setToast('Rechecked Claude connection.');
+                } catch (e: any) {
+                  setToast(String(e.message));
+                }
+              }}
+            >
+              Recheck
+            </button>
+          </div>
+        )}
         {(screen === 'jobs' || screen === 'detail') && <JobsScreen {...screens} screen={screen} />}
         {screen === 'pending' && <PendingScreen {...screens} />}
         {screen === 'resume' && <ResumeScreen {...screens} />}

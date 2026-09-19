@@ -19,18 +19,16 @@ import { timingSafeEqual } from 'node:crypto';
 
 export const accessCodeRequired = () => !!process.env.WAYPOINT_ACCESS_CODE;
 
-/** Rejects a wrong code without leaking how much of it was right. */
+/** Rejects a wrong code without leaking how much of it was right, or how long
+ *  the expected code is. Compare inside a fixed-size buffer sized to the
+ *  expected secret so the timing cost is independent of the caller's input. */
 function constantTimeEquals(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  // timingSafeEqual throws on length mismatch, which would itself be a leak, so
-  // compare a fixed-size digest-like padding of both.
-  if (ab.length !== bb.length) {
-    // Still burn a comparison so the failure takes a similar amount of time.
-    timingSafeEqual(ab, ab);
-    return false;
-  }
-  return timingSafeEqual(ab, bb);
+  const expected = Buffer.from(b);
+  const padded = Buffer.alloc(expected.length);
+  const input = Buffer.from(a);
+  input.copy(padded, 0, 0, Math.min(input.length, padded.length));
+  const equal = timingSafeEqual(padded, expected);
+  return equal && input.length === expected.length;
 }
 
 const attempts = new Map<string, { count: number; first: number }>();

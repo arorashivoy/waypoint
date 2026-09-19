@@ -31,7 +31,14 @@ export async function GET(req: NextRequest) {
     headers: { authorization: `Bearer ${token.access_token}` },
   }).then((r) => r.json());
 
-  const user = await ensureUser(me.email || 'you@local', me.name || 'You', me.picture);
+  // Without a verified email we cannot pick the right account, and the previous
+  // `|| 'you@local'` fallback silently merged every emailless sign-in into one
+  // shared user. Fail closed instead.
+  if (!me?.email || typeof me.email !== 'string') {
+    return NextResponse.redirect(new URL('/?auth=failed', req.url));
+  }
+
+  const user = await ensureUser(me.email, me.name || 'You', me.picture);
   cookies().set(SESSION_COOKIE, user.id, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 365 });
   cookies().delete('wp_oidc_state');
   return NextResponse.redirect(new URL('/', req.url));

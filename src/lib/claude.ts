@@ -18,6 +18,34 @@ const TIMEOUT_MS = Number(process.env.WAYPOINT_CLAUDE_TIMEOUT_MS || 120_000);
 
 let cachedMode: { mode: ClaudeMode; detail: string } | null = null;
 
+/** A CLI `--version` check passes even after `claude login` expires, so the
+ *  first auth failure only surfaces once we actually spawn a call. Remember it
+ *  so `buildState` can warn the user instead of the UI silently failing. */
+let authFailure: { message: string; at: number } | null = null;
+
+/** Rate limits and exhausted credit look like ordinary call failures too; keep
+ *  them separate from auth so the banner can say the right thing. */
+let quotaFailure: { message: string; at: number } | null = null;
+
+const AUTH_HINT = /(login|log in|logged out|not authenticated|unauthenticated|unauthorized|expired|invalid_token|401)/i;
+const QUOTA_HINT = /(rate[_ -]?limit|rate limited|too many requests|quota|credit[_ -]?balance|insufficient[_ -]?credit|usage[_ -]?limit|billing|out of credit|429)/i;
+
+export function claudeAuthFailure() {
+  return authFailure;
+}
+
+export function clearClaudeAuthFailure() {
+  authFailure = null;
+}
+
+export function claudeQuotaFailure() {
+  return quotaFailure;
+}
+
+export function clearClaudeQuotaFailure() {
+  quotaFailure = null;
+}
+
 function run(cmd: string, args: string[], input?: string, timeout = TIMEOUT_MS) {
   return new Promise<{ code: number; stdout: string; stderr: string }>((resolve, reject) => {
     // The CLI falls back to key-based billing if it sees ANTHROPIC_API_KEY, which
@@ -45,7 +73,8 @@ export async function detectMode(force = false): Promise<{ mode: ClaudeMode; det
     try {
       const v = await run(CLI, ['--version'], undefined, 15_000);
       if (v.code === 0) {
-        cachedMode = { mode: 'cli', detail: `Claude Code CLI ${v.stdout.trim()} · your subscription` };
+        const via = process.env.CLAUDE_CODE_OAUTH_TOKEN ? 'CLAUDE_CODE_OAUTH_TOKEN · your subscription' : 'your subscription';
+        cachedMode = { mode: 'cli', detail: `Claude Code CLI ${v.stdout.trim()} · ${via}` };
         return cachedMode;
       }
     } catch {
@@ -60,13 +89,41 @@ export async function detectMode(force = false): Promise<{ mode: ClaudeMode; det
   return cachedMode;
 }
 
+function recordCliFailure(detail: string) {
+  if (QUOTA_HINT.test(detail)) {
+    quotaFailure = {
+      message: 'Claude subscription is out of usage for now. Wait for the quota to reset, upgrade the plan, or set ANTHROPIC_API_KEY to fall back to API credit.',
+      at: Date.now(),
+    };
+  } else if (AUTH_HINT.test(detail)) {
+    // A configured OAuth token is the credential; telling the user to run
+    // `claude login` when they set up token-based auth would be a wild goose
+    // chase. Point them at the actual thing to rotate.
+    const message = process.env.CLAUDE_CODE_OAUTH_TOKEN
+      ? 'Claude Code OAuth token was rejected. Rotate CLAUDE_CODE_OAUTH_TOKEN by running `claude setup-token` and updating the env.'
+      : 'Claude CLI is signed out. Run `claude login` on the server to restore analysis.';
+    authFailure = { message, at: Date.now() };
+    cachedMode = null;
+  }
+}
+
 async function askViaCli(system: string, prompt: string): Promise<string> {
   const args = ['-p', '--output-format', 'json', '--model', MODEL, '--append-system-prompt', system];
   const res = await run(CLI, args, prompt);
-  if (res.code !== 0) throw new Error(`claude exited ${res.code}: ${res.stderr.slice(0, 400) || res.stdout.slice(0, 400)}`);
+  if (res.code !== 0) {
+    const detail = res.stderr.slice(0, 400) || res.stdout.slice(0, 400);
+    recordCliFailure(detail);
+    throw new Error(`claude exited ${res.code}: ${detail}`);
+  }
   try {
     const parsed = JSON.parse(res.stdout);
-    if (parsed.is_error) throw new Error(String(parsed.result || 'claude reported an error'));
+    if (parsed.is_error) {
+      const msg = String(parsed.result || 'claude reported an error');
+      recordCliFailure(msg);
+      throw new Error(msg);
+    }
+    authFailure = null;
+    quotaFailure = null;
     return String(parsed.result ?? '');
   } catch (e) {
     if (res.stdout.trim().startsWith('{')) throw e;
@@ -84,8 +141,24 @@ async function askViaApi(system: string, prompt: string): Promise<string> {
     },
     body: JSON.stringify({ model: MODEL, max_tokens: 4096, system, messages: [{ role: 'user', content: prompt }] }),
   });
-  if (!res.ok) throw new Error(`Anthropic API ${res.status}: ${(await res.text()).slice(0, 400)}`);
+  if (!res.ok) {
+    const detail = (await res.text()).slice(0, 400);
+    if (res.status === 401 || res.status === 403) {
+      authFailure = { message: 'Anthropic API rejected the key (401/403). Update ANTHROPIC_API_KEY to restore analysis.', at: Date.now() };
+    } else if (res.status === 429 || QUOTA_HINT.test(detail)) {
+      quotaFailure = {
+        message:
+          res.status === 429
+            ? 'Anthropic API is rate-limiting requests (429). Wait for the window to reset, or top up credit if the balance is empty.'
+            : 'Anthropic API rejected the request for a billing or quota reason. Check the credit balance on your Anthropic Console.',
+        at: Date.now(),
+      };
+    }
+    throw new Error(`Anthropic API ${res.status}: ${detail}`);
+  }
   const data = await res.json();
+  authFailure = null;
+  quotaFailure = null;
   return (data.content || []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
 }
 
