@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { db } from './db';
 import { COUNTRIES } from './countries';
 import { inferLevels } from './match';
+import { loadClaims, profileFromClaims, type ResolvedProfile } from './claims';
 import type { ProfileSummary } from './prompts';
 
 export const SESSION_COOKIE = 'waypoint_user';
@@ -33,7 +34,25 @@ export async function requireUser() {
   return user;
 }
 
-export async function profileSummary(userId: string): Promise<ProfileSummary & { levels: string[]; currentEmployer: string; schools: string[]; interests: string[] }> {
+/**
+ * The profile every prompt is built from.
+ *
+ * `data/profile/claims.yml` wins whenever it is present and valid. It is the
+ * only account of him that he wrote and vouched for: it says what is actually
+ * evidenced, with a proof sentence per claim, where a LinkedIn export says
+ * whatever a 2022 undergraduate happened to list and whatever endorsements
+ * accumulated since.
+ *
+ * The import remains the fallback, so the app works on a fresh checkout with
+ * nothing but a LinkedIn archive — and so an invalid claims file degrades to a
+ * consistent, known-provenance profile rather than a half-read one. `loadClaims`
+ * logs loudly in that case; `npm run check:claims` is the gate that stops it
+ * reaching runtime at all.
+ */
+export async function profileSummary(userId: string): Promise<ResolvedProfile> {
+  const claims = loadClaims();
+  if (claims) return profileFromClaims(claims);
+
   const [user, positions, educations, projects, skills] = await Promise.all([
     db.user.findUniqueOrThrow({ where: { id: userId } }),
     db.position.findMany({ where: { userId }, orderBy: { startedAt: 'desc' } }),

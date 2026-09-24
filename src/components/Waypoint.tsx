@@ -122,6 +122,45 @@ export default function Waypoint() {
       </aside>
 
       <main className="main">
+        {state.claims && (
+          <div
+            role="alert"
+            style={{
+              margin: '12px 16px 0',
+              padding: '10px 14px',
+              border: '1px solid #b91c1c',
+              background: '#fee2e2',
+              color: '#7f1d1d',
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 12,
+              fontSize: 14,
+            }}
+          >
+            <span className="grow">
+              <strong>Your profile file is invalid, so Waypoint is using the LinkedIn import instead.</strong>{' '}
+              <code style={{ fontSize: 13 }}>{state.claims.path}</code>
+              <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                {state.claims.errors.slice(0, 3).map((e: string) => (
+                  <li key={e} style={{ fontSize: 13 }}>
+                    {e}
+                  </li>
+                ))}
+                {state.claims.errors.length > 3 && (
+                  <li style={{ fontSize: 13 }}>and {state.claims.errors.length - 3} more</li>
+                )}
+              </ul>
+              <span style={{ fontSize: 13, display: 'block', marginTop: 6 }}>
+                Fix them and run <code>npm run check:claims</code>, then recheck.
+              </span>
+            </span>
+            <button className="btn" onClick={() => refresh()}>
+              Recheck
+            </button>
+          </div>
+        )}
+
         {(state.claude?.authFailure || state.claude?.quotaFailure) && (
           <div
             role="alert"

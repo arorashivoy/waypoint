@@ -72,6 +72,26 @@ export function inferLevels(positions: { title: string; startedAt?: Date | null;
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\b(inc|ltd|llc|gmbh|se|sa|nv|bv|plc|group|services|bank|europe|technology|technologies)\b/g, '').replace(/\s+/g, ' ').trim();
 
+/**
+ * Whether a contact's headline names a school.
+ *
+ * A substring test is wrong here in both directions. "IIIT-D" as a plain
+ * substring hits "IIIT Dharwad", and the full registered name — "Indraprastha
+ * Institute of Information Technology Delhi" — appears in nobody's headline,
+ * which is why the alumnus branch almost never fired before. So: match on word
+ * boundaries over the normalised text, and let `ctx.schools` carry the short
+ * forms people actually write (IIIT Delhi, IIITD) alongside the official name.
+ *
+ * Terms under four characters are refused outright: a two-letter token matches
+ * half the connection list, and one false alum outranks a genuine ex-colleague
+ * under the ordering above.
+ */
+function mentionsTerm(headline: string, term: string): boolean {
+  const t = norm(term);
+  if (t.length < 4) return false;
+  return new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(norm(headline));
+}
+
 export type Route = {
   init: string;
   name: string;
@@ -91,11 +111,23 @@ export type RouteContext = {
 };
 
 /**
- * Ranking from the brief, highest first:
- *   1st-degree at the company > former colleague at the company > alumnus at the
+ * Ranking, highest first:
+ *   alumnus at the company > former colleague at the company > 1st-degree at the
  *   company > shared interest > everyone else. Only 1st-degree connections exist
  *   in a LinkedIn export, so a company with no connection gets an honest empty
  *   list rather than an invented person.
+ *
+ * Alumni (110) outrank former colleagues (105), which still outrank a plain
+ * 1st-degree connection at the company (100) — the gaps are kept narrow so the
+ * recruiter penalty (-25) continues to sink a talent-acquisition contact below
+ * all three.
+ *
+ * Alumni outrank former colleagues on his instruction. The two branches are
+ * therefore also *ordered* — the chain below tests alumnus first — because a
+ * contact who is both an IIIT-D graduate and ex-Goldman is common, and an
+ * `else if` chain silently awards whichever branch it reaches first regardless
+ * of the scores attached to them. Reordering the numbers without reordering the
+ * tests would have changed nothing for exactly the contacts this is aimed at.
  */
 export function rankRoutes(contacts: Contact[], ctx: RouteContext): Route[] {
   const target = norm(ctx.company);
@@ -112,17 +144,21 @@ export function rankRoutes(contacts: Contact[], ctx: RouteContext): Route[] {
       let score = 100;
       let why = '1st-degree connection at the company';
 
-      if (employer && (company.includes(employer) || norm(position).includes(employer))) {
+      const alum = ctx.schools.find((s) => mentionsTerm(position, s));
+      if (alum) {
         score = 110;
+        why = `1st-degree · ${alum} alum`;
+      } else if (employer && (company.includes(employer) || norm(position).includes(employer))) {
+        score = 105;
         why = `1st-degree · same ${ctx.currentEmployer} org`;
-      } else if (ctx.schools.some((s) => norm(position).includes(norm(s)))) {
-        score = 95;
-        why = `1st-degree · ${ctx.schools[0]} alum`;
       } else if (ctx.interests.some((i) => norm(position).includes(norm(i)))) {
         score = 90;
         why = `1st-degree · shared interest: ${ctx.interests.find((i) => norm(position).includes(norm(i)))}`;
       }
-      if (/\b(recruit|talent|sourcer)\b/i.test(position)) { score -= 25; why += ' · recruiter'; }
+      // `\brecruit\b` never matched "Recruiter" or "Recruiting", so the penalty
+      // had been silently dead. It matters more now that alumni score 110: a
+      // recruiter who happens to be an alumnus would otherwise top the list.
+      if (/\b(recruit\w*|talent|sourcer)\b/i.test(position)) { score -= 25; why += ' · recruiter'; }
 
       const name = `${c.firstName} ${c.lastName}`.trim();
       return {

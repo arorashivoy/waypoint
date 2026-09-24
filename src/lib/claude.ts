@@ -12,7 +12,10 @@ import { spawn } from 'node:child_process';
  */
 export type ClaudeMode = 'cli' | 'api' | 'none';
 
-const MODEL = process.env.WAYPOINT_CLAUDE_MODEL || 'claude-sonnet-5';
+/** Pinned, not configurable. Waypoint is tuned against Sonnet's judgement on
+ *  these prompts, and the model id is part of the cache key in `cache.ts` — an
+ *  env var that could move it would silently strand every cached reply. */
+export const MODEL = 'claude-sonnet-5';
 const CLI = process.env.WAYPOINT_CLAUDE_BIN || 'claude';
 const TIMEOUT_MS = Number(process.env.WAYPOINT_CLAUDE_TIMEOUT_MS || 120_000);
 

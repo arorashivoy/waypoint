@@ -1,9 +1,11 @@
 import type { Job } from '@prisma/client';
 import { db } from './db';
-import { askJson, detectMode } from './claude';
+import { detectMode } from './claude';
+import { askJsonCached } from './cache';
 import { ANALYSE_SYSTEM, analysePrompt, NOTE_SYSTEM, notePrompt } from './prompts';
 import { profileSummary } from './user';
 import { fieldFit, levelFit, matchScore, rankRoutes, routeLabel, type Route } from './match';
+import { renderNote, resolveHighlight, type Slots } from './templates';
 import { ALWAYS_ON_CV, CV_COUNTRY_RULES, PROJECT_PICKS } from './countries';
 import { fieldFromText } from './sources/geo';
 
@@ -83,19 +85,35 @@ function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileS
   };
 }
 
+/** How many times a posting may fail analysis before it stops being queued. A
+ *  posting whose description breaks the model every time would otherwise take a
+ *  slot out of every refresh's budget forever. */
+export const MAX_ANALYSIS_TRIES = 3;
+
+/**
+ * `analysedAt` — not `analysis` — is the flag that means "Claude has read this".
+ * They differ whenever a call failed: the heuristic is still written so the card
+ * has something to show, but the job stays eligible for a retry instead of being
+ * silently frozen at a keyword guess.
+ *
+ * The model call itself goes through `askJsonCached`, so a posting syndicated to
+ * two boards under two externalIds costs one call, not two.
+ */
 export async function analyseJob(job: Job, userId: string, force = false): Promise<Analysis> {
-  if (job.analysis && !force) return JSON.parse(job.analysis) as Analysis;
+  if (job.analysedAt && job.analysis && !force) return JSON.parse(job.analysis) as Analysis;
 
   const profile = await profileSummary(userId);
   let analysis: Analysis;
+  let read = false;
 
   const { mode } = await detectMode();
   if (mode === 'none') {
     analysis = heuristicAnalysis(job, profile);
   } else {
     try {
-      const out = await askJson<Omit<Analysis, 'by'>>(ANALYSE_SYSTEM, analysePrompt(profile, job));
+      const out = await askJsonCached<Omit<Analysis, 'by'>>('analysis', ANALYSE_SYSTEM, analysePrompt(profile, job));
       analysis = { ...out, requirements: out.requirements || [], must: out.must || [], projects: out.projects || [], by: 'claude' };
+      read = true;
     } catch {
       analysis = heuristicAnalysis(job, profile);
     }
@@ -105,6 +123,8 @@ export async function analyseJob(job: Job, userId: string, force = false): Promi
     where: { id: job.id },
     data: {
       analysis: JSON.stringify(analysis),
+      analysedAt: read ? new Date() : job.analysedAt,
+      analysisTries: read ? job.analysisTries : job.analysisTries + 1,
       field: analysis.field || job.field,
       mode: analysis.mode || job.mode,
       level: analysis.level || job.level,
@@ -162,17 +182,39 @@ export async function jobView(job: Job, userId: string, opts: { analyse?: boolea
   return viewOf(job, profile, contacts, analysis);
 }
 
+/**
+ * The note is assembled from `CONNECT_NOTE_TEMPLATE`; Claude supplies only the
+ * hook, the proof line and which project or role to highlight. That keeps the
+ * ask and the tone fixed, keeps the 300-character budget under our control
+ * rather than the model's, and bounds what a hostile job description can reach.
+ */
 export async function draftNote(job: Job, userId: string, route: Route | null): Promise<string> {
   const profile = await profileSummary(userId);
   const contact = route || { name: 'there', role: `at ${job.company}`, why: 'no 1st-degree contact found yet' };
+  const firstName = contact.name.split(' ')[0];
+  const candidates = [...profile.projects.map((p) => p.title), ...profile.positions.map((p) => p.title)].filter(Boolean);
   const { mode } = await detectMode();
 
   if (mode === 'none') {
-    const firstName = contact.name.split(' ')[0];
-    const base = `Hi ${firstName}, I ${profile.headline.toLowerCase()} and saw the ${job.role} role at ${job.company}. It maps closely to the systems I build today. Would you be open to referring me?`;
-    return base.slice(0, 300);
+    return renderNote({
+      firstName,
+      role: job.role,
+      company: job.company,
+      highlight: candidates[0] || '',
+      hook: `it maps closely to the systems I build today`,
+      proof: `I ${profile.headline.toLowerCase()}`,
+    });
   }
 
-  const { note } = await askJson<{ note: string }>(NOTE_SYSTEM, notePrompt(profile, job, contact));
-  return (note || '').slice(0, 300);
+  const slots = await askJsonCached<Slots>('note', NOTE_SYSTEM, notePrompt(profile, job, contact));
+  return renderNote({
+    firstName,
+    role: job.role,
+    company: job.company,
+    // Checked against the candidate's real titles: a note naming a project they
+    // have never built is worse than one naming the wrong real project.
+    highlight: resolveHighlight(slots.highlight, candidates),
+    hook: slots.hook,
+    proof: slots.proof,
+  });
 }

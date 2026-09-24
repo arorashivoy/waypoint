@@ -15,7 +15,9 @@ const inFlight = new Map<string, Promise<any>>();
 
 async function detail(jobId: string, userId: string, force: boolean) {
   const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
-  if (force || !job.analysis) await analyseJob(job, userId, force);
+  // `analysedAt`, not `analysis`: a job carrying only a keyword heuristic from a
+  // failed call should get a real read when you open it, not the stale estimate.
+  if (force || !job.analysedAt) await analyseJob(job, userId, force);
 
   const fresh = await db.job.findUniqueOrThrow({ where: { id: jobId } });
   const view = await jobView(fresh, userId);

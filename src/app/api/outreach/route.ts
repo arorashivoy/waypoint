@@ -3,8 +3,13 @@ import { db } from '@/lib/db';
 import { requireUser, profileSummary } from '@/lib/user';
 import { jobView } from '@/lib/analysis';
 import { askJson, detectMode } from '@/lib/claude';
+import { askJsonCached } from '@/lib/cache';
+import { renderReferral, resolveHighlight, type Slots } from '@/lib/templates';
 import { REFERRAL_SYSTEM, referralPrompt, REPLY_SYSTEM, replyPrompt } from '@/lib/prompts';
 import { checkForInjection } from '@/lib/injection';
+import { loadClaims } from '@/lib/claims';
+import { buildResume, resumeOffer } from '@/lib/resume';
+import { shareResume } from '@/lib/gdrive';
 
 export const maxDuration = 300;
 
@@ -51,12 +56,56 @@ export async function POST(req: NextRequest) {
     const request = await db.outreachEvent.findFirst({ where: { applicationId: app.id, kind: 'request' } });
     const name = request?.contactName || 'there';
     const { mode } = await detectMode();
-    const message =
-      mode === 'none'
-        ? `Thanks for connecting, ${name.split(' ')[0]}! I am applying for ${job.role} at ${job.company}. I have spent [X] years on ${profile.headline}. Would you be comfortable referring me? I can send my CV and the job ID [JOB ID].`
-        : (await askJson<{ message: string }>(REFERRAL_SYSTEM, referralPrompt(profile, job, name))).message;
 
-    await db.application.update({ where: { id: app.id }, data: { status: 'accepted' } });
+    // The message body comes from REFERRAL_TEMPLATE, not from the model. Claude
+    // supplies three spans — which project or role to lead with, why it matches
+    // this posting, and the one thing the posting asks for — and everything else
+    // is filled from rows we already hold. Fixed ask, fixed tone, and roughly a
+    // quarter of the output tokens of writing the message from scratch.
+    const candidates = [...profile.projects.map((p) => p.title), ...profile.positions.map((p) => p.title)].filter(Boolean);
+    const slots: Slots =
+      mode === 'none'
+        ? { highlight: candidates[0] || '', hook: 'it lines up closely with what I build today', proof: `I ${profile.headline.toLowerCase()}` }
+        : await askJsonCached<Slots>('referral', REFERRAL_SYSTEM, referralPrompt(profile, job, name));
+
+    // The CV is built here rather than when the message is opened, so the
+    // version he attaches is the one the message describes. Which projects lead
+    // is decided from the claim graph against this posting's own words — no
+    // model call, and the same answer every time for the same posting.
+    const resume = await buildResume(loadClaims(), `${job.role}\n${job.description}`, app.id);
+
+    // Uploaded before the message is written, because the message quotes the
+    // link. One file per posting: a referrer who opens it weeks later still
+    // sees the CV that was tailored for their company, which a single
+    // overwritten link could not promise.
+    const shared = resume ? await shareResume(resume.path, job.company, job.role) : { url: null, reason: null };
+    if (resume && shared.url) resume.publicUrl = shared.url;
+
+    const message = renderReferral({
+      firstName: name.split(' ')[0],
+      role: job.role,
+      company: job.company,
+      jobRef: job.url || '[JOB ID]',
+      candidateName: profile.name,
+      highlight: resolveHighlight(slots.highlight, candidates),
+      hook: slots.hook,
+      proof: slots.proof,
+      cv: resumeOffer(resume),
+    });
+
+    // Kept on the application, not only in the message body: before an
+    // interview the question is "which CV did this company read", and the
+    // message is the wrong place to have to go looking for it.
+    await db.application.update({
+      where: { id: app.id },
+      data: {
+        status: 'accepted',
+        cvUrl: shared.url,
+        cvPath: resume?.path || null,
+        cvLead: resume?.lead || null,
+        cvSentAt: resume ? new Date() : null,
+      },
+    });
     await db.outreachEvent.create({
       data: {
         applicationId: app.id,
@@ -68,7 +117,24 @@ export async function POST(req: NextRequest) {
         body: message,
       },
     });
-    return NextResponse.json({ ok: true });
+    // `reason` is returned as well as `path`: an untailored CV looks exactly
+    // like a tailored one from the outside, so the one case worth saying out
+    // loud is the one where it silently did not happen.
+    return NextResponse.json({
+      ok: true,
+      resume: resume && {
+        url: `/api/resume/${app.id}`,
+        path: resume.path,
+        tailored: resume.tailored,
+        lead: resume.lead,
+        order: resume.order,
+        dropped: resume.dropped,
+        matched: resume.matched,
+        publicUrl: resume.publicUrl,
+        reason: resume.reason,
+        shareReason: shared.reason,
+      },
+    });
   }
 
   if (body.action === 'replied') {

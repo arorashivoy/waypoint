@@ -87,6 +87,45 @@ to refresh; a new import replaces the profile wholesale and re-grades every cach
 `config/watchlist.json` plus the aggregators, then queues the most promising unread ones for Claude
 to read in the background.
 
+**4. Optional: a Drive link to the tailored CV in each referral message.** Needs `RESUME_PDF` or
+`RESUME_TEX` set, since there is nothing to upload without a CV. Once configured, each posting gets
+its own Drive file, so a referrer who opens the link weeks later still sees the version tailored for
+their company. Without it, the message falls back to "happy to send my CV".
+
+It authenticates as *you* over OAuth, not as a service account: a service account has no storage in
+a personal Drive, so its uploads fail. The scope is `drive.file`, which lets Waypoint touch only the
+files it created itself — not the rest of your Drive.
+
+1. At [console.cloud.google.com](https://console.cloud.google.com), create a project, then
+   **APIs & Services → Library → enable "Google Drive API"**.
+2. **Google Auth Platform** (formerly "OAuth consent screen") → **Branding**: app name and your email.
+   Then **Audience** → User type External → **Publish app**, so the status reads "In production".
+   Do not leave it in "Testing": Google expires a Testing app's refresh token after 7 days, and
+   uploads start failing a week later. `drive.file` is a non-sensitive scope, so publishing needs
+   no review.
+3. **Credentials → Create credentials → OAuth client ID → Desktop app.** Desktop, not Web: it
+   accepts any `http://localhost` callback, which the auth script listens on (port 3119).
+4. Put the client id and secret in `.env`:
+   ```bash
+   GDRIVE_CLIENT_ID=...
+   GDRIVE_CLIENT_SECRET=...
+   ```
+5. Run the one-time consent:
+   ```bash
+   npm run gdrive:auth
+   ```
+   It opens Google's consent screen. "Google hasn't verified this app" is expected for your own
+   app — Advanced → Continue. The terminal then prints `GDRIVE_REFRESH_TOKEN=…`; paste it into
+   `.env`. It is a long-lived credential: keep it in `.env` and nowhere else.
+6. Optional: create a Drive folder, open it, and copy the id from its URL into `GDRIVE_FOLDER_ID`,
+   so the CVs land there instead of your Drive root.
+7. Restart `npm run dev`.
+
+Uploaded files are "anyone with the link" — that is what makes the link work in a LinkedIn message,
+and it also means your phone number and email are readable by anyone it is forwarded to. Revoke one
+from its sharing menu, or all access at
+[myaccount.google.com/permissions](https://myaccount.google.com/permissions).
+
 ---
 
 ## Using it
@@ -210,12 +249,52 @@ fallback rather than breaking, and the sidebar says which mode is live.
 Four calls, each with the job description or inbound message fenced as untrusted data
 (`src/lib/prompts.ts`):
 
-| Call | Produces |
-|---|---|
-| Analyse | requirements marked on/not-on profile, field, mode, level, sponsorship, CV must-haves, project ranking |
-| Note | the ≤300-character connection note |
-| Referral | the longer message once a contact accepts, with `[X years]` / `[JOB ID]` placeholders |
-| Reply | a drafted reply **plus a certainty verdict** |
+Every call runs on **`claude-sonnet-5`**. The model is pinned in `src/lib/claude.ts` and is not
+configurable: it is part of the cache key below, so an env var that could move it would strand every
+cached reply.
+
+| Call | Produces | Cached |
+|---|---|---|
+| Analyse | requirements marked on/not-on profile, field, mode, level, sponsorship, CV must-haves, project ranking | yes |
+| Note | three spans that fill `CONNECT_NOTE_TEMPLATE` | yes |
+| Referral | three spans that fill `REFERRAL_TEMPLATE` once a contact accepts | yes |
+| Reply | a drafted reply **plus a certainty verdict** | **no, by design** |
+
+### The reply cache is deliberately absent
+
+The reply call decides whether text may send without you reading it. A cache there would be
+replayable: a message that once earned `certain: true` would earn it again on every repeat. It is the
+one call that pays for a fresh judgement each time.
+
+### Templates, not free-form messages
+
+Outreach is a fixed frame plus a few job-specific spans (`src/lib/templates.ts`). Claude is asked
+only for `highlight` (which project or role to lead with), `hook` (the one thing this posting asks
+for) and `proof` (one sentence tying them together); the greeting, the ask and the sign-off are
+written once, in the repo. This keeps the tone constant across applications, cuts output tokens to
+roughly a quarter, and means injected text in a description can reach one short, length-capped span
+rather than the whole message. `highlight` is checked against your real project and job titles before
+it is used — a message naming a project you have never built is worse than one naming the wrong real
+project.
+
+### Nothing is analysed twice
+
+`LlmCache` is keyed on `sha256(model ‖ system prompt ‖ user prompt)` — the exact bytes sent to the
+model, and nothing else (`src/lib/cache.ts`). Keying on the job row instead would mean enumerating
+the inputs an answer depends on, and missing one; here every dependency is inside the rendered
+prompt by construction. Three things follow:
+
+- One advert syndicated to two boards is two `Job` rows with two `externalId`s but one prompt, so the
+  second is a hit. Cross-source dedupe with no dedupe code.
+- An edited description, a re-imported LinkedIn profile, a reworded prompt or a model change all miss
+  and re-analyse, correctly, with no version counter to remember to bump.
+- The raw reply text is stored, not the parsed object, so a fix to `extractJson` replays against every
+  cached entry instead of needing a re-call. Failures are never cached.
+
+`Job.analysedAt` — not `Job.analysis` — is what "Claude has read this" means. They differ when a call
+fails: the keyword heuristic is still written so the card has something to show, but the job stays
+eligible for a retry instead of being frozen at a capped 65% estimate by one bad minute.
+`Job.analysisTries` stops that retry being endless, at three attempts.
 
 The certainty check is the safety-critical one. A draft is marked certain only when the message asks
 for something already on file (CV, job link, job ID) or a question the profile answers outright.
@@ -307,6 +386,41 @@ everyone else, with recruiters demoted. Each route shows its reason.
 A LinkedIn export contains only 1st-degree connections, so a company where you know nobody gets an
 **empty list and an honest message** — never an invented contact.
 
+## The claims ledger
+
+`data/profile/claims.yml` is a hand-written graph of what you can actually back up: each claim
+(skill, language, metric, credential, award) carries aliases, links to broader or related claims,
+evidence edges to a real project, position or education entry with a depth
+(`mentioned` < `used` < `built`), and the recruiter-facing surfaces it currently appears on.
+
+When the file is present and valid it replaces the LinkedIn import in every analysis and outreach
+prompt. When it is absent or invalid the app falls back to the import **silently** — nothing
+crashes, the messages just get worse. So validate after every edit:
+
+```bash
+npm run check:claims             # ✓ or ✗, plus coverage gaps per surface
+npm run check:claims -- --strict # warnings fail too
+```
+
+The checker and the app call the same `validate()` in `src/lib/claims.ts`, so they cannot disagree.
+The ledger is personal data, so `data/profile/` is gitignored and the file is never committed —
+back it up yourself. `CLAIMS_FILE` points the app at a different path.
+
+## Tailored CVs
+
+With `RESUME_TEX` set, each referral gets a CV reordered for that posting (`src/lib/resume.ts`).
+Choosing the order is deterministic and uses no model: the posting's text is matched against
+claim labels, aliases and one link hop in the ledger, and the projects (and the lead role's bullets)
+are sorted so the closest match comes first. Nothing is rewritten, only reordered (or trimmed, with `RESUME_MAX_PROJECTS`), so the CV cannot
+say anything the base document does not.
+
+Producing the PDF is best-effort. It needs a LaTeX engine (tectonic, pdflatex, xelatex or lualatex,
+auto-detected). If the section cannot be mapped to the ledger or the compile fails, the base
+`RESUME_PDF` goes out unchanged and the UI says why. Output is keyed on a hash of the rendered
+LaTeX, so an unchanged order is a cache hit. `GET /api/resume/<applicationId>` serves the PDF for
+one application, and `Application.cvUrl` / `cvPath` / `cvLead` record which version a given company
+received.
+
 ## What LinkedIn does and does not allow
 
 These constraints shape half the app, so they are worth stating plainly.
@@ -367,12 +481,20 @@ Copy `.env.example` to `.env`. Everything has a working default except the optio
 | `WAYPOINT_EMAIL` | `you@local` | Identifier for the local account. |
 | `WAYPOINT_ACCESS_CODE` | *(unset)* | Passcode required at sign-in. **Set before exposing beyond localhost.** Unset means no passcode field appears. |
 | `WAYPOINT_CLAUDE_MODE` | `cli` | `cli` uses your subscription via the Claude Code CLI; `api` forces the HTTP API. |
-| `WAYPOINT_CLAUDE_MODEL` | `claude-sonnet-5` | Model for every Claude call. |
 | `WAYPOINT_CLAUDE_BIN` | `claude` | Full path to the CLI if it is not on `PATH`. |
 | `WAYPOINT_CLAUDE_TIMEOUT_MS` | `120000` | Per-call timeout. Raise it on a slow connection. |
 | `ANTHROPIC_API_KEY` | *(unset)* | Only to bypass the subscription and pay API credit. Stripped from the CLI's environment so it cannot silently bill you. |
 | `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | *(unset)* | Free key from [developer.adzuna.com](https://developer.adzuna.com). Best lever for broader NL/PL/IN coverage. |
 | `LINKEDIN_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` | *(unset)* | Real OIDC sign-in. Returns name, email and photo only. |
+| `GDRIVE_CLIENT_ID` / `_SECRET` / `_REFRESH_TOKEN` | *(unset)* | Upload each tailored CV to your Drive and put its link in the referral message. See [First run, step 4](#first-run-getting-your-real-data-in). |
+| `GDRIVE_FOLDER_ID` | *(unset)* | Drive folder to upload into. Unset uploads to the Drive root. |
+| `RESUME_PDF` | *(unset)* | Base CV sent when tailoring is unavailable. With neither this nor `RESUME_TEX`, CV features are off. `~` is expanded. |
+| `RESUME_TEX` | *(unset)* | LaTeX source of the same CV. Turns on per-job tailoring. See [Tailored CVs](#tailored-cvs). |
+| `RESUME_PUBLIC_URL` | *(unset)* | A link a recruiter can open. The referral message offers a link only when this or Drive is set. |
+| `RESUME_ENGINE` | auto | `tectonic`, `pdflatex`, `xelatex` or `lualatex`. |
+| `RESUME_MAX_PROJECTS` | *(unset)* | Keep only the N most relevant projects. Unset reorders without dropping. |
+| `RESUME_OUT_DIR` / `RESUME_TIMEOUT_MS` | `data/resumes` / `180000` | Where tailored PDFs go; per-compile timeout. |
+| `CLAIMS_FILE` | `data/profile/claims.yml` | Path to the claims ledger. |
 | `WAYPOINT_SEED_SAMPLES` | *(unset)* | `1` makes `npm run db:seed` insert placeholder listings and a placeholder profile. Off by default on purpose. |
 
 ## Scripts
@@ -384,12 +506,19 @@ Copy `.env.example` to `.env`. Everything has a working default except the optio
 | `npm run build` / `npm start` | Production build and serve |
 | `npm run db:push` | Apply schema changes to the database |
 | `npm run db:seed` | Re-run the seed (placeholder data only with `WAYPOINT_SEED_SAMPLES=1`) |
+| `npm run gdrive:auth` | One-time Google consent; prints the `GDRIVE_REFRESH_TOKEN` for `.env` |
+| `npm run check:claims` | Validate `data/profile/claims.yml` and report coverage gaps |
 | `./scripts/remote.sh` | Server plus a public HTTPS tunnel, passcode enforced |
 
 ## Troubleshooting
 
 **"Claude not connected" in the sidebar.** Run `claude login`, then restart the dev server — the mode
 is detected once at startup. `curl localhost:3117/api/claude` forces a re-check.
+
+**Referral message has no CV link.** The UI shows the reason. `invalid_grant` means the refresh
+token is dead: the consent screen was left in "Testing" (7-day expiry) or access was revoked. Publish
+the app and run `npm run gdrive:auth` again. If you deleted a CV from Drive by hand, delete the
+`.link.json` beside its PDF in `data/resumes/` so the next message uploads it again.
 
 **`EADDRINUSE` on 3117.** Something already holds the port:
 `lsof -nP -iTCP:3117 -sTCP:LISTEN`, then kill it.

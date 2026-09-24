@@ -33,9 +33,19 @@ export default function PendingScreen({ state, refresh, setToast }: { state: any
   const markAccepted = async (a: any) => {
     setBusy(a.id);
     try {
-      await post('/api/outreach', { jobId: a.jobId, action: 'accepted' });
+      const res = await post<{
+        resume?: { tailored: boolean; lead: string | null; reason: string | null; path: string; publicUrl: string | null; shareReason: string | null };
+      }>('/api/outreach', { jobId: a.jobId, action: 'accepted' });
       await refresh();
-      setToast('Referral message drafted. It is waiting in Needs you.');
+      const cv = res.resume;
+      const built = cv?.tailored && cv.lead ? `CV rebuilt leading with ${cv.lead}` : cv?.reason ? `CV not tailored: ${cv.reason}` : null;
+      // The link is the part that reached the other person, so it leads; a
+      // failed upload is said out loud rather than leaving a message that
+      // quietly offers nothing.
+      const sent = cv?.publicUrl ? 'link in the message' : cv?.shareReason ? cv.shareReason : cv ? `attach ${cv.path}` : null;
+      setToast(
+        ['Referral message drafted, waiting in Needs you.', built, sent].filter(Boolean).join(' ') || 'Referral message drafted.',
+      );
     } catch (e) {
       setToast((e as Error).message);
     } finally {
@@ -185,6 +195,13 @@ export default function PendingScreen({ state, refresh, setToast }: { state: any
             <article key={p.id} className="pend-card" style={{ gap: 4 }}>
               <span style={{ fontSize: 15, fontWeight: 600 }}>{p.role}</span>
               <span style={{ fontSize: 13, color: 'var(--muted)' }}>{p.company} · {p.city}</span>
+              {p.cvUrl && (
+                <span style={{ fontSize: 13, color: 'var(--muted-2)' }}>
+                  <a href={p.cvUrl} target="_blank" rel="noreferrer">The CV they read</a>
+                  {p.cvLead ? ` · leads with ${p.cvLead}` : ''}
+                  {p.cvSent ? ` · sent ${p.cvSent}` : ''}
+                </span>
+              )}
             </article>
           ))}
         </div>

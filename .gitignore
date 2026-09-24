@@ -3,6 +3,16 @@ node_modules
 .env
 data/*.db
 data/*.db-journal
+data/*.yaml
+data/*.yml
 uploads
 tsconfig.tsbuildinfo
 *.log
+tmp/
+**/.DS_Store
+.claude/**
+data/resumes
+*.bak-*
+*.snapshot
+GITHUB_REMEDIATION.md
+data/profile/

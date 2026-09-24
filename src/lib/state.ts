@@ -4,6 +4,7 @@ import { makeJobViewer } from './analysis';
 import { detectMode, claudeAuthFailure, claudeQuotaFailure } from './claude';
 import { analysisProgress } from './queue';
 import { profileSummary } from './user';
+import { claimsFailure } from './claims';
 
 const ago = (d: Date) => {
   const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
@@ -137,9 +138,20 @@ export async function buildState(userId: string) {
       })),
   );
 
+  // Which CV went to which company, carried through to the screen he opens
+  // before an interview. Kept for every application that has one, not only the
+  // applied ones, because the question comes up as soon as a reply does.
   const appliedList = apps
     .filter((a) => a.status === 'applied')
-    .map((a) => ({ id: a.id, role: a.job.role, company: a.job.company, city: a.job.city }));
+    .map((a) => ({
+      id: a.id,
+      role: a.job.role,
+      company: a.job.company,
+      city: a.job.city,
+      cvUrl: a.cvUrl,
+      cvLead: a.cvLead,
+      cvSent: a.cvSentAt ? shortAgo(a.cvSentAt) : null,
+    }));
 
   const contacts = contactRows.map((c) => ({
     id: c.id,
@@ -178,6 +190,7 @@ export async function buildState(userId: string) {
       headline: profile.headline,
     },
     claude: { ...claude, authFailure: claudeAuthFailure(), quotaFailure: claudeQuotaFailure() },
+    claims: claimsFailure(),
     countries: COUNTRIES.map((c) => {
       const pref = prefs.find((p) => p.cc === c.cc);
       return { ...c, on: pref ? pref.on : true, count: String(counts.get(c.cc) || 0) };

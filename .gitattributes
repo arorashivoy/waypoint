@@ -1,0 +1,2 @@
+# prompts.ts holds a literal control-character regex, which makes git call it binary.
+*.ts diff

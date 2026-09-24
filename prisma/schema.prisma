@@ -123,6 +123,14 @@ model Job {
   fetchedAt   DateTime @default(now())
   analysis    String?
 
+  // `analysis` may hold a keyword guess written after a failed Claude call, so
+  // it cannot double as "this has been read". These two can: `analysedAt` is
+  // set only when Claude actually answered, and `analysisTries` bounds the
+  // retries so one permanently failing posting cannot eat the queue budget on
+  // every refresh.
+  analysedAt    DateTime?
+  analysisTries Int       @default(0)
+
   applications Application[]
 
   @@index([cc, postedAt])
@@ -137,6 +145,17 @@ model Application {
   match     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Which CV actually went out for this posting. A tailored CV is built per
+  // job and its projects and bullets are reordered, so "my resume" is not one
+  // document — before an interview the only useful question is which version
+  // this company read, and that is answerable only if the link is kept here.
+  // `cvPath` is the local file, `cvUrl` the Drive link the message carried,
+  // `cvLead` the entry it was reordered to open with.
+  cvUrl    String?
+  cvPath   String?
+  cvLead   String?
+  cvSentAt DateTime?
 
   user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   job      Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
@@ -163,4 +182,23 @@ model OutreachEvent {
   createdAt     DateTime @default(now())
 
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}
+
+// Content-addressed cache of model replies, keyed on a hash of the exact
+// (model, system, prompt) triple that was sent. Because the key is derived from
+// the request bytes rather than from the job row, two listings of the same
+// advert from different boards share one entry, and any change to the posting,
+// the profile, the prompt text or the model misses by construction.
+//
+// Not per-user: identity is already inside the prompt via the profile block.
+model LlmCache {
+  key       String   @id
+  kind      String
+  model     String
+  value     String
+  hits      Int      @default(0)
+  createdAt DateTime @default(now())
+  usedAt    DateTime @default(now())
+
+  @@index([kind, usedAt])
 }
