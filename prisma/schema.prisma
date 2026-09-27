@@ -131,6 +131,11 @@ model Job {
   analysedAt    DateTime?
   analysisTries Int       @default(0)
 
+  // Set when the company is marked `priority` in config/watchlist.json, whichever
+  // source the listing came from. Moves the job up the analysis queue and the list
+  // without touching its match score.
+  priority Boolean @default(false)
+
   applications Application[]
 
   @@index([cc, postedAt])

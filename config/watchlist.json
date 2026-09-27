@@ -1,6 +1,186 @@
 {
-  "_comment": "Companies whose openings Waypoint pulls straight from their applicant-tracking system. Greenhouse, Lever, Ashby and Workable each publish these endpoints so a company's own jobs can be republished, which is why they are the reliable source — unlike LinkedIn, Indeed, StepStone or Glassdoor, which forbid it. 'token' is the board slug in the careers URL, e.g. boards.greenhouse.io/<token>, jobs.lever.co/<token>, jobs.ashbyhq.com/<token>, apply.workable.com/<token>. Every board listed here was probed and had live postings at the time it was added; a token that later stops resolving is reported by name in the Refresh feeds toast rather than failing the whole fetch. Add your own targets the same way — this is the highest-quality source in the app, because the descriptions and posting dates come from the employer.",
+  "_comment": "Companies whose openings Waypoint pulls straight from their applicant-tracking system. Greenhouse, Lever, Ashby and Workable each publish these endpoints so a company's own jobs can be republished, which is why they are the reliable source — unlike LinkedIn, Indeed, StepStone or Glassdoor, which forbid it. 'token' is the board slug in the careers URL, e.g. boards.greenhouse.io/<token>, jobs.lever.co/<token>, jobs.ashbyhq.com/<token>, apply.workable.com/<token>. Every board listed here was probed and had live postings at the time it was added; a token that later stops resolving is reported by name in the Refresh feeds toast rather than failing the whole fetch. Add your own targets the same way — this is the highest-quality source in the app, because the descriptions and posting dates come from the employer. Beyond the four ATSs: 'smartrecruiters' (token = company id), 'workday' (token = tenant|host|site from <tenant>.<host>.myworkdayjobs.com/<site>), 'microsoft', 'amazon', 'apple' for those companies' own careers search, and 'google' for Google's published jobs feed (DeepMind and YouTube included). 'link' entries (Meta) are never fetched — its terms forbid it — but appear as links on the Countries screen. 'priority': true puts a company's jobs first in the analysis queue and lifts them 10 points in list order (not in the score shown); it applies to copies found on aggregators too, matched on the company name.",
   "companies": [
+    {
+      "company": "Google",
+      "ats": "google",
+      "token": "feed.xml",
+      "priority": true
+    },
+    {
+      "company": "Meta",
+      "ats": "link",
+      "url": "https://www.metacareers.com/jobs",
+      "priority": true
+    },
+    {
+      "company": "Microsoft",
+      "ats": "microsoft",
+      "token": "microsoft.com",
+      "priority": true
+    },
+    {
+      "company": "Amazon",
+      "ats": "amazon",
+      "token": "amazon.jobs",
+      "priority": true
+    },
+    {
+      "company": "Apple",
+      "ats": "apple",
+      "token": "jobs.apple.com",
+      "priority": true
+    },
+    {
+      "company": "NVIDIA",
+      "ats": "workday",
+      "token": "nvidia|wd5|NVIDIAExternalCareerSite",
+      "priority": true
+    },
+    {
+      "company": "Intel",
+      "ats": "workday",
+      "token": "intel|wd1|External",
+      "priority": true
+    },
+    {
+      "company": "Boston Dynamics",
+      "ats": "workday",
+      "token": "bostondynamics|wd1|Boston_Dynamics",
+      "priority": true
+    },
+    {
+      "company": "Bosch",
+      "ats": "smartrecruiters",
+      "token": "BoschGroup",
+      "priority": true
+    },
+    {
+      "company": "Continental",
+      "ats": "smartrecruiters",
+      "token": "Continental",
+      "priority": true
+    },
+    {
+      "company": "OpenAI",
+      "ats": "ashby",
+      "token": "openai",
+      "priority": true
+    },
+    {
+      "company": "Anthropic",
+      "ats": "greenhouse",
+      "token": "anthropic",
+      "priority": true
+    },
+    {
+      "company": "Scale AI",
+      "ats": "greenhouse",
+      "token": "scaleai",
+      "priority": true
+    },
+    {
+      "company": "Cohere",
+      "ats": "ashby",
+      "token": "cohere",
+      "priority": true
+    },
+    {
+      "company": "Perplexity",
+      "ats": "ashby",
+      "token": "perplexity",
+      "priority": true
+    },
+    {
+      "company": "Isomorphic Labs",
+      "ats": "greenhouse",
+      "token": "isomorphiclabs",
+      "priority": true
+    },
+    {
+      "company": "Hugging Face",
+      "ats": "workable",
+      "token": "huggingface",
+      "priority": true
+    },
+    {
+      "company": "ElevenLabs",
+      "ats": "ashby",
+      "token": "elevenlabs",
+      "priority": true
+    },
+    {
+      "company": "Helsing",
+      "ats": "greenhouse",
+      "token": "helsing",
+      "priority": true
+    },
+    {
+      "company": "DeepL",
+      "ats": "ashby",
+      "token": "deepl",
+      "priority": true
+    },
+    {
+      "company": "Synthesia",
+      "ats": "ashby",
+      "token": "synthesia",
+      "priority": true
+    },
+    {
+      "company": "Faculty",
+      "ats": "ashby",
+      "token": "faculty",
+      "priority": true
+    },
+    {
+      "company": "Waymo",
+      "ats": "greenhouse",
+      "token": "waymo",
+      "priority": true
+    },
+    {
+      "company": "Wayve",
+      "ats": "greenhouse",
+      "token": "wayve",
+      "priority": true
+    },
+    {
+      "company": "Figure AI",
+      "ats": "greenhouse",
+      "token": "figureai",
+      "priority": true
+    },
+    {
+      "company": "1X",
+      "ats": "ashby",
+      "token": "1x",
+      "priority": true
+    },
+    {
+      "company": "Physical Intelligence",
+      "ats": "ashby",
+      "token": "physicalintelligence",
+      "priority": true
+    },
+    {
+      "company": "Snowflake",
+      "ats": "ashby",
+      "token": "snowflake",
+      "priority": true
+    },
+    {
+      "company": "Cloudflare",
+      "ats": "greenhouse",
+      "token": "cloudflare",
+      "priority": true
+    },
+    {
+      "company": "Celonis",
+      "ats": "greenhouse",
+      "token": "celonis",
+      "priority": true
+    },
     {
       "company": "IMC Trading",
       "ats": "greenhouse",
@@ -49,7 +229,8 @@
     {
       "company": "Databricks",
       "ats": "greenhouse",
-      "token": "databricks"
+      "token": "databricks",
+      "priority": true
     },
     {
       "company": "Datadog",
@@ -84,7 +265,8 @@
     {
       "company": "Sereact",
       "ats": "ashby",
-      "token": "sereact"
+      "token": "sereact",
+      "priority": true
     },
     {
       "company": "Bird (MessageBird)",

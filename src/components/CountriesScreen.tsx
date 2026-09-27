@@ -16,6 +16,17 @@ export default function CountriesScreen({ state, toggleCountry }: { state: any; 
           ))}
         </div>
 
+        {state.careerLinks.length > 0 && (
+          <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+            <span className="label" style={{ letterSpacing: '0.08em' }}>★ Search by hand</span>
+            {state.careerLinks.map((l: { company: string; url: string }) => (
+              <a key={l.company} href={l.url} target="_blank" rel="noreferrer" style={{ fontSize: 14, padding: '6px 10px', borderRadius: 6, background: 'var(--chip)', color: 'inherit' }}>
+                {l.company} careers ↗
+              </a>
+            ))}
+          </div>
+        )}
+
         <div className="three-col">
           {state.countries.map((c: any) => (
             <div key={c.cc} className="panel stack" style={{ gap: 12, padding: 20, borderRadius: 12, opacity: c.on ? 1 : 0.6 }}>
@@ -52,9 +63,11 @@ export default function CountriesScreen({ state, toggleCountry }: { state: any; 
 
         <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--muted)', maxWidth: 760, margin: 0 }}>
           The boards listed on each card are where you search by hand — LinkedIn, Indeed, StepStone and Glassdoor all
-          forbid scraping, so Waypoint links out rather than fetching them. What it does fetch automatically: the
-          company boards in <code>config/watchlist.json</code> through the Greenhouse, Lever, Ashby and Workable public
-          APIs, Arbeitnow for Germany, and Adzuna if you set <code>ADZUNA_APP_ID</code>.
+          forbid scraping, so Waypoint links out rather than fetching them, and the same goes for Meta careers. What it
+          does fetch automatically: the companies in <code>config/watchlist.json</code> through the Greenhouse, Lever,
+          Ashby, Workable and SmartRecruiters public APIs, Google&apos;s jobs feed, and the Microsoft, Amazon, Apple and
+          Workday careers sites, plus Arbeitnow for Germany, The Muse, and Adzuna if you set <code>ADZUNA_APP_ID</code>. Companies
+          marked ★ are read first and rank above others of similar fit.
         </p>
       </div>
     </>

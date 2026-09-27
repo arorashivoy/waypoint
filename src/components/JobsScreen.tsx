@@ -26,6 +26,7 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
   const [q, setQ] = useState('');
   const [f, setF] = useState(DEFAULT_FILTERS);
   const [sponsorOnly, setSponsorOnly] = useState(false);
+  const [topOnly, setTopOnly] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -42,6 +43,7 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
         } else if (f.level !== 'Any' && j.level !== f.level) return false;
         if (j.days > (POSTED_WINDOWS[f.posted] ?? Infinity)) return false;
         if (sponsorOnly && !j.sponsor) return false;
+        if (topOnly && !j.priority) return false;
         if (q) {
           const hay = `${j.role} ${j.company} ${j.city}`.toLowerCase();
           if (!hay.includes(q.toLowerCase())) return false;
@@ -49,13 +51,13 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
         return true;
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.jobs, state.countries, state.levels, f, sponsorOnly, q],
+    [state.jobs, state.countries, state.levels, f, sponsorOnly, topOnly, q],
   );
 
   const activeId = selected && jobs.some((j: any) => j.id === selected) ? selected : phone ? selected : jobs[0]?.id ?? null;
 
   const activeFilters =
-    Object.entries(f).filter(([k, v]) => v !== DEFAULT_FILTERS[k]).length + (sponsorOnly ? 1 : 0);
+    Object.entries(f).filter(([k, v]) => v !== DEFAULT_FILTERS[k]).length + (sponsorOnly ? 1 : 0) + (topOnly ? 1 : 0);
 
   const countLabel = `${jobs.length} ${jobs.length === 1 ? 'role' : 'roles'}`;
 
@@ -128,6 +130,9 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
         <button className="chip" data-on={sponsorOnly} aria-pressed={sponsorOnly} onClick={() => setSponsorOnly(!sponsorOnly)}>
           Sponsors visa
         </button>
+        <button className="chip" data-on={topOnly} aria-pressed={topOnly} onClick={() => setTopOnly(!topOnly)}>
+          ★ Top companies
+        </button>
       </div>
 
       <div className="mobile-only" style={{ padding: '0 16px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -171,7 +176,7 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
                 <span className="mono" style={{ fontSize: 12, color: 'var(--positive)', fontWeight: 500 }}>{j.matchLabel}</span>
               </div>
               <span className="role">{j.role}</span>
-              <span style={{ fontSize: 14, color: 'var(--muted)' }}>{j.company} · {j.field} · {j.level}</span>
+              <span style={{ fontSize: 14, color: 'var(--muted)' }}>{j.priority && <span title="Priority company" style={{ color: 'var(--ink)' }}>★ </span>}{j.company} · {j.field} · {j.level}</span>
               <div className="row" style={{ gap: 8, flexWrap: 'wrap', width: '100%' }}>
                 <span className="tag">{j.path}</span>
                 {j.isSent && !j.isApplied && <span className="tag tag-dark">In pending</span>}
@@ -194,7 +199,7 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
           <div className="sheet-body" role="dialog" aria-label="Job filters" onClick={(e) => e.stopPropagation()}>
             <div className="row">
               <h2 className="display grow" style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Filters</h2>
-              <button style={{ height: 44, padding: '0 8px', border: 0, background: 'transparent', fontSize: 15, textDecoration: 'underline' }} onClick={() => { setF(DEFAULT_FILTERS); setSponsorOnly(false); }}>
+              <button style={{ height: 44, padding: '0 8px', border: 0, background: 'transparent', fontSize: 15, textDecoration: 'underline' }} onClick={() => { setF(DEFAULT_FILTERS); setSponsorOnly(false); setTopOnly(false); }}>
                 Reset
               </button>
             </div>
@@ -212,6 +217,9 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
             ))}
             <button className="chip" style={{ alignSelf: 'flex-start' }} data-on={sponsorOnly} aria-pressed={sponsorOnly} onClick={() => setSponsorOnly(!sponsorOnly)}>
               Sponsors visa only
+            </button>
+            <button className="chip" style={{ alignSelf: 'flex-start' }} data-on={topOnly} aria-pressed={topOnly} onClick={() => setTopOnly(!topOnly)}>
+              ★ Top companies only
             </button>
             <button className="btn btn-dark" style={{ height: 52, borderRadius: 10, fontSize: 16, fontWeight: 600 }} onClick={() => setSheet(false)}>
               Show {countLabel}

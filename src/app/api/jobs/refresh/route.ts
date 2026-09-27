@@ -24,7 +24,7 @@ export async function POST() {
   for (const j of jobs) {
     await db.job.upsert({
       where: { externalId: j.externalId },
-      update: { fetchedAt: new Date(), postedAt: j.postedAt, description: j.description, url: j.url },
+      update: { fetchedAt: new Date(), postedAt: j.postedAt, description: j.description, url: j.url, priority: j.priority },
       create: j,
     });
   }

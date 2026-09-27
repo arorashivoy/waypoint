@@ -40,7 +40,9 @@ export async function queueAnalysis(userId: string, limit = 25) {
     .map((job) => ({ job, ...view(job) }))
     // Postings that are not software roles at all never earn a Claude call.
     .filter((x) => x.analysis.field !== 'Other')
-    .sort((a, b) => b.match - a.match)
+    // Priority companies are read first, so their scores are real before the
+    // rest of the queue is touched.
+    .sort((a, b) => Number(b.job.priority) - Number(a.job.priority) || b.match - a.match)
     .slice(0, limit)
     .map((x) => x.job);
 

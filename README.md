@@ -442,21 +442,53 @@ These constraints shape half the app, so they are worth stating plainly.
 
 ## Job sources
 
-Fetched automatically — all four ATS vendors publish these endpoints so a company's own openings can
-be republished:
+Waypoint only fetches from sources whose owners permit automated access. Everything else is a link.
 
-- **Greenhouse, Lever, Ashby, Workable** — the companies in `config/watchlist.json`. This is the most
-  reliable source; edit the file to track your own targets. `token` is the board slug in the careers
-  URL. Every board shipped was checked and had live postings; one that stops resolving is reported by
-  name in the refresh toast instead of failing the whole fetch.
+**Company boards and careers sites** — the companies in `config/watchlist.json`, the highest-quality
+source, because the description and posting date come from the employer.
+
+| `ats` | How it is fetched | Companies shipped |
+|---|---|---|
+| `greenhouse`, `lever`, `ashby`, `workable` | Documented public job-board APIs | Anthropic, OpenAI, Scale AI, Cohere, Perplexity, Isomorphic Labs, Hugging Face, ElevenLabs, Helsing, DeepL, Synthesia, Faculty, Waymo, Wayve, Figure AI, 1X, Physical Intelligence, Snowflake, Cloudflare, Celonis, Databricks, Sereact, plus the fintech and trading list |
+| `smartrecruiters` | Documented public Posting API | Bosch, Continental |
+| `workday` | The search API behind the company's Workday careers site; token is `tenant\|host\|site` | NVIDIA, Intel, Boston Dynamics |
+| `google` | Google's published jobs feed (`/about/careers/applications/jobs/feed.xml`, every open role, DeepMind and YouTube included). Its `robots.txt` blocks the results pages, not the feed | Google |
+| `microsoft`, `amazon`, `apple` | The search endpoint the company's own careers page calls, permitted by its `robots.txt` | Microsoft, Amazon, Apple |
+| `link` | **Never fetched** — shown as a link on the Countries screen | Meta: its terms forbid automated collection and metacareers.com rejects non-browser clients. The Muse's Meta listings stopped updating in January 2026, so there is no current feed to use |
+
+The big employers list warehouse, retail and sales roles alongside engineering ones — Amazon has ~700
+openings in Germany alone. So the careers-site fetchers keep only technical titles *before* making
+any per-job request, Amazon is filtered server-side to engineering and science categories, and each
+company is capped at 30 detailed listings per country with at most four requests in flight.
+
+A board that stops resolving is reported by name in the refresh toast instead of failing the whole
+fetch.
+
+**Aggregators**
+
 - **Arbeitnow** — public job API, Germany.
+- **The Muse** — public jobs API, software roles in the main cities of each active country.
 - **Adzuna** — optional, needs a free `ADZUNA_APP_ID` / `ADZUNA_APP_KEY`. Coverage varies by country.
 
-Not fetched: LinkedIn Jobs, Indeed, StepStone, Glassdoor. All prohibit scraping, so the Countries
-screen links out to them for searching by hand. Check any source's current terms before adding it.
+**Not fetched:** LinkedIn Jobs, Indeed, StepStone, Glassdoor, Meta. The Countries screen links
+out to them for searching by hand.
 
-De-duplication is by company + normalised title + city, and the ATS copy wins over the aggregator
-copy because its description is authoritative.
+### Priority companies
+
+A watchlist entry with `"priority": true` is a company you want to see first. Its jobs:
+
+1. **are read by Claude first** — the analysis queue takes every priority job before any other, so
+   their scores are real, not keyword estimates;
+2. **sort 10 points higher** in the job list. A 72% Anthropic role sits above a 78% unknown one, but
+   below an 85% one: fit still wins when the gap is real. The score *shown* is never changed;
+3. **carry a ★** and can be isolated with the **★ Top companies** filter.
+
+Priority follows the *company*, not the source: it is matched on whole words at the start of the
+company name, so a Meta listing that arrives through Adzuna is marked too, even though Meta itself is never
+fetched, and "Amazon Development Center Germany GmbH" counts as Amazon.
+
+De-duplication is by company + normalised title + city. The employer's own copy beats an
+aggregator's, and a priority company's own copy beats everything.
 
 ## Stack
 

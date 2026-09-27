@@ -5,6 +5,7 @@ import { detectMode, claudeAuthFailure, claudeQuotaFailure } from './claude';
 import { analysisProgress } from './queue';
 import { profileSummary } from './user';
 import { claimsFailure } from './claims';
+import { watchlist } from './sources';
 
 const ago = (d: Date) => {
   const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
@@ -68,6 +69,7 @@ export async function buildState(userId: string) {
         visa: analysis.visa,
         url: j.url,
         source: j.source,
+        priority: j.priority,
         posted: ago(j.postedAt),
         days: Math.floor((Date.now() - j.postedAt.getTime()) / 86_400_000),
         match,
@@ -83,7 +85,13 @@ export async function buildState(userId: string) {
   // Ranked by fit, not by date. With several hundred live listings a
   // recency-first list buries the handful worth reading, and a posting Claude
   // has read always outranks a keyword estimate at the same score.
-  jobCards.sort((a, b) => b.match - a.match || Number(a.provisional) - Number(b.provisional) || a.days - b.days);
+  //
+  // A priority company sorts as if it scored PRIORITY_LIFT higher, so it wins
+  // among jobs of similar fit but a clearly better fit elsewhere still wins. The
+  // lift is applied to the sort key only; the score shown is the real one.
+  const PRIORITY_LIFT = 10;
+  const key = (j: (typeof jobCards)[number]) => j.match + (j.priority ? PRIORITY_LIFT : 0);
+  jobCards.sort((a, b) => key(b) - key(a) || Number(a.provisional) - Number(b.provisional) || a.days - b.days);
 
   const needs = apps.flatMap((a) =>
     a.outreach
@@ -196,6 +204,7 @@ export async function buildState(userId: string) {
       return { ...c, on: pref ? pref.on : true, count: String(counts.get(c.cc) || 0) };
     }),
     globalSites: GLOBAL_SITES,
+    careerLinks: (await watchlist()).flatMap((e) => (e.ats === 'link' ? [{ company: e.company, url: e.url }] : [])),
     jobs: jobCards,
     needs,
     awaiting,
