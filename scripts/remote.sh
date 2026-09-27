@@ -26,8 +26,10 @@ trap cleanup EXIT INT TERM
 # another session) holding the port makes a doomed `npm run dev` look healthy,
 # and the tunnel then quietly depends on a process this script does not own.
 if curl -sf -o /dev/null "http://localhost:$PORT" 2>/dev/null; then
-  echo "Something is already serving :$PORT — reusing it."
-  echo "  (If that is not your own \`npm run dev\`, stop it first: lsof -nP -iTCP:$PORT -sTCP:LISTEN)"
+  if [ -z "${WAYPOINT_DEV_FROM_START:-}" ]; then
+    echo "Something is already serving :$PORT — reusing it."
+    echo "  (If that is not your own \`npm run dev\`, stop it first: lsof -nP -iTCP:$PORT -sTCP:LISTEN)"
+  fi
   OWN_SERVER=0
 else
   echo "Starting Waypoint on :$PORT ..."
@@ -77,7 +79,7 @@ fi
 echo
 echo "  public: $url"
 echo "  passcode: the WAYPOINT_ACCESS_CODE value in .env"
-if [ "$OWN_SERVER" -eq 0 ]; then
+if [ "$OWN_SERVER" -eq 0 ] && [ -z "${WAYPOINT_DEV_FROM_START:-}" ]; then
   echo
   echo "  NOTE: this tunnel points at a server this script did not start."
   echo "        If that server stops, the public URL stops with it."
