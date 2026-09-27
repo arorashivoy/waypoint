@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   const user = await ensureUser(
     process.env.WAYPOINT_EMAIL || 'you@local',
-    process.env.WAYPOINT_NAME || 'Shivoy Arora',
+    process.env.WAYPOINT_NAME || 'Your Name',
   );
 
   // Behind a tunnel the browser speaks https even though Next sees plain http,

@@ -3,11 +3,11 @@ import { db } from '@/lib/db';
 import { requireUser } from '@/lib/user';
 import { fetchAll } from '@/lib/sources';
 import { queueAnalysis } from '@/lib/queue';
+import { loadClaims } from '@/lib/claims';
+import { searchQueries } from '@/lib/resume';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
-
-const QUERIES = ['software engineer', 'backend engineer', 'securities', 'robotics engineer'];
 
 export async function POST() {
   const user = await requireUser();
@@ -15,7 +15,7 @@ export async function POST() {
   const ccs = prefs.map((p) => p.cc);
   if (!ccs.length) return NextResponse.json({ added: 0, report: [], note: 'Every country is paused.' });
 
-  const { jobs, report } = await fetchAll(ccs, QUERIES);
+  const { jobs, report } = await fetchAll(ccs, searchQueries(loadClaims()));
 
   const known = new Set(
     (await db.job.findMany({ where: { externalId: { in: jobs.map((j) => j.externalId) } }, select: { externalId: true } }))

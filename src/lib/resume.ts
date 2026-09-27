@@ -188,6 +188,14 @@ export function projectPicks(doc: ClaimsDoc | null): ProjectPick[] {
   });
 }
 
+/** Job-board search terms: a general one, plus one for each field claims.yml
+ *  has a project to lead with. */
+export function searchQueries(doc: ClaimsDoc | null): string[] {
+  const fields = new Set(projectPicks(doc).map((p) => p.role));
+  const extra = FIELD_QUERIES.filter((q) => fields.has(q.field)).map((q) => q.search);
+  return [...new Set(['software engineer', ...(extra.length ? extra : ['backend engineer'])])];
+}
+
 /** Overlap of significant words, used to tie a CV entry to a claims.yml
  *  project. The two are written by different hands — "ROS 2 Autonomous
  *  Navigation" on the CV against "ROS 2 SLAM navigation robot" in the file — so

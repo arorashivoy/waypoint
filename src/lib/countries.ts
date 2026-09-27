@@ -63,10 +63,10 @@ export const CV_COUNTRY_RULES: Record<string, string[]> = {
 /** What a posting in each field typically asks for. Run through `rankEvidence`
  *  against claims.yml to decide which project leads the CV for that field, so
  *  the choice follows the claim graph instead of a hand-written table. */
-export const FIELD_QUERIES: { field: (typeof FIELDS)[number]; query: string }[] = [
-  { field: 'Finance tech', query: 'financial platform, microservices, Spring Boot, REST APIs, distributed systems, distributed data consistency, system design, event-driven' },
-  { field: 'Backend', query: 'backend services, Java, Python, Spring Boot, microservices, REST APIs, gRPC, Redis, PostgreSQL, distributed systems, AWS' },
-  { field: 'Trading', query: 'low latency, C++, multithreading, networking, TCP, data structures, algorithms' },
-  { field: 'ML & NLP', query: 'machine learning, deep learning, NLP, transformers, PyTorch, model evaluation, dataset annotation' },
-  { field: 'Robotics', query: 'robotics, UAV, drones, autonomy, ArduPilot, flight control, SLAM, ROS' },
+export const FIELD_QUERIES: { field: (typeof FIELDS)[number]; query: string; search: string }[] = [
+  { field: 'Finance tech', query: 'financial platform, microservices, Spring Boot, REST APIs, distributed systems, distributed data consistency, system design, event-driven', search: 'fintech software engineer' },
+  { field: 'Backend', query: 'backend services, Java, Python, Spring Boot, microservices, REST APIs, gRPC, Redis, PostgreSQL, distributed systems, AWS', search: 'backend engineer' },
+  { field: 'Trading', query: 'low latency, C++, multithreading, networking, TCP, data structures, algorithms', search: 'low latency engineer' },
+  { field: 'ML & NLP', query: 'machine learning, deep learning, NLP, transformers, PyTorch, model evaluation, dataset annotation', search: 'machine learning engineer' },
+  { field: 'Robotics', query: 'robotics, UAV, drones, autonomy, ArduPilot, flight control, SLAM, ROS', search: 'robotics engineer' },
 ];

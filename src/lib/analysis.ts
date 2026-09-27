@@ -6,9 +6,9 @@ import { ANALYSE_SYSTEM, analysePrompt, NOTE_SYSTEM, notePrompt } from './prompt
 import { profileSummary } from './user';
 import { fieldFit, levelFit, matchScore, rankRoutes, routeLabel, type Route } from './match';
 import { renderNote, resolveHighlight, type Slots } from './templates';
-import { CV_COUNTRY_RULES } from './countries';
+import { CV_COUNTRY_RULES, FIELD_QUERIES } from './countries';
 import { loadClaims } from './claims';
-import { claimsInPosting, projectPicks } from './resume';
+import { claimsInPosting, projectPicks, rankEvidence } from './resume';
 import { fieldFromText } from './sources/geo';
 
 export type Analysis = {
@@ -23,7 +23,17 @@ export type Analysis = {
   by: 'claude' | 'heuristic';
 };
 
-const STRONG_FIELDS = ['Finance tech', 'Backend'];
+/** The two fields claims.yml has the strongest job or project evidence for. Without
+ *  a claims file, Backend: every software profile overlaps it. */
+function strongFields(): string[] {
+  const doc = loadClaims();
+  if (!doc) return ['Backend'];
+  return FIELD_QUERIES.map((q) => ({ field: q.field, score: rankEvidence(doc, q.query).find((p) => p.kind === 'project' || p.kind === 'position')?.score || 0 }))
+    .filter((f) => f.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 2)
+    .map((f) => f.field);
+}
 
 /** Keyword overlap, used when Claude is not reachable so the app still works. */
 function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileSummary>>): Analysis {
@@ -150,7 +160,7 @@ function viewOf(job: Job, profile: Profile, contacts: { company: string | null; 
   });
 
   const provisional = analysis.by !== 'claude';
-  const raw = matchScore(analysis.requirements, fieldFit(analysis.field, STRONG_FIELDS), levelFit(analysis.level, profile.levels));
+  const raw = matchScore(analysis.requirements, fieldFit(analysis.field, strongFields()), levelFit(analysis.level, profile.levels));
   // A keyword guess is never allowed to outrank a posting Claude actually read.
   const match = provisional ? Math.min(raw, 65) : raw;
 

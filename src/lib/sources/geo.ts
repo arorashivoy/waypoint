@@ -50,14 +50,17 @@ export function modeFromText(text: string): 'Remote' | 'Hybrid' | 'On-site' {
 /** Cheap pre-LLM guesses, overwritten by the analysis pass when Claude runs. */
 export function fieldFromText(text: string): string {
   const t = text.toLowerCase();
-  if (/securities lending|collateral|settlement|custody|post-trade|clearing|prime broker/.test(t)) return 'Finance tech';
+  const software = /\b(software|backend|back-end|engineer|developer|api|microservice|kubernetes|java|python|golang|typescript)\b/.test(t);
+  // Finance words alone also describe a bank's sales and operations roles, so
+  // they only make a posting Finance tech when it also reads as software.
+  if (software && /fintech|payments?\b|banking|capital markets|asset management|wealth management|securities|ledger|settlement|custody|post-trade|clearing|collateral/.test(t)) return 'Finance tech';
   if (/market making|low.?latency|trading system|order book|execution/.test(t)) return 'Trading';
-  if (/\bros ?2?\b|slam|robotic|autonomy|lidar|motion planning/.test(t)) return 'Robotics';
+  if (/\bros ?2?\b|slam|robotic|autonomy|lidar|motion planning|\buavs?\b|drones?\b/.test(t)) return 'Robotics';
   if (/\bnlp\b|\bllm\b|transformer|machine learning|pytorch|deep learning/.test(t)) return 'ML & NLP';
   // Only claim a software field when the posting actually reads like one. The
   // aggregators carry sales, marketing and site roles too, and labelling those
   // "Backend" would quietly pollute the Field filter.
-  if (/\b(software|backend|back-end|engineer|developer|api|microservice|kubernetes|java|python|golang|typescript)\b/.test(t)) return 'Backend';
+  if (software) return 'Backend';
   return 'Other';
 }
 
