@@ -32,15 +32,27 @@ const SIGNALS: { re: RegExp; why: string }[] = [
   { re: /\b(as|this is)\b[^.!?\n]{0,20}\b(anthropic|openai|your (developer|creator|administrator))\b/i,
     why: 'it falsely claims to speak for the assistant’s developer' },
   { re: /\b(api[_ -]?key|password|credential|token|\.env\b|ssh key)\b/i, why: 'it asks about credentials' },
-  // Invisible codepoints have no legitimate place in a LinkedIn message.
-  { re: /[\u{E0000}-\u{E007F}]/u, why: 'it contains hidden invisible characters' },
+  // Tag/private-use codepoints (E0000-E007F) carry no glyph and are the classic
+  // way to smuggle a payload past a human reader. Zero-width joiners, the BOM,
+  // and word joiners can hide word boundaries the signal patterns above rely
+  // on. None of these belong in a LinkedIn message.
+  { re: /[\u{E0000}-\u{E007F}]|[​-‏‪-‮⁠-⁤﻿]/u,
+    why: 'it contains hidden invisible characters' },
 ];
 
 export type InjectionCheck = { suspicious: boolean; why: string | null };
 
 export function checkForInjection(text: string): InjectionCheck {
+  // Detect the invisibles on the raw text — normalization would strip them —
+  // then run the semantic patterns over an NFKC-folded copy so fullwidth,
+  // compatibility, and homoglyph forms of "ignore previous instructions" are
+  // caught alongside the plain ASCII spelling.
+  const invisibles = SIGNALS[SIGNALS.length - 1];
+  if (invisibles.re.test(text)) return { suspicious: true, why: invisibles.why };
+  const folded = text.normalize('NFKC');
   for (const { re, why } of SIGNALS) {
-    if (re.test(text)) return { suspicious: true, why };
+    if (re === invisibles.re) continue;
+    if (re.test(folded)) return { suspicious: true, why };
   }
   return { suspicious: false, why: null };
 }

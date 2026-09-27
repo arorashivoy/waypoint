@@ -78,7 +78,9 @@ export async function uploadResume(pdfPath: string, company: string, role: strin
   if (!cfg) throw new Error('Google Drive is not configured');
 
   const bytes = readFileSync(pdfPath);
-  const name = `ShivoyArora-CV-${safe(company)}-${safe(role)}.pdf`;
+  // Owner name comes from WAYPOINT_NAME in .env, e.g. "Jane Doe" -> "JaneDoe-CV-...".
+  const owner = safe((process.env.WAYPOINT_NAME || '').replace(/\s+/g, ''));
+  const name = `${owner ? `${owner}-` : ''}CV-${safe(company)}-${safe(role)}.pdf`;
   const metadata: Record<string, unknown> = { name, mimeType: 'application/pdf' };
   if (cfg.folderId) metadata.parents = [cfg.folderId];
 
