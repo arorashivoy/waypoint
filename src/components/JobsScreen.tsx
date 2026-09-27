@@ -135,7 +135,7 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
         </button>
       </div>
 
-      <div className="mobile-only" style={{ padding: '0 16px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="mobile-only" style={{ padding: '0 var(--gutter) 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <label className="sr-only" htmlFor="wp-m-search">Search roles</label>
         <input id="wp-m-search" type="search" className="field" style={{ width: '100%' }} placeholder="Search role, company, city" value={q} onChange={(e) => setQ(e.target.value)} />
         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>

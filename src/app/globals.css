@@ -256,23 +256,27 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .sidebar { display: none; }
   .desktop-only { display: none !important; }
 
-  .main { padding-bottom: 72px; }
+  /* viewport-fit=cover lets content run under the notch and rounded corners. */
+  .main {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 72px env(safe-area-inset-left);
+    --gutter: 20px;
+  }
 
-  .screen-head { padding: 20px 16px 12px; border-bottom: 0; }
+  .screen-head { padding: 20px var(--gutter) 12px; border-bottom: 0; }
   .screen-head h1 { font-size: 28px; }
 
   .filters { display: none; }
 
   .jobs-split { flex-direction: column; }
-  .jobs-list { width: 100%; padding: 4px 16px 24px; gap: 10px; overflow: visible; }
-  .jobs-detail { padding: 0 16px 28px; overflow: visible; }
+  .jobs-list { width: 100%; padding: 4px var(--gutter) 24px; gap: 10px; overflow: visible; }
+  .jobs-detail { padding: 0 var(--gutter) 28px; overflow: visible; }
   .job-card { background: var(--surface); padding: 14px; }
   .job-card .role { font-size: 16px; }
 
   .panel { padding: 0; border: 0; background: transparent; border-radius: 0; }
   .two-col, .two-col-tight, .three-col { grid-template-columns: minmax(0, 1fr); gap: 16px; }
 
-  .board { display: flex; flex-direction: column; gap: 14px; padding: 4px 16px 28px; }
+  .board { display: flex; flex-direction: column; gap: 14px; padding: 4px var(--gutter) 28px; }
 
   .tabbar {
     position: fixed; bottom: 0; left: 0; right: 0;
