@@ -433,6 +433,8 @@ These constraints shape half the app, so they are worth stating plainly.
   of your data → full archive. Upload the `.zip` on the Resume screen. `Connections.csv` — name,
   company, position, connection date — is what makes referral routing possible at all. Re-upload any
   time to refresh; a fresh import replaces the profile wholesale and invalidates cached analyses.
+  When `claims.yml` is in force, or you upload a bare `Connections.csv` instead of the `.zip`, only
+  contacts are replaced and analyses are kept, since the rest of the import is not read.
   (The parser handles the three-line `Notes:` preamble LinkedIn puts above the real header, which
   breaks naive CSV parsing.)
 - **No outbound action is automated.** The API cannot send a connection request or a message or read

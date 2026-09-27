@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { requireUser } from '@/lib/user';
 import { parseExport } from '@/lib/linkedin-import';
+import { loadClaims } from '@/lib/claims';
 
 export const maxDuration = 300;
 
@@ -9,6 +10,13 @@ export const maxDuration = 300;
  * A fresh export replaces the imported profile wholesale. That is what makes
  * "re-upload to refresh connections" work: a contact who left a company, or a
  * new 1st-degree connection, shows up on the next import.
+ *
+ * Only contacts are replaced when claims.yml is in force or the upload is a
+ * bare Connections.csv. With claims.yml loaded the imported positions,
+ * projects and skills are never read, so replacing them changes nothing, and
+ * clearing every analysis for it would re-bill each job for a profile that did
+ * not move. Contacts never need that: routes are ranked from live contacts on
+ * every view, not stored in the analysis.
  */
 export async function POST(req: NextRequest) {
   const user = await requireUser();
@@ -24,6 +32,25 @@ export async function POST(req: NextRequest) {
   }
 
   const userId = user.id;
+
+  if (!parsed.archive || loadClaims()) {
+    // Zero rows means the wrong file or an export requested without
+    // connections; replacing with that would silently erase every route.
+    if (!parsed.contacts.length) {
+      return NextResponse.json({ error: 'No connections found in that file. Upload Connections.csv or the full LinkedIn archive.' }, { status: 400 });
+    }
+    // Carried forward so the Profile screen does not report the untouched
+    // positions and projects as zero.
+    const prev = await db.profileImport.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } });
+    const counts = { ...(prev ? JSON.parse(prev.counts) : {}), contacts: parsed.contacts.length };
+    await db.$transaction([
+      db.contact.deleteMany({ where: { userId } }),
+      db.contact.createMany({ data: parsed.contacts.map((c) => ({ ...c, userId })) }),
+      db.profileImport.create({ data: { userId, filename: file.name, counts: JSON.stringify(counts) } }),
+    ]);
+    return NextResponse.json({ ok: true, scope: 'contacts', counts });
+  }
+
   await db.$transaction([
     db.position.deleteMany({ where: { userId } }),
     db.education.deleteMany({ where: { userId } }),
@@ -40,5 +67,5 @@ export async function POST(req: NextRequest) {
     db.job.updateMany({ data: { analysis: null } }),
   ]);
 
-  return NextResponse.json({ ok: true, counts: parsed.counts });
+  return NextResponse.json({ ok: true, scope: 'full', counts: parsed.counts });
 }

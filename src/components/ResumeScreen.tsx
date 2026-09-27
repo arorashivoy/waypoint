@@ -16,7 +16,9 @@ export default function ResumeScreen({ state, refresh, setToast }: { state: any;
       if (!res.ok) throw new Error(data.error || 'Import failed');
       await refresh();
       setToast(
-        `Imported ${data.counts.positions} positions, ${data.counts.educations} schools, ${data.counts.projects} projects, ${data.counts.skills} skills and ${data.counts.contacts} connections.`,
+        data.scope === 'contacts'
+          ? `Refreshed ${data.counts.contacts} connections. Profile and job analyses left as they were.`
+          : `Imported ${data.counts.positions} positions, ${data.counts.educations} schools, ${data.counts.projects} projects, ${data.counts.skills} skills and ${data.counts.contacts} connections.`,
       );
     } catch (e) {
       setToast((e as Error).message);
@@ -45,7 +47,7 @@ export default function ResumeScreen({ state, refresh, setToast }: { state: any;
               <input
                 ref={input}
                 type="file"
-                accept=".zip"
+                accept=".zip,.csv"
                 hidden
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }}
               />

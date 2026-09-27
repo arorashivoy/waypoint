@@ -18,6 +18,8 @@ export type ImportedProfile = {
   skills: string[];
   contacts: { firstName: string; lastName: string; company: string | null; position: string | null; profileUrl: string | null; connectedAt: Date | null }[];
   counts: Record<string, number>;
+  /** False for a bare Connections.csv, which says nothing about the rest of the profile. */
+  archive: boolean;
 };
 
 /** LinkedIn writes dates as "Mar 2024", "2024", or occasionally "3/15/2024". */
@@ -34,9 +36,10 @@ function parseDate(v: string | undefined): Date | null {
  * line that looks like the header.
  */
 function rows(csv: string): Record<string, string>[] {
-  const lines = csv.split(/\r?\n/);
+  // A CSV re-saved from Excel gains a BOM, which would otherwise glue itself to "First Name".
+  const lines = csv.replace(/^\uFEFF/, '').split(/\r?\n/);
   const headerIdx = lines.findIndex((l) => /^"?(First Name|Company Name|School Name|Title|Name|Notes",?$)/i.test(l.trim()) && !/^Notes:/i.test(l));
-  const body = headerIdx > 0 ? lines.slice(headerIdx).join('\n') : csv;
+  const body = lines.slice(Math.max(headerIdx, 0)).join('\n');
   const out = Papa.parse<Record<string, string>>(body, { header: true, skipEmptyLines: true });
   return (out.data || []).filter((r) => Object.values(r).some((v) => (v || '').trim()));
 }
@@ -50,11 +53,15 @@ const pick = (entries: { name: string; text: string }[], ...names: string[]) => 
 };
 
 export function parseExport(buffer: Buffer): ImportedProfile {
-  const zip = new AdmZip(buffer);
-  const entries = zip
-    .getEntries()
-    .filter((e) => !e.isDirectory && e.entryName.toLowerCase().endsWith('.csv'))
-    .map((e) => ({ name: e.entryName.split('/').pop() || e.entryName, text: e.getData().toString('utf8') }));
+  // Every zip starts with the local-file-header magic "PK"; anything else is
+  // taken to be Connections.csv on its own, uploaded to refresh contacts.
+  const archive = buffer.subarray(0, 2).toString('latin1') === 'PK';
+  const entries = archive
+    ? new AdmZip(buffer)
+        .getEntries()
+        .filter((e) => !e.isDirectory && e.entryName.toLowerCase().endsWith('.csv'))
+        .map((e) => ({ name: e.entryName.split('/').pop() || e.entryName, text: e.getData().toString('utf8') }))
+    : [{ name: 'Connections.csv', text: buffer.toString('utf8') }];
 
   const profileRows = pick(entries, 'Profile.csv');
   const headline = profileRows[0]?.['Headline'] || '';
@@ -107,5 +114,6 @@ export function parseExport(buffer: Buffer): ImportedProfile {
       skills: skills.length,
       contacts: contacts.length,
     },
+    archive,
   };
 }
