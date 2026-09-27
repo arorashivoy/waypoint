@@ -6,7 +6,9 @@ import { ANALYSE_SYSTEM, analysePrompt, NOTE_SYSTEM, notePrompt } from './prompt
 import { profileSummary } from './user';
 import { fieldFit, levelFit, matchScore, rankRoutes, routeLabel, type Route } from './match';
 import { renderNote, resolveHighlight, type Slots } from './templates';
-import { ALWAYS_ON_CV, CV_COUNTRY_RULES, PROJECT_PICKS } from './countries';
+import { CV_COUNTRY_RULES } from './countries';
+import { loadClaims } from './claims';
+import { claimsInPosting, projectPicks } from './resume';
 import { fieldFromText } from './sources/geo';
 
 export type Analysis = {
@@ -35,22 +37,24 @@ function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileS
 
   // Deliberately narrow patterns. An earlier, looser set matched words that
   // appear in any corporate posting — "platform", "systems", "optimization" —
-  // and handed a paid-search marketing role a 65% score.
+  // and handed a paid-search marketing role a 65% score. Used only when there
+  // is no claims.yml; with one, the posting is read against the claim graph.
   const candidates = [
-    ['Securities lending or financing domain', /securities lending|stock loan|collateral management|repo desk|prime brokerage|post-trade/i],
     ['Production systems at scale', /high[- ]throughput|low[- ]latency|production services|scalab(le|ility)|high availability/i],
     ['Java or Spring', /\bjava\b|spring boot|\bjvm\b/i],
     ['Python', /\bpython\b|\bdjango\b|\bfastapi\b/i],
     ['C++', /\bc\+\+\b|\bcpp\b/i],
     ['Distributed systems', /distributed systems|\bkafka\b|microservices|event[- ]driven/i],
-    ['ROS 2 and SLAM', /\bros ?2\b|\bslam\b|point cloud|motion planning/i],
     ['Machine learning', /\bbert\b|transformer|pytorch|tensorflow|machine learning engineer|deep learning/i],
     ['Strong algorithms and maths', /data structures and algorithms|numerical method|linear algebra|competitive programming/i],
   ] as const;
 
+  const claims = loadClaims();
   const requirements: { t: string; ok: boolean }[] =
     field === 'Other'
       ? [{ t: 'A software engineering role', ok: false }]
+      : claims
+      ? claimsInPosting(claims, `${job.role}\n${job.description}`).slice(0, 5)
       : candidates
           .filter(([, re]) => re.test(job.description) || re.test(job.role))
           .slice(0, 5)
@@ -60,7 +64,7 @@ function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileS
   // nothing is credited until Claude has actually read it.
   if (requirements.length < 2) requirements.push({ t: 'Core skills named in the posting', ok: false });
 
-  const lead = PROJECT_PICKS.find((p) => job.field.startsWith(p.role.split(',')[0].split(' ')[0]))?.lead;
+  const lead = projectPicks(claims).find((p) => p.role === job.field)?.lead;
   const projects = profile.projects
     .map((p) => ({ n: p.title, why: p.title === lead ? 'Closest match to this posting' : 'Supporting evidence, one line' }))
     .sort((a, b) => (a.n === lead ? -1 : b.n === lead ? 1 : 0))
@@ -78,7 +82,6 @@ function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileS
         ? 'A notice period line'
         : `A work authorisation line: "Will require ${job.visa === 'Sponsorship not stated' ? 'sponsorship' : job.visa} sponsorship"`,
       ...(CV_COUNTRY_RULES[job.cc] || []).slice(0, 1),
-      ALWAYS_ON_CV[1],
     ].filter(Boolean),
     projects,
     by: 'heuristic',

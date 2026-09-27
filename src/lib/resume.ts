@@ -5,6 +5,7 @@ import { homedir, tmpdir } from 'os';
 import { dirname, join, resolve } from 'path';
 import { promisify } from 'util';
 import type { Claim, ClaimsDoc } from './claims';
+import { FIELD_QUERIES } from './countries';
 
 const run = promisify(execFile);
 
@@ -163,6 +164,28 @@ export function rankEvidence(doc: ClaimsDoc, postingText: string): EvidencePick[
   }
 
   return [...picks.values()].sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+}
+
+/** Skills and languages from claims.yml that a posting names, each with
+ *  whether it has evidence behind it. A claim with none is listed on a surface
+ *  but unproven, so it is shown as a gap rather than credited. */
+export function claimsInPosting(doc: ClaimsDoc, postingText: string): { t: string; ok: boolean }[] {
+  const text = norm(postingText);
+  return doc.claims
+    .filter((c) => (c.kind === 'skill' || c.kind === 'language') && [c.label, ...c.aliases].some((t) => mentions(text, t)))
+    .map((c) => ({ t: c.label, ok: c.evidence.some((e) => e.depth !== 'mentioned') }));
+}
+
+export type ProjectPick = { role: string; lead: string; then: string };
+
+/** Which claims.yml project leads the CV in each field, and which follows it.
+ *  A field no project has evidence for is left out rather than padded. */
+export function projectPicks(doc: ClaimsDoc | null): ProjectPick[] {
+  if (!doc) return [];
+  return FIELD_QUERIES.flatMap(({ field, query }) => {
+    const [lead, then] = rankEvidence(doc, query).filter((p) => p.kind === 'project');
+    return lead ? [{ role: field, lead: lead.title, then: then?.title || '—' }] : [];
+  });
 }
 
 /** Overlap of significant words, used to tie a CV entry to a claims.yml

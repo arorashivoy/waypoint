@@ -79,15 +79,6 @@ export default function ResumeScreen({ state, refresh, setToast }: { state: any;
           </div>
 
           <div className="stack resume-rules" style={{ gap: 20 }}>
-            <div style={{ background: 'var(--accent-wash)', borderRadius: 14, padding: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <h2 className="display" style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--accent-deep)' }}>Mandatory on every CV you send</h2>
-              {state.always.map((m: string, i: number) => (
-                <div key={i} style={{ fontSize: 15, lineHeight: 1.5, display: 'flex', gap: 10 }}>
-                  <span style={{ color: 'var(--accent-ink)' }}>—</span><span>{m}</span>
-                </div>
-              ))}
-            </div>
-
             <div className="panel stack" style={{ gap: 6, padding: 24 }}>
               <h2 className="display" style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 700 }}>Which project leads, by role</h2>
               <div className="three-col desktop-only" style={{ gap: 12, padding: '8px 0', borderBottom: '1px solid var(--ink)' }}>

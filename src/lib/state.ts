@@ -1,10 +1,11 @@
 import { db } from './db';
-import { COUNTRIES, GLOBAL_SITES, ALWAYS_ON_CV, PROJECT_PICKS } from './countries';
+import { COUNTRIES, GLOBAL_SITES } from './countries';
 import { makeJobViewer } from './analysis';
 import { detectMode, claudeAuthFailure, claudeQuotaFailure } from './claude';
 import { analysisProgress } from './queue';
 import { profileSummary } from './user';
-import { claimsFailure } from './claims';
+import { claimsFailure, loadClaims } from './claims';
+import { projectPicks } from './resume';
 import { watchlist } from './sources';
 
 const ago = (d: Date) => {
@@ -223,8 +224,7 @@ export async function buildState(userId: string) {
     lastImport: lastImportRow
       ? { filename: lastImportRow.filename, createdAt: lastImportRow.createdAt.toISOString(), counts: importCounts }
       : null,
-    always: ALWAYS_ON_CV,
-    picks: PROJECT_PICKS,
+    picks: projectPicks(loadClaims()),
     levels: profile.levels,
   };
 }

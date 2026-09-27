@@ -60,17 +60,13 @@ export const CV_COUNTRY_RULES: Record<string, string[]> = {
   IN: ['Notice period, which Indian employers ask for up front'],
 };
 
-export const ALWAYS_ON_CV = [
-  'A one-line work authorisation status: every country abroad on your list checks it first',
-  'Numbers for the lending platform: volumes, latency or users [ADD YOURS]',
-  'Languages with CEFR levels: English, plus any German, Dutch or French started',
-  'A link to the ROS 2 repository and the paper, once public',
-  'Two pages at most; no photo for the Netherlands or Ireland',
-];
-
-export const PROJECT_PICKS = [
-  { role: 'Finance tech', lead: 'Securities lending platform', then: 'ROS 2 SLAM, one line' },
-  { role: 'Trading, low latency', lead: 'ROS 2 SLAM maze solver', then: 'Securities lending platform' },
-  { role: 'ML and NLP', lead: 'RecipeBERT paper', then: 'ROS 2 SLAM maze solver' },
-  { role: 'Robotics', lead: 'ROS 2 SLAM maze solver', then: 'RecipeBERT paper' },
+/** What a posting in each field typically asks for. Run through `rankEvidence`
+ *  against claims.yml to decide which project leads the CV for that field, so
+ *  the choice follows the claim graph instead of a hand-written table. */
+export const FIELD_QUERIES: { field: (typeof FIELDS)[number]; query: string }[] = [
+  { field: 'Finance tech', query: 'financial platform, microservices, Spring Boot, REST APIs, distributed systems, distributed data consistency, system design, event-driven' },
+  { field: 'Backend', query: 'backend services, Java, Python, Spring Boot, microservices, REST APIs, gRPC, Redis, PostgreSQL, distributed systems, AWS' },
+  { field: 'Trading', query: 'low latency, C++, multithreading, networking, TCP, data structures, algorithms' },
+  { field: 'ML & NLP', query: 'machine learning, deep learning, NLP, transformers, PyTorch, model evaluation, dataset annotation' },
+  { field: 'Robotics', query: 'robotics, UAV, drones, autonomy, ArduPilot, flight control, SLAM, ROS' },
 ];
