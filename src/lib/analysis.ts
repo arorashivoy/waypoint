@@ -7,8 +7,8 @@ import { profileSummary } from './user';
 import { fieldFit, levelFit, matchScore, rankRoutes, routeLabel, type Route } from './match';
 import { renderNote, resolveHighlight, type Slots } from './templates';
 import { CV_COUNTRY_RULES, FIELD_QUERIES } from './countries';
-import { loadClaims } from './claims';
-import { claimsInPosting, projectPicks, rankEvidence } from './resume';
+import { loadClaims, type ClaimsDoc } from './claims';
+import { claimsInPosting, projectPicks, rankEvidence, type ProjectPick } from './resume';
 import { fieldFromText } from './sources/geo';
 
 export type Analysis = {
@@ -25,8 +25,7 @@ export type Analysis = {
 
 /** The two fields claims.yml has the strongest job or project evidence for. Without
  *  a claims file, Backend: every software profile overlaps it. */
-function strongFields(): string[] {
-  const doc = loadClaims();
+function strongFields(doc: ClaimsDoc | null): string[] {
   if (!doc) return ['Backend'];
   return FIELD_QUERIES.map((q) => ({ field: q.field, score: rankEvidence(doc, q.query).find((p) => p.kind === 'project' || p.kind === 'position')?.score || 0 }))
     .filter((f) => f.score > 0)
@@ -35,8 +34,18 @@ function strongFields(): string[] {
     .map((f) => f.field);
 }
 
+/** What claims.yml says about fit in each field. Scoring it runs the claim
+ *  graph once per field, so it is built once per load and shared by every job
+ *  in the list, not recomputed per job. */
+type Fit = { claims: ClaimsDoc | null; strong: string[]; picks: ProjectPick[] };
+
+function fitFromClaims(): Fit {
+  const claims = loadClaims();
+  return { claims, strong: strongFields(claims), picks: projectPicks(claims) };
+}
+
 /** Keyword overlap, used when Claude is not reachable so the app still works. */
-function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileSummary>>): Analysis {
+function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileSummary>>, fit: Fit): Analysis {
   const haystack = [
     ...profile.positions.map((p) => `${p.title} ${p.company} ${p.summary || ''}`),
     ...profile.projects.map((p) => `${p.title} ${p.description || ''}`),
@@ -59,7 +68,7 @@ function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileS
     ['Strong algorithms and maths', /data structures and algorithms|numerical method|linear algebra|competitive programming/i],
   ] as const;
 
-  const claims = loadClaims();
+  const { claims } = fit;
   const requirements: { t: string; ok: boolean }[] =
     field === 'Other'
       ? [{ t: 'A software engineering role', ok: false }]
@@ -74,7 +83,7 @@ function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileS
   // nothing is credited until Claude has actually read it.
   if (requirements.length < 2) requirements.push({ t: 'Core skills named in the posting', ok: false });
 
-  const lead = projectPicks(claims).find((p) => p.role === job.field)?.lead;
+  const lead = fit.picks.find((p) => p.role === job.field)?.lead;
   const projects = profile.projects
     .map((p) => ({ n: p.title, why: p.title === lead ? 'Closest match to this posting' : 'Supporting evidence, one line' }))
     .sort((a, b) => (a.n === lead ? -1 : b.n === lead ? 1 : 0))
@@ -121,14 +130,14 @@ export async function analyseJob(job: Job, userId: string, force = false): Promi
 
   const { mode } = await detectMode();
   if (mode === 'none') {
-    analysis = heuristicAnalysis(job, profile);
+    analysis = heuristicAnalysis(job, profile, fitFromClaims());
   } else {
     try {
       const out = await askJsonCached<Omit<Analysis, 'by'>>('analysis', ANALYSE_SYSTEM, analysePrompt(profile, job));
       analysis = { ...out, requirements: out.requirements || [], must: out.must || [], projects: out.projects || [], by: 'claude' };
       read = true;
     } catch {
-      analysis = heuristicAnalysis(job, profile);
+      analysis = heuristicAnalysis(job, profile, fitFromClaims());
     }
   }
 
@@ -150,7 +159,7 @@ export async function analyseJob(job: Job, userId: string, force = false): Promi
 
 type Profile = Awaited<ReturnType<typeof profileSummary>>;
 
-function viewOf(job: Job, profile: Profile, contacts: { company: string | null; position: string | null; firstName: string; lastName: string; profileUrl: string | null }[], analysis: Analysis) {
+function viewOf(job: Job, profile: Profile, contacts: { company: string | null; position: string | null; firstName: string; lastName: string; profileUrl: string | null }[], analysis: Analysis, fit: Fit) {
   const routes = rankRoutes(contacts as any, {
     company: job.company,
     field: analysis.field,
@@ -160,7 +169,7 @@ function viewOf(job: Job, profile: Profile, contacts: { company: string | null; 
   });
 
   const provisional = analysis.by !== 'claude';
-  const raw = matchScore(analysis.requirements, fieldFit(analysis.field, strongFields()), levelFit(analysis.level, profile.levels));
+  const raw = matchScore(analysis.requirements, fieldFit(analysis.field, fit.strong), levelFit(analysis.level, profile.levels));
   // A keyword guess is never allowed to outrank a posting Claude actually read.
   const match = provisional ? Math.min(raw, 65) : raw;
 
@@ -177,7 +186,8 @@ export async function makeJobViewer(userId: string) {
     profileSummary(userId),
     db.contact.findMany({ where: { userId } }),
   ]);
-  return (job: Job) => viewOf(job, profile, contacts, job.analysis ? JSON.parse(job.analysis) : heuristicAnalysis(job, profile));
+  const fit = fitFromClaims();
+  return (job: Job) => viewOf(job, profile, contacts, job.analysis ? JSON.parse(job.analysis) : heuristicAnalysis(job, profile, fit), fit);
 }
 
 export async function jobView(job: Job, userId: string, opts: { analyse?: boolean } = {}) {
@@ -186,13 +196,14 @@ export async function jobView(job: Job, userId: string, opts: { analyse?: boolea
     db.contact.findMany({ where: { userId } }),
   ]);
 
+  const fit = fitFromClaims();
   const analysis: Analysis = job.analysis
     ? JSON.parse(job.analysis)
     : opts.analyse
       ? await analyseJob(job, userId)
-      : heuristicAnalysis(job, profile);
+      : heuristicAnalysis(job, profile, fit);
 
-  return viewOf(job, profile, contacts, analysis);
+  return viewOf(job, profile, contacts, analysis, fit);
 }
 
 /**
