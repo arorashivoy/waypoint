@@ -408,11 +408,36 @@ back it up yourself. `CLAIMS_FILE` points the app at a different path.
 
 ## Tailored CVs
 
-With `RESUME_TEX` set, each referral gets a CV reordered for that posting (`src/lib/resume.ts`).
-Choosing the order is deterministic and uses no model: the posting's text is matched against
-claim labels, aliases and one link hop in the ledger, and the projects (and the lead role's bullets)
-are sorted so the closest match comes first. Nothing is rewritten, only reordered (or trimmed, with `RESUME_MAX_PROJECTS`), so the CV cannot
-say anything the base document does not.
+With `RESUME_TEX` set, each referral gets a CV whose content is chosen for that posting
+(`src/lib/resume.ts`). The base CV is the starting layout, not the menu: what goes in is picked from
+`claims.yml`. Choosing is deterministic and uses no model: the posting's text is matched against
+claim labels, aliases and one link hop in the ledger, and then
+
+- **Projects.** Every project in the ledger competes for the section's slots, not only the ones on
+  the base CV. A project that is not on the base CV can win a slot if you give it a `tex:` entry in
+  `claims.yml`: one `\item` block in the same shape as the entries already on your CV. The weakest
+  fit drops out to make room. The section keeps the base CV's length unless `RESUME_MAX_PROJECTS`
+  says otherwise. If a project would have made the cut but has no `tex:`, the UI says so and the
+  project is left out.
+- **Experience.** The lead role's bullets are sorted so the closest match comes first.
+- **Skills.** Within each line of the skills section, the skills the posting asks for move to the
+  front. A skill the posting names, that the ledger has `used` or `built` evidence for, but that the
+  base CV leaves out, takes the place of the least relevant entry on the line it is linked to. Unbacked
+  entries go first. Languages only ever join a line labelled for languages. Line lengths stay as
+  they were.
+
+```yaml
+targets:
+  projects:
+    - id: kafka-pipeline
+      title: Kafka event pipeline
+      tex: |
+        \item \textbf{Kafka Event Pipeline} \hfill 2025 \\
+        Built a 50k msg/s pipeline with exactly-once delivery.
+```
+
+Nothing is generated: every line on the PDF is one you wrote, either in the base CV or in a `tex:`
+entry, so the CV cannot say anything you have not.
 
 Producing the PDF is best-effort. It needs a LaTeX engine (tectonic, pdflatex, xelatex or lualatex,
 auto-detected). If the section cannot be mapped to the ledger or the compile fails, the base
@@ -526,7 +551,7 @@ Copy `.env.example` to `.env`. Everything has a working default except the optio
 | `RESUME_TEX` | *(unset)* | LaTeX source of the same CV. Turns on per-job tailoring. See [Tailored CVs](#tailored-cvs). |
 | `RESUME_PUBLIC_URL` | *(unset)* | A link a recruiter can open. The referral message offers a link only when this or Drive is set. |
 | `RESUME_ENGINE` | auto | `tectonic`, `pdflatex`, `xelatex` or `lualatex`. |
-| `RESUME_MAX_PROJECTS` | *(unset)* | Keep only the N most relevant projects. Unset reorders without dropping. |
+| `RESUME_MAX_PROJECTS` | *(unset)* | How many projects the tailored CV carries, picked from `claims.yml`. Unset keeps the base CV's count. |
 | `RESUME_OUT_DIR` / `RESUME_TIMEOUT_MS` | `data/resumes` / `180000` | Where tailored PDFs go; per-compile timeout. |
 | `CLAIMS_FILE` | `data/profile/claims.yml` | Path to the claims ledger. |
 | `WAYPOINT_SEED_SAMPLES` | *(unset)* | `1` makes `npm run db:seed` insert placeholder listings and a placeholder profile. Off by default on purpose. |

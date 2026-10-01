@@ -78,7 +78,19 @@ export type Claim = {
   higherIsBetter?: boolean;
 };
 
-export type ProjectTarget = { id: string; title: string; org?: string | null; description?: string | null; url?: string | null };
+export type ProjectTarget = {
+  id: string;
+  title: string;
+  org?: string | null;
+  description?: string | null;
+  url?: string | null;
+  /** The project's CV entry as LaTeX, one `\item` block in the CV's own macros.
+   *  Only needed for a project that is not already on the base CV: with it, a
+   *  posting that fits this project better than one the CV carries gets it
+   *  swapped in. Without it the project can lead a referral message but never
+   *  appear on the PDF, because the wording of a CV line is his to write. */
+  tex?: string | null;
+};
 /** One bullet of a position, addressable as `position:<id>/<bullet id>`.
  *
  *  `match` is a distinctive phrase from the CV bullet rather than the bullet's
@@ -165,6 +177,18 @@ export function validate(raw: unknown): Check {
       if (typeof a !== 'string' || !a.trim()) err(`targets.educations[${i}].aliases[${j}]`, 'must be a non-empty string');
       else if (a.replace(/[^a-z0-9]/gi, '').length < 4) err(`targets.educations[${i}].aliases[${j}]`, `"${a}" is too short to match on; under four characters it matches half the connection list`);
     });
+  });
+
+  projects.forEach((p: any, i) => {
+    if (p.tex === undefined || p.tex === null) return;
+    // Spliced into the projects section verbatim, beside entries the CV class
+    // knows how to lay out. Anything but an `\item` block there breaks the
+    // compile, or worse, compiles into a page with a stray paragraph on it.
+    if (typeof p.tex !== 'string' || !/^\\item\b/.test(p.tex.trim())) {
+      err(`targets.projects[${i}].tex`, 'if present, the LaTeX of one CV entry, starting with \\item');
+    } else if (/\\item\b/.test(p.tex.trim().slice(5).replace(/\\begin\{itemize\}[\s\S]*?\\end\{itemize\}/g, ''))) {
+      err(`targets.projects[${i}].tex`, 'holds more than one top-level \\item; one entry per project');
+    }
   });
 
   positions.forEach((p: any, i) => {
