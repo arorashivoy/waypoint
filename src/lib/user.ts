@@ -5,7 +5,10 @@ import { inferLevels } from './match';
 import { loadClaims, profileFromClaims, schoolOf, type ResolvedProfile } from './claims';
 import type { ProfileSummary } from './prompts';
 
-export const SESSION_COOKIE = 'waypoint_user';
+/** Browsers share cookies across ports on one host, so a second copy of the
+ *  app on another port (a second user on the same machine) would otherwise
+ *  read this one's session and sign it out. */
+export const SESSION_COOKIE = process.env.PORT && process.env.PORT !== '3117' ? `waypoint_user_${process.env.PORT}` : 'waypoint_user';
 
 export async function ensureUser(email: string, name: string, picture?: string, linkedin?: string) {
   const user = await db.user.upsert({

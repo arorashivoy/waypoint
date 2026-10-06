@@ -117,8 +117,11 @@ files it created itself — not the rest of your Drive.
    It opens Google's consent screen. "Google hasn't verified this app" is expected for your own
    app — Advanced → Continue. The terminal then prints `GDRIVE_REFRESH_TOKEN=…`; paste it into
    `.env`. It is a long-lived credential: keep it in `.env` and nowhere else.
-6. Optional: create a Drive folder, open it, and copy the id from its URL into `GDRIVE_FOLDER_ID`,
-   so the CVs land there instead of your Drive root.
+6. Optional: a folder for the CVs, so they land there instead of your Drive root. It must be
+   created **by Waypoint's token**, not by hand: `drive.file` only sees files the app created,
+   so a folder you make in Drive returns 404 and every upload into it fails. The API call is in
+   [SETUP_WITH_CLAUDE.md](SETUP_WITH_CLAUDE.md#5-google-drive-cv-links-in-referral-messages)
+   (section 5, step 7); put the returned id in `GDRIVE_FOLDER_ID`.
 7. Restart `npm run dev`.
 
 Uploaded files are "anyone with the link" — that is what makes the link work in a LinkedIn message,

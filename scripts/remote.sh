@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PORT=3117
+PORT="${PORT:-3117}"
 
 if ! grep -q '^WAYPOINT_ACCESS_CODE="..*"' .env 2>/dev/null; then
   echo "Refusing to expose Waypoint with no passcode." >&2
