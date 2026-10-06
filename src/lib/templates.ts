@@ -22,7 +22,6 @@ export type Slots = {
   hook: string;
 };
 
-export type NoteFill = { firstName: string; role: string; company: string } & Slots;
 export type ReferralFill = {
   firstName: string;
   role: string;
@@ -35,15 +34,9 @@ export type ReferralFill = {
   cv: string;
 } & Slots;
 
-/** LinkedIn rejects a connection note over 300 characters, so the frame is kept
- *  short enough that the two model slots have room inside the budget. */
-export const CONNECT_NOTE_MAX = 300;
-
-export const CONNECT_NOTE_TEMPLATE = `Hi {firstName}, I saw the {role} role at {company} — {hook}. {proof} Would you be open to referring me?`;
-
 export const REFERRAL_TEMPLATE = `Hi {firstName},
 
-Thanks for connecting! I am applying for {role} at {company}, and {hook}.
+Hope you are doing well. I am applying for {role} at {company}, and {hook}.
 
 {proof}
 
@@ -99,18 +92,6 @@ function groundProof(proof: string, highlight: string, max: number) {
   // first word to splice it in mangles a leading "I" or a product name.
   if (!body) return `My work on ${highlight} is the closest match`;
   return clampToWords(`My work on ${highlight} is the closest match. ${body}`, max);
-}
-
-export function renderNote(v: NoteFill) {
-  const highlight = span(v.highlight, 60);
-  const body = fill(CONNECT_NOTE_TEMPLATE, {
-    firstName: v.firstName,
-    role: v.role,
-    company: v.company,
-    hook: span(v.hook, 90),
-    proof: groundProof(v.proof, highlight, 140) + '.',
-  });
-  return clampToWords(body.replace(/\s+/g, ' ').trim(), CONNECT_NOTE_MAX);
 }
 
 export function renderReferral(v: ReferralFill) {

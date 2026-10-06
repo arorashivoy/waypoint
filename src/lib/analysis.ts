@@ -2,10 +2,9 @@ import type { Job } from '@prisma/client';
 import { db } from './db';
 import { detectMode } from './claude';
 import { askJsonCached } from './cache';
-import { ANALYSE_SYSTEM, analysePrompt, NOTE_SYSTEM, notePrompt } from './prompts';
+import { ANALYSE_SYSTEM, analysePrompt } from './prompts';
 import { profileSummary } from './user';
-import { fieldFit, levelFit, matchScore, rankRoutes, routeLabel, type Route } from './match';
-import { renderNote, resolveHighlight, type Slots } from './templates';
+import { fieldFit, levelFit, matchScore, rankRoutes, routeLabel } from './match';
 import { CV_COUNTRY_RULES, FIELD_QUERIES } from './countries';
 import { loadClaims, type ClaimsDoc } from './claims';
 import { claimsInPosting, projectPicks, rankEvidence, type ProjectPick } from './resume';
@@ -224,39 +223,3 @@ export async function jobView(job: Job, userId: string, opts: { analyse?: boolea
   return viewOf(job, profile, contacts, analysis, fit);
 }
 
-/**
- * The note is assembled from `CONNECT_NOTE_TEMPLATE`; Claude supplies only the
- * hook, the proof line and which project or role to highlight. That keeps the
- * ask and the tone fixed, keeps the 300-character budget under our control
- * rather than the model's, and bounds what a hostile job description can reach.
- */
-export async function draftNote(job: Job, userId: string, route: Route | null): Promise<string> {
-  const profile = await profileSummary(userId);
-  const contact = route || { name: 'there', role: `at ${job.company}`, why: 'no 1st-degree contact found yet' };
-  const firstName = contact.name.split(' ')[0];
-  const candidates = [...profile.projects.map((p) => p.title), ...profile.positions.map((p) => p.title)].filter(Boolean);
-  const { mode } = await detectMode();
-
-  if (mode === 'none') {
-    return renderNote({
-      firstName,
-      role: job.role,
-      company: job.company,
-      highlight: candidates[0] || '',
-      hook: `it maps closely to the systems I build today`,
-      proof: `I ${profile.headline.toLowerCase()}`,
-    });
-  }
-
-  const slots = await askJsonCached<Slots>('note', NOTE_SYSTEM, notePrompt(profile, job, contact));
-  return renderNote({
-    firstName,
-    role: job.role,
-    company: job.company,
-    // Checked against the candidate's real titles: a note naming a project they
-    // have never built is worse than one naming the wrong real project.
-    highlight: resolveHighlight(slots.highlight, candidates),
-    hook: slots.hook,
-    proof: slots.proof,
-  });
-}

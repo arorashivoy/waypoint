@@ -15,6 +15,11 @@ export const maxDuration = 300;
 
 const ON_FILE = ['the CV', 'the job link', 'the job ID', 'the LinkedIn profile'];
 
+/** Without a profile URL in the export, a people search for the name at the
+ *  company is the closest LinkedIn gets to the person. */
+const profileLink = (c: { name: string; profileUrl: string | null }, company: string) =>
+  c.profileUrl || `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${c.name} ${company}`)}`;
+
 /**
  * LinkedIn's API cannot send a connection request, send a message, or read the
  * inbox, and automating the site breaks the User Agreement. So every outbound
@@ -31,30 +36,14 @@ export async function POST(req: NextRequest) {
     create: { userId: user.id, jobId: job.id },
   });
 
-  if (body.action === 'send-request') {
+  if (body.action === 'referral') {
+    // Every route comes from Connections.csv, so the contact is already a
+    // 1st-degree connection: there is no request to wait on, and the referral
+    // ask goes straight into a message.
+    const profile = await profileSummary(user.id);
     const { routes } = await jobView(job, user.id);
     const route = routes[0];
-    await db.application.update({ where: { id: app.id }, data: { status: 'sent' } });
-    await db.outreachEvent.create({
-      data: {
-        applicationId: app.id,
-        kind: 'request',
-        contactName: route?.name || 'Contact',
-        contactInit: route?.init || '??',
-        contactUrl: route?.profileUrl || null,
-        org: `${job.company} · ${job.city}`,
-        body: app.note,
-        reason: route?.why || '',
-        handled: true,
-      },
-    });
-    return NextResponse.json({ ok: true, copy: app.note, open: route?.profileUrl || 'https://www.linkedin.com/search/results/people/' });
-  }
-
-  if (body.action === 'accepted') {
-    const profile = await profileSummary(user.id);
-    const request = await db.outreachEvent.findFirst({ where: { applicationId: app.id, kind: 'request' } });
-    const name = request?.contactName || 'there';
+    if (!route) return NextResponse.json({ error: `No 1st-degree connection at ${job.company} in your imported export.` }, { status: 404 });
     const { mode } = await detectMode();
 
     // The message body comes from REFERRAL_TEMPLATE, not from the model. Claude
@@ -66,12 +55,11 @@ export async function POST(req: NextRequest) {
     const slots: Slots =
       mode === 'none'
         ? { highlight: candidates[0] || '', hook: 'it lines up closely with what I build today', proof: `I ${profile.headline.toLowerCase()}` }
-        : await askJsonCached<Slots>('referral', REFERRAL_SYSTEM, referralPrompt(profile, job, name));
+        : await askJsonCached<Slots>('referral', REFERRAL_SYSTEM, referralPrompt(profile, job, route.name));
 
-    // The CV is built here rather than when the message is opened, so the
-    // version he attaches is the one the message describes. Which projects lead
-    // is decided from the claim graph against this posting's own words — no
-    // model call, and the same answer every time for the same posting.
+    // Which projects lead is decided from the claim graph against this
+    // posting's own words — no model call, and the same answer every time for
+    // the same posting.
     const resume = await buildResume(loadClaims(), `${job.role}\n${job.description}`, app.id);
 
     // Uploaded before the message is written, because the message quotes the
@@ -82,7 +70,7 @@ export async function POST(req: NextRequest) {
     if (resume && shared.url) resume.publicUrl = shared.url;
 
     const message = renderReferral({
-      firstName: name.split(' ')[0],
+      firstName: route.name.split(' ')[0],
       role: job.role,
       company: job.company,
       jobRef: job.url || '[JOB ID]',
@@ -99,7 +87,7 @@ export async function POST(req: NextRequest) {
     await db.application.update({
       where: { id: app.id },
       data: {
-        status: 'accepted',
+        status: 'sent',
         cvUrl: shared.url,
         cvPath: resume?.path || null,
         cvLead: resume?.lead || null,
@@ -109,12 +97,14 @@ export async function POST(req: NextRequest) {
     await db.outreachEvent.create({
       data: {
         applicationId: app.id,
-        kind: 'accepted',
-        contactName: name,
-        contactInit: request?.contactInit || '??',
-        contactUrl: request?.contactUrl || null,
+        kind: 'request',
+        contactName: route.name,
+        contactInit: route.init,
+        contactUrl: profileLink(route, job.company),
         org: `${job.company} · ${job.city}`,
         body: message,
+        reason: route.why,
+        handled: true,
       },
     });
     // `reason` is returned as well as `path`: an untailored CV looks exactly
@@ -122,14 +112,13 @@ export async function POST(req: NextRequest) {
     // loud is the one where it silently did not happen.
     return NextResponse.json({
       ok: true,
+      copy: message,
+      open: profileLink(route, job.company),
+      name: route.name,
       resume: resume && {
-        url: `/api/resume/${app.id}`,
-        path: resume.path,
         tailored: resume.tailored,
         lead: resume.lead,
-        order: resume.order,
-        dropped: resume.dropped,
-        matched: resume.matched,
+        path: resume.path,
         publicUrl: resume.publicUrl,
         reason: resume.reason,
         shareReason: shared.reason,

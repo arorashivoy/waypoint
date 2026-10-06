@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { api, copyAndOpen, patch, post } from './api';
+import { api, copyAndOpen, draftCopyOpen, patch, post } from './api';
 import { FILTER_GROUPS, POSTED_WINDOWS } from '@/lib/countries';
 import type { Screen } from './Waypoint';
 
@@ -233,32 +233,17 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
 
 function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string; state: any; refresh: () => Promise<any>; setToast: (s: string) => void; onBack?: () => void; phone: boolean }) {
   const [job, setJob] = useState<any>(null);
-  const [note, setNote] = useState('');
-  const [drafting, setDrafting] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  // Shown only when the browser blocked the new tab, so opening it costs one
+  // more click instead of silently not happening.
+  const [blocked, setBlocked] = useState(false);
 
   useEffect(() => {
     let live = true;
     setJob(null);
-    setNote('');
+    setBlocked(false);
     api(`/api/jobs/${id}`)
-      .then(async (j: any) => {
-        if (!live) return;
-        setJob(j);
-        setNote(j.note || '');
-        if (j.noteReady) return;
-        // Second round trip: the posting and the referral route are already on
-        // screen while Claude writes the note.
-        setDrafting(true);
-        try {
-          const { note: fresh } = await post<{ note: string }>(`/api/jobs/${id}/note`);
-          if (live) setNote(fresh);
-        } catch (e) {
-          if (live) setToast((e as Error).message);
-        } finally {
-          if (live) setDrafting(false);
-        }
-      })
+      .then((j: any) => { if (live) setJob(j); })
       .catch((e) => setToast(e.message));
     return () => { live = false; };
   }, [id, setToast]);
@@ -277,35 +262,21 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
   }
 
   const best = job.routes[0] || null;
-  const overLimit = note.length > 300;
 
-  const saveNote = (v: string) => {
-    setNote(v);
-    patch(`/api/jobs/${id}`, { note: v }).catch(() => {});
-  };
-
-  const redraft = async () => {
-    setBusy('note');
-    try {
-      const { note: fresh } = await post<{ note: string }>(`/api/jobs/${id}/note`);
-      setNote(fresh);
-      setToast('Note redrafted from the description.');
-    } catch (e) {
-      setToast((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const sendRequest = async () => {
+  const findContact = async () => {
     setBusy('send');
     try {
-      await patch(`/api/jobs/${id}`, { note });
-      const res = await post<{ copy: string; open: string }>('/api/outreach', { jobId: id, action: 'send-request' });
-      await copyAndOpen(res.copy, res.open);
+      type Referral = { copy: string; open: string | null; name: string; resume: { tailored: boolean; lead: string | null; publicUrl: string | null; reason: string | null; shareReason: string | null } | null };
+      const { res, copied, opened } = await draftCopyOpen(post<Referral>('/api/outreach', { jobId: id, action: 'referral' }));
+      setJob({ ...job, isSent: true, referral: { copy: res.copy, open: res.open, name: res.name } });
+      setBlocked(!opened);
       await refresh();
-      setJob({ ...job, isSent: true });
-      setToast('Note copied and LinkedIn opened. Paste it into the connection request, then send it there.');
+      const cv = res.resume;
+      const cvNote = !cv ? null : cv.publicUrl ? `CV link in the message${cv.tailored && cv.lead ? `, leading with ${cv.lead}` : ''}.` : cv.shareReason || cv.reason;
+      const did = copied && opened ? `Referral message copied and ${res.name}'s profile opened. Paste it into a message there.`
+        : copied ? `Referral message copied. The browser blocked the new tab, so open ${res.name}'s profile below.`
+        : `The browser blocked the clipboard. Use the buttons below to copy the message and open ${res.name}'s profile.`;
+      setToast([did, cvNote].filter(Boolean).join(' '));
     } catch (e) {
       setToast((e as Error).message);
     } finally {
@@ -374,31 +345,23 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
             </div>
           ))}
 
-          <div className="stack" style={{ gap: 6 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <label htmlFor="wp-note" style={{ fontSize: 14, fontWeight: 600, flexGrow: 1 }}>Connection note, written from the description</label>
-              <button onClick={redraft} disabled={busy === 'note' || drafting} style={{ border: 0, background: 'transparent', fontSize: 13, textDecoration: 'underline', padding: 0 }}>
-                {busy === 'note' || drafting ? 'Drafting…' : 'Redraft'}
-              </button>
-              <span className="mono" style={{ fontSize: 12, color: overLimit ? 'var(--danger)' : 'var(--muted-3)' }}>{note.length}/300</span>
-            </div>
-            <textarea
-              id="wp-note"
-              className="note-area"
-              value={note}
-              placeholder={drafting ? 'Claude is writing this from the description…' : ''}
-              onChange={(e) => saveNote(e.target.value)}
-            />
-          </div>
-
-          {!job.isSent ? (
-            <button className="btn-accent" onClick={sendRequest} disabled={busy === 'send' || drafting || !best}>
-              {busy === 'send' ? 'Copying…' : drafting ? 'Waiting for the note…' : best ? `Send connect request to ${best.name}` : 'No contact to send to'}
+          {!job.referral ? (
+            <button className="btn-accent" onClick={findContact} disabled={busy === 'send' || !best}>
+              {busy === 'send' ? 'Drafting the referral and your CV…' : best ? `Find contact: ${best.name}` : 'No contact to ask'}
             </button>
           ) : (
-            <div style={{ padding: '12px 14px', borderRadius: 8, background: 'var(--ink)', color: 'var(--ground)', fontSize: 14, lineHeight: 1.5 }}>
-              Request sent. This job is in Pending — mark it accepted there when {best?.name || 'they'} accept
-              {best ? 's' : ''}, and the referral message will be drafted for you.
+            <div className="stack" style={{ gap: 10, padding: '12px 14px', borderRadius: 8, background: 'var(--ink)', color: 'var(--ground)', fontSize: 14, lineHeight: 1.5 }}>
+              <span>
+                Referral message drafted for {job.referral.name}. This job is in Pending — when they reply, paste it there.
+              </span>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button className="btn" onClick={() => copyAndOpen(job.referral.copy).then(() => setToast('Referral message copied.'))}>Copy message</button>
+                {job.referral.open && (
+                  <a className={blocked ? 'btn-accent' : 'btn'} href={job.referral.open} target="_blank" rel="noopener noreferrer">
+                    Open {job.referral.name.split(' ')[0]}&apos;s profile
+                  </a>
+                )}
+              </div>
             </div>
           )}
         </div>

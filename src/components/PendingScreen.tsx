@@ -5,8 +5,7 @@ import { copyAndOpen, patch, post } from './api';
 
 /**
  * Nothing on this board can be driven by LinkedIn, so every transition is the
- * user telling Waypoint what happened: they accepted, they replied with this
- * text. In exchange Waypoint does the drafting and the certainty check.
+ * user telling Waypoint what happened: they replied with this text. In exchange Waypoint does the drafting and the certainty check.
  */
 export default function PendingScreen({ state, refresh, setToast }: { state: any; refresh: () => Promise<any>; setToast: (s: string) => void }) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -23,29 +22,6 @@ export default function PendingScreen({ state, refresh, setToast }: { state: any
       await copyAndOpen(res.copy, res.open);
       setToast('Message copied and LinkedIn opened. Paste and send it there.');
       await refresh();
-    } catch (e) {
-      setToast((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const markAccepted = async (a: any) => {
-    setBusy(a.id);
-    try {
-      const res = await post<{
-        resume?: { tailored: boolean; lead: string | null; reason: string | null; path: string; publicUrl: string | null; shareReason: string | null };
-      }>('/api/outreach', { jobId: a.jobId, action: 'accepted' });
-      await refresh();
-      const cv = res.resume;
-      const built = cv?.tailored && cv.lead ? `CV rebuilt leading with ${cv.lead}` : cv?.reason ? `CV not tailored: ${cv.reason}` : null;
-      // The link is the part that reached the other person, so it leads; a
-      // failed upload is said out loud rather than leaving a message that
-      // quietly offers nothing.
-      const sent = cv?.publicUrl ? 'link in the message' : cv?.shareReason ? cv.shareReason : cv ? `attach ${cv.path}` : null;
-      setToast(
-        ['Referral message drafted, waiting in Needs you.', built, sent].filter(Boolean).join(' ') || 'Referral message drafted.',
-      );
     } catch (e) {
       setToast((e as Error).message);
     } finally {
@@ -73,7 +49,7 @@ export default function PendingScreen({ state, refresh, setToast }: { state: any
       <header className="screen-head">
         <h1 className="display">Pending applications</h1>
         <span className="sub">
-          Cards flash when someone accepts or replies. Replies are marked safe to send only when the answer was already on file.
+          Waypoint cannot see your LinkedIn inbox. When someone replies, paste it here; the answer is marked safe to send only when it was already on file.
         </span>
       </header>
 
@@ -122,10 +98,10 @@ export default function PendingScreen({ state, refresh, setToast }: { state: any
 
         <div className="column">
           <div className="column-head">
-            <span className="grow">Waiting to accept</span>
+            <span className="grow">Waiting for a reply</span>
             <span className="mono" style={{ fontSize: 13, color: 'var(--muted-3)' }}>{state.awaiting.length}</span>
           </div>
-          {state.awaiting.length === 0 && <div className="empty" style={{ padding: 14, fontSize: 14 }}>No requests out. Send one from a job.</div>}
+          {state.awaiting.length === 0 && <div className="empty" style={{ padding: 14, fontSize: 14 }}>No referral requests out. Find a contact from a job.</div>}
           {state.awaiting.map((a: any) => (
             <article key={a.id} className="pend-card">
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -138,10 +114,7 @@ export default function PendingScreen({ state, refresh, setToast }: { state: any
               <span style={{ fontSize: 13, color: 'var(--muted)' }}>{a.role}</span>
               <span className="mono" style={{ fontSize: 12, color: 'var(--muted-3)' }}>{a.when}{a.why ? ` · ${a.why}` : ''}</span>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button className="btn" style={{ height: 44, flexGrow: 1 }} onClick={() => markAccepted(a)} disabled={busy === a.id}>
-                  {busy === a.id ? 'Drafting…' : 'They accepted'}
-                </button>
-                <button className="btn" style={{ height: 44 }} onClick={() => { setReplying(replying === a.id ? null : a.id); setIncoming(''); }}>
+                <button className="btn" style={{ height: 44, flexGrow: 1 }} onClick={() => { setReplying(replying === a.id ? null : a.id); setIncoming(''); }}>
                   They replied
                 </button>
               </div>
@@ -160,7 +133,7 @@ export default function PendingScreen({ state, refresh, setToast }: { state: any
 
         <div className="column">
           <div className="column-head">
-            <span className="grow">Replied for you</span>
+            <span className="grow">Safe to send</span>
             <span className="mono" style={{ fontSize: 13, color: 'var(--muted-3)' }}>{state.auto.length}</span>
           </div>
           {state.auto.length === 0 && <div className="empty" style={{ padding: 14, fontSize: 14 }}>Nothing was certain enough to answer on its own yet.</div>}

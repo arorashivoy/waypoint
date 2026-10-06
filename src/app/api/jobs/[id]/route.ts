@@ -28,6 +28,8 @@ async function detail(jobId: string, userId: string, force: boolean) {
     create: { userId, jobId, match: view.match },
   });
 
+  const referral = await db.outreachEvent.findFirst({ where: { applicationId: app.id, kind: 'request' }, orderBy: { createdAt: 'desc' } });
+
   return {
     id: fresh.id,
     role: fresh.role,
@@ -42,10 +44,9 @@ async function detail(jobId: string, userId: string, force: boolean) {
     projects: view.analysis.projects.map((p, i) => ({ ...p, rank: String(i + 1) })),
     routes: view.routes,
     match: view.match,
-    note: app.note,
-    // The note is drafted by a second call the client makes once this renders,
-    // so the description and referral route appear without waiting for it.
-    noteReady: app.note.length > 0,
+    // So the message can be copied again after a reload, or when the browser
+    // blocked the clipboard the first time.
+    referral: referral && { copy: referral.body, open: referral.contactUrl, name: referral.contactName },
     isSent: app.status !== 'draft',
     isApplied: app.status === 'applied',
   };
@@ -78,8 +79,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     create: { userId: user.id, jobId: params.id },
   });
 
-  const data: { note?: string; status?: string } = {};
-  if (typeof body.note === 'string') data.note = body.note.slice(0, 2000);
+  const data: { status?: string } = {};
   if (body.applied !== undefined) data.status = body.applied ? 'applied' : app.status === 'applied' ? 'draft' : app.status;
   if (Object.keys(data).length) await db.application.update({ where: { id: app.id }, data });
 

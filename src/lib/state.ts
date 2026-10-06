@@ -96,20 +96,20 @@ export async function buildState(userId: string) {
 
   const needs = apps.flatMap((a) =>
     a.outreach
-      .filter((o) => (o.kind === 'accepted' || o.kind === 'replied') && !o.handled && !o.certain)
+      .filter((o) => o.kind === 'replied' && !o.handled && !o.certain)
       .map((o) => ({
         id: o.id,
-        kind: o.kind === 'accepted' ? 'Accepted' : 'Replied',
+        kind: 'Replied',
         init: o.contactInit || '??',
         who: o.contactName || 'Contact',
         org: o.org || `${a.job.company} · ${a.job.city}`,
         role: a.job.role,
         when: shortAgo(o.createdAt),
         quote: o.incoming || '',
-        draftLabel: o.kind === 'accepted' ? 'Referral message, drafted from the posting' : 'Suggested reply',
+        draftLabel: 'Suggested reply',
         draft: o.body,
         reason: o.reason || '',
-        action: o.kind === 'accepted' ? 'Send referral' : 'Send reply',
+        action: 'Send reply',
         contactUrl: o.contactUrl,
       })),
   );
@@ -141,7 +141,7 @@ export async function buildState(userId: string) {
         org: o.org || `${a.job.company} · ${a.job.city}`,
         quote: o.incoming || '',
         sent: o.body,
-        why: o.reason || 'Sent on its own: everything it asked for was already on file.',
+        why: o.reason || 'Everything it asked for was already on file.',
         handled: o.handled,
         contactUrl: o.contactUrl,
       })),

@@ -26,3 +26,28 @@ export async function copyAndOpen(text: string, url?: string | null) {
   }
   if (url) window.open(url, '_blank', 'noopener');
 }
+
+/**
+ * Browsers allow a clipboard write or a new tab only shortly after a click, and
+ * a referral takes far longer than that to draft (CV build plus Drive upload).
+ * A ClipboardItem given a promise claims the clipboard during the click and is
+ * filled in when the text arrives. A tab has no such escape hatch, so the caller
+ * is told whether it was blocked and can offer a link instead.
+ */
+export async function draftCopyOpen<T extends { copy: string; open: string | null }>(draft: Promise<T>) {
+  let copied: Promise<boolean>;
+  try {
+    copied = navigator.clipboard
+      .write([new ClipboardItem({ 'text/plain': draft.then((r) => new Blob([r.copy], { type: 'text/plain' })) })])
+      .then(() => true, () => false);
+  } catch {
+    copied = Promise.resolve(false);
+  }
+  const res = await draft;
+  const ok = (await copied) || (await navigator.clipboard?.writeText(res.copy).then(() => true, () => false)) || false;
+  // Not 'noopener' in the features string: with it window.open always returns
+  // null, and a blocked popup would be indistinguishable from an opened one.
+  const tab = res.open ? window.open(res.open, '_blank') : null;
+  if (tab) tab.opener = null;
+  return { res, copied: ok, opened: !!tab };
+}
