@@ -162,6 +162,14 @@ model Application {
   cvLead   String?
   cvSentAt DateTime?
 
+  // The Drive file this job's CV lives in, overwritten in place on every
+  // rebuild so a link already sent keeps working. `cvSteer` is the "Refine with
+  // Claude" selection (JSON `Steer` from resume.ts) every rebuild applies, and
+  // `cvChat` the conversation that produced it (JSON array of turns).
+  cvDriveId String?
+  cvSteer   String?
+  cvChat    String  @default("[]")
+
   user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   job      Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
   outreach OutreachEvent[]

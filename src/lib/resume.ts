@@ -270,6 +270,44 @@ export type Tailoring = { tex: string; order: string[]; dropped: string[]; added
 
 const headingOf = (raw: string) => raw.match(/\\textbf\{([^}]*)\}/)?.[1]?.trim() || '';
 
+type CvProject = { raw: string; id: string; title: string };
+
+/** The projects section of a CV with each entry tied to its claims.yml
+ *  project, or the reason the entries cannot be tied with confidence. */
+function mapCvProjects(tex: string, doc: ClaimsDoc): { m: RegExpMatchArray; parts: { prefix: string; body: string; suffix: string }; rows: CvProject[] } | { why: string } {
+  const m = tex.match(PROJECT_SECTION);
+  if (!m) return { why: 'the CV has no projects section to reorder' };
+
+  const parts = splitSection(m[1]);
+  if (!parts) return { why: 'the projects section has no entries' };
+
+  const items = splitItems(parts.body);
+  if (items.length < 2) return { why: 'the projects section has fewer than two entries' };
+
+  const mapped = items.map((raw) => {
+    const heading = headingOf(raw) || raw.slice(0, 80);
+    const matches = doc.targets.projects
+      .map((p) => ({ p, o: overlap(heading, p.title) }))
+      .filter((x) => x.o >= 0.34)
+      .sort((a, b) => b.o - a.o);
+    if (!matches.length) return null;
+    // Two projects fitting one CV entry equally well means the mapping is a
+    // coin flip, and a coin flip decides which project a recruiter reads first.
+    if (matches.length > 1 && matches[1].o === matches[0].o) return null;
+    const best = matches[0].p;
+    // The CV's own heading, not the claims.yml title: this is the name the
+    // referrer will see when they open the document, and the message quotes it.
+    return { raw, id: best.id, title: heading || best.title };
+  });
+
+  if (mapped.some((s) => s === null)) return { why: 'a project on the CV could not be matched to claims.yml with confidence' };
+  const rows = mapped as CvProject[];
+  if (new Set(rows.map((r) => r.id)).size !== rows.length) {
+    return { why: 'two projects on the CV map to the same claims.yml project' };
+  }
+  return { m, parts, rows };
+}
+
 /**
  * Chooses which projects the CV carries for this posting, and in what order.
  *
@@ -291,39 +329,13 @@ const headingOf = (raw: string) => raw.match(/\\textbf\{([^}]*)\}/)?.[1]?.trim()
  * falls back to the base PDF, which is always correct if not always optimal.
  */
 export function tailorTex(tex: string, doc: ClaimsDoc, ranked: EvidencePick[], maxProjects: number | null): Tailoring {
-  const m = tex.match(PROJECT_SECTION);
-  if (!m) return { why: 'the CV has no projects section to reorder' };
-
-  const parts = splitSection(m[1]);
-  if (!parts) return { why: 'the projects section has no entries' };
-
-  const items = splitItems(parts.body);
-  if (items.length < 2) return { why: 'the projects section has fewer than two entries' };
+  const cv = mapCvProjects(tex, doc);
+  if ('why' in cv) return cv;
+  const { m, parts } = cv;
 
   const scoreOf = new Map(ranked.filter((r) => r.kind === 'project').map((r) => [r.target, r.score]));
   const score = (id: string) => scoreOf.get(`project:${id}`) || 0;
-
-  const mapped = items.map((raw) => {
-    const heading = headingOf(raw) || raw.slice(0, 80);
-    const matches = doc.targets.projects
-      .map((p) => ({ p, o: overlap(heading, p.title) }))
-      .filter((x) => x.o >= 0.34)
-      .sort((a, b) => b.o - a.o);
-    if (!matches.length) return null;
-    // Two projects fitting one CV entry equally well means the mapping is a
-    // coin flip, and a coin flip decides which project a recruiter reads first.
-    if (matches.length > 1 && matches[1].o === matches[0].o) return null;
-    const best = matches[0].p;
-    // The CV's own heading, not the claims.yml title: this is the name the
-    // referrer will see when they open the document, and the message quotes it.
-    return { raw, id: best.id, title: heading || best.title, score: score(best.id), onCv: true };
-  });
-
-  if (mapped.some((s) => s === null)) return { why: 'a project on the CV could not be matched to claims.yml with confidence' };
-  const rows = mapped as { raw: string; id: string; title: string; score: number; onCv: boolean }[];
-  if (new Set(rows.map((r) => r.id)).size !== rows.length) {
-    return { why: 'two projects on the CV map to the same claims.yml project' };
-  }
+  const rows = cv.rows.map((r) => ({ ...r, score: score(r.id), onCv: true }));
 
   // Off-CV projects only compete when the posting actually asks for them; a
   // zero-score stranger replacing a zero-score entry he chose is churn.
@@ -660,6 +672,8 @@ export type BuiltResume = {
   /** Skills swapped onto the CV for this posting, and what made room. */
   skillsAdded: string[];
   skillsDropped: string[];
+  /** Skills the posting (or a refinement) moved to the front of their lines. */
+  skillsLead: string[];
   matched: string[];
   /** Transforms that did not apply, and why. Not failures — a posting that
    *  matches his jobs but none of his projects legitimately leaves the projects
@@ -673,11 +687,65 @@ export type BuiltResume = {
 };
 
 /**
+ * A refinement of one posting's CV, expressed as choices between things he
+ * already wrote: claims.yml project ids in the order they should run,
+ * `position/bullet` ids in the order they should lead, and skill slugs to put
+ * first. A field left out keeps the posting's own ranking. There is no field for
+ * free text, so nothing a refinement asks for can put words on the CV that are
+ * not in his LaTeX or claims.yml already.
+ */
+export type Steer = { projects?: string[]; bullets?: string[]; skills?: string[] };
+
+/** A steered kind replaces the posting's ranking rather than nudging it: "lead
+ *  with X" has to mean X leads, and a blend would let the posting's score
+ *  quietly win the top slot back. Scores descend from the list length so the
+ *  order given is the order built. */
+function steered(ranked: EvidencePick[], steer: Steer): EvidencePick[] {
+  const picks = (kind: 'project' | 'bullet', prefix: string, ids: string[]): EvidencePick[] =>
+    ids.map((id, i) => ({ target: `${prefix}:${id}`, kind, title: id, score: ids.length - i, matched: [] }));
+  let out = ranked;
+  if (steer.projects?.length) out = [...out.filter((r) => r.kind !== 'project'), ...picks('project', 'project', steer.projects)];
+  if (steer.bullets?.length) out = [...out.filter((r) => r.kind !== 'bullet'), ...picks('bullet', 'position', steer.bullets)];
+  return out;
+}
+
+export type ResumeMenu = {
+  /** `usable` is whether the project can appear on the PDF at all: it is on the
+   *  base CV, or claims.yml carries its `tex`. */
+  projects: { id: string; title: string; onCv: boolean; usable: boolean }[];
+  bullets: { id: string; position: string; match: string }[];
+  skills: { slug: string; label: string; evidenced: boolean }[];
+};
+
+/** Everything a refinement may choose between, read from the base CV and
+ *  claims.yml. Null when there is no LaTeX source to rewrite. */
+export function resumeMenu(doc: ClaimsDoc): ResumeMenu | null {
+  const cfg = resumeConfig();
+  if (!cfg.tex || !existsSync(cfg.tex)) return null;
+  const cv = mapCvProjects(readFileSync(cfg.tex, 'utf8'), doc);
+  const onCv = new Set('why' in cv ? [] : cv.rows.map((r) => r.id));
+  return {
+    projects: doc.targets.projects.map((p) => ({
+      id: p.id,
+      title: p.title,
+      onCv: onCv.has(p.id),
+      // An unmappable projects section is left alone by `tailorTex`, so no
+      // project can be steered into it either.
+      usable: !('why' in cv) && (onCv.has(p.id) || !!p.tex),
+    })),
+    bullets: doc.targets.positions.flatMap((p) => (p.bullets || []).map((b) => ({ id: `${p.id}/${b.id}`, position: `${p.title}, ${p.company}`, match: b.match }))),
+    skills: doc.claims
+      .filter((c) => c.kind === 'skill' || c.kind === 'language')
+      .map((c) => ({ slug: c.slug, label: c.label, evidenced: c.evidence.some((e) => e.depth !== 'mentioned') })),
+  };
+}
+
+/**
  * The CV to send for one posting. Never throws: every failure downgrades to the
  * base PDF with a reason attached, because a missing LaTeX package must not
  * take down the referral flow.
  */
-export async function buildResume(doc: ClaimsDoc | null, postingText: string, key: string): Promise<BuiltResume | null> {
+export async function buildResume(doc: ClaimsDoc | null, postingText: string, key: string, steer: Steer = {}): Promise<BuiltResume | null> {
   const cfg = resumeConfig();
   if (!cfg.pdf && !cfg.tex) return null;
 
@@ -691,6 +759,7 @@ export async function buildResume(doc: ClaimsDoc | null, postingText: string, ke
     dropped: [],
     skillsAdded: [],
     skillsDropped: [],
+    skillsLead: [],
     matched: [],
     skipped: [],
     publicUrl: cfg.publicUrl,
@@ -704,8 +773,9 @@ export async function buildResume(doc: ClaimsDoc | null, postingText: string, ke
   if (!cfg.tex) return bail('RESUME_TEX is not set, so there is no source to rewrite');
   if (!existsSync(cfg.tex)) return bail(`RESUME_TEX points at ${cfg.tex}, which does not exist`);
 
-  const weights = claimWeights(doc, postingText);
-  const ranked = rankEvidence(doc, postingText);
+  const posting = rankEvidence(doc, postingText);
+  const ranked = steered(posting, steer);
+  const weights = steer.skills?.length ? new Map(steer.skills.map((s) => [s, 1])) : claimWeights(doc, postingText);
 
   // The template on disk is never written to. Every transform is a pure string
   // rewrite over a copy, and the build happens in a scratch directory — the
@@ -724,7 +794,9 @@ export async function buildResume(doc: ClaimsDoc | null, postingText: string, ke
     return t.tex;
   };
 
-  const projects = tailorTex(template, doc, ranked, cfg.maxProjects);
+  // A steered project list is also the count: "drop the hackathon" means one
+  // entry fewer, not the next-best project taking its slot.
+  const projects = tailorTex(template, doc, ranked, steer.projects?.length || cfg.maxProjects);
   const afterProjects = step('projects', template, projects);
   const experience = tailorExperience(afterProjects, doc, ranked);
   const afterExperience = step('experience', afterProjects, experience);
@@ -743,7 +815,7 @@ export async function buildResume(doc: ClaimsDoc | null, postingText: string, ke
 
   const order = 'why' in projects ? [] : projects.order;
   const bullets = 'why' in experience ? [] : experience.order;
-  const matched = ranked.filter((r) => r.score > 0).flatMap((r) => r.matched);
+  const matched = posting.filter((r) => r.score > 0).flatMap((r) => r.matched);
   const result: BuiltResume = {
     ...base,
     path: out,
@@ -755,6 +827,7 @@ export async function buildResume(doc: ClaimsDoc | null, postingText: string, ke
     dropped: 'why' in projects ? [] : projects.dropped,
     skillsAdded: 'why' in skills ? [] : skills.added,
     skillsDropped: 'why' in skills ? [] : skills.dropped,
+    skillsLead: 'why' in skills ? [] : skills.order,
     matched: [...new Set(matched)],
     skipped,
   };

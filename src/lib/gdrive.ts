@@ -1,6 +1,5 @@
 import { createHash } from 'crypto';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { basename } from 'path';
+import { existsSync, readFileSync } from 'fs';
 
 /**
  * Uploads a tailored CV to Google Drive and returns a link a recruiter can open.
@@ -114,35 +113,54 @@ export async function uploadResume(pdfPath: string, company: string, role: strin
 }
 
 /**
- * The link for one built CV, uploading it the first time and reusing it after.
- *
- * The record sits in a `.link.json` beside the PDF, whose own filename already
- * contains a hash of the rendered LaTeX. So a rebuild that selects the same
- * order reuses the same Drive file, and a genuinely different CV gets a new
- * one — which is the behaviour the per-job choice needs: a referrer who opens
- * last month's link still sees the CV that was tailored for their company.
- *
- * Never throws. A failed upload costs the link, not the referral.
+ * Replaces the bytes of a file this app uploaded earlier, keeping its id, its
+ * link and its "anyone with the link" permission. Null when the file is gone —
+ * deleted by hand from Drive — so the caller can upload a fresh one instead.
  */
-export async function shareResume(pdfPath: string, company: string, role: string): Promise<{ url: string | null; reason: string | null }> {
-  if (!driveConfig()) return { url: null, reason: 'Google Drive is not configured — see GDRIVE_* in .env.example' };
-  if (!pdfPath || !existsSync(pdfPath)) return { url: null, reason: 'there is no CV file to upload' };
+export async function replaceResume(fileId: string, pdfPath: string): Promise<{ url: string; id: string } | null> {
+  const cfg = driveConfig();
+  if (!cfg) throw new Error('Google Drive is not configured');
 
-  const sidecar = `${pdfPath}.link.json`;
-  if (existsSync(sidecar)) {
-    try {
-      const cached = JSON.parse(readFileSync(sidecar, 'utf8'));
-      if (cached?.url) return { url: cached.url, reason: null };
-    } catch {
-      // corrupt sidecar; fall through and upload again
-    }
-  }
+  const at = await accessToken(cfg);
+  const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media&fields=id,webViewLink`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${at}`, 'Content-Type': 'application/pdf' },
+    body: new Uint8Array(readFileSync(pdfPath)),
+  });
+  if (res.status === 404) return null;
+  const file: any = await res.json();
+  if (!res.ok) throw new Error(file?.error?.message || `update failed (${res.status})`);
+  return { url: file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`, id: file.id };
+}
+
+/**
+ * The Drive link for one application's CV: one file per job, uploaded the first
+ * time and overwritten in place after, so the link in a message already sent
+ * keeps working and always shows the latest version built for that company.
+ *
+ * Per job rather than per PDF: two postings that select the same order build
+ * the same PDF, and if they shared a Drive file, refining one company's CV
+ * would silently rewrite the one the other company was sent.
+ *
+ * `uploaded` is the local PDF the Drive file currently holds, so an unchanged
+ * rebuild costs no upload. Never throws. A failed upload costs the link, not the
+ * referral.
+ */
+export async function shareResume(
+  pdfPath: string,
+  company: string,
+  role: string,
+  prior: { id: string | null; url: string | null; uploaded: string | null },
+): Promise<{ url: string | null; id: string | null; reason: string | null }> {
+  if (!driveConfig()) return { url: null, id: prior.id, reason: 'Google Drive is not configured — see GDRIVE_* in .env.example' };
+  if (!pdfPath || !existsSync(pdfPath)) return { url: null, id: prior.id, reason: 'there is no CV file to upload' };
+  if (prior.id && prior.url && prior.uploaded === pdfPath) return { url: prior.url, id: prior.id, reason: null };
 
   try {
-    const shared = await uploadResume(pdfPath, company, role);
-    writeFileSync(sidecar, JSON.stringify({ ...shared, file: basename(pdfPath), at: new Date().toISOString() }, null, 2));
-    return { url: shared.url, reason: null };
+    const replaced = prior.id ? await replaceResume(prior.id, pdfPath) : null;
+    const shared = replaced || (await uploadResume(pdfPath, company, role));
+    return { url: shared.url, id: shared.id, reason: null };
   } catch (e) {
-    return { url: null, reason: `Drive upload failed: ${(e as Error).message}` };
+    return { url: null, id: prior.id, reason: `Drive upload failed: ${(e as Error).message}` };
   }
 }
