@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { db } from './db';
 import { COUNTRIES } from './countries';
 import { inferLevels } from './match';
-import { loadClaims, profileFromClaims, type ResolvedProfile } from './claims';
+import { loadClaims, profileFromClaims, schoolOf, type ResolvedProfile } from './claims';
 import type { ProfileSummary } from './prompts';
 
 export const SESSION_COOKIE = 'waypoint_user';
@@ -79,6 +79,9 @@ export async function profileSummary(userId: string): Promise<ResolvedProfile> {
     levels: inferLevels(positions),
     currentEmployer: positions[0]?.company || '',
     schools: educations.map((e) => e.school),
+    // Education.csv can carry a school-leaving certificate beside the degree,
+    // and its rows come in no particular order.
+    school: schoolOf(educations.find((e) => e.degree) || educations[0]),
     interests: [...new Set(projects.flatMap((p) => (p.tags || '').split(',').map((t) => t.trim()).filter(Boolean)))],
   };
 }

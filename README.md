@@ -256,7 +256,7 @@ cached reply.
 | Call | Produces | Cached |
 |---|---|---|
 | Analyse | requirements marked on/not-on profile, field, mode, level, sponsorship, CV must-haves, project ranking | yes |
-| Note | three spans that fill `CONNECT_NOTE_TEMPLATE` | yes |
+| Note | one hook that fills `ALUMNI_NOTE_TEMPLATE`, a 300-character note to an alumnus | yes |
 | Referral | three spans that fill `REFERRAL_TEMPLATE` once a contact accepts | yes |
 | Reply | a drafted reply **plus a certainty verdict** | **no, by design** |
 
@@ -385,6 +385,28 @@ everyone else, with recruiters demoted. Each route shows its reason.
 
 A LinkedIn export contains only 1st-degree connections, so a company where you know nobody gets an
 **empty list and an honest message** — never an invented contact.
+
+### Alumni fallback
+
+With no route, the job screen offers **Find {school} alumni at {company}** instead. The school is the
+first education in `claims.yml` (its first alias is the name people see), or the import's degree
+entry. LinkedIn has no people-search API and scraping it breaks the User Agreement, so Waypoint cannot
+list the alumni or choose one: one click drafts a connection note, copies it, and opens LinkedIn's own
+search for you to pick from, with a guide beside the button — recruiter, HR or talent acquisition
+first, then the most senior engineer in the role's field, then anyone from your programme, preferring
+people in the job's city.
+
+- **The search.** With the school's LinkedIn slug, it is the school's alumni list filtered by company,
+  `linkedin.com/school/<slug>/people/?keywords=<company>`. Set it as `linkedin:` on the education in
+  `claims.yml` (`linkedin: iiit-delhi`) or as `WAYPOINT_SCHOOL_LINKEDIN_SLUG`. Without one it falls back
+  to a people search for `<school> <company>`, which also matches people who merely mention both.
+- **The note.** Alumni are not connections, so the ask is a connection-request note, which LinkedIn
+  caps at 300 characters: `ALUMNI_NOTE_TEMPLATE` plus one model-written hook. There is no room for the
+  CV link or a name, since the recipient is picked after drafting. Over the cap, the hook is cut
+  first, then the role title; the referral ask is in the fixed frame and is never cut.
+- **After.** The request sits in Pending as "{school} alumni at {company}". When someone accepts,
+  **They accepted** takes their name (and profile link, optionally) and drafts the ordinary referral
+  message with the tailored CV link.
 
 ## The claims ledger
 

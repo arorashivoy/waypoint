@@ -184,3 +184,29 @@ export function routeLabel(routes: Route[], company: string): string {
   if (!routes.length) return `No 1st-degree contact at ${company}`;
   return routes[0].why.replace(/^1st-degree · /, '').replace(/^1st-degree connection at the company$/, '1st-degree connection');
 }
+
+/**
+ * Where to look for an alumnus when no connection works at the company.
+ *
+ * Waypoint cannot run this search itself — LinkedIn has no people-search API
+ * and scraping it breaks the User Agreement — so this is a link the user opens
+ * and picks from. The school's own alumni page takes its vanity slug and a
+ * `keywords` filter that matches current employer, which is the precise
+ * version. Without a slug, a plain people search for "<school> <company>" is
+ * the fallback: looser, since it also matches anyone who merely mentions both.
+ *
+ * Legal suffixes are dropped because a board lists "Stripe, Inc." and a
+ * profile says "Stripe", and the keyword filter is literal.
+ */
+export function alumniSearch(school: { short: string; linkedin: string | null }, company: string) {
+  const name = company.replace(/[,\s]+(inc|ltd|llc|gmbh|ag|se|sa|nv|bv|b\.v|n\.v|plc|limited)\.?$/i, '').trim() || company;
+  return school.linkedin
+    ? `https://www.linkedin.com/school/${encodeURIComponent(school.linkedin)}/people/?keywords=${encodeURIComponent(name)}`
+    : `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${school.short} ${name}`)}`;
+}
+
+/** Marks an outreach row as a note to an alumnus rather than a message to a
+ *  connection — the reply and acceptance paths differ, and there is no column
+ *  for it because the distinction lives only until they accept. */
+export const ALUMNI_REASON = 'Alumni request · not a connection yet';
+export const isAlumniRequest = (o: { reason: string | null } | null | undefined) => o?.reason === ALUMNI_REASON;

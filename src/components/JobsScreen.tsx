@@ -231,6 +231,66 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
   );
 }
 
+/** LinkedIn's cap on a connection note; the server drafts within it, and the
+ *  counter is for edits made here. */
+const NOTE_LIMIT = 300;
+
+/**
+ * Waypoint cannot search LinkedIn, so the search is a link and the choice of
+ * person is the user's. The guide is what it would rank on if it could.
+ */
+function AlumniAsk({ alumni, company, city, busy, onFind }: { alumni: { school: string; precise: boolean }; company: string; city: string; busy: boolean; onFind: () => void }) {
+  return (
+    <div className="stack" style={{ gap: 12 }}>
+      <div className="must">
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent-ink)' }}>Whom to pick from the results</span>
+        {[
+          'A recruiter, HR or talent-acquisition person: routing referrals is their job, and they are paid to answer.',
+          'Otherwise the most senior engineer in this role’s team or field.',
+          'Otherwise anyone from your own programme.',
+          `Among equals, someone who lists ${city || 'the job’s city'} or its country.`,
+        ].map((t, i) => (
+          <div key={i} style={{ fontSize: 14, lineHeight: 1.45, display: 'flex', gap: 8 }}>
+            <span className="dash">{i < 3 ? `${i + 1}.` : '—'}</span><span>{t}</span>
+          </div>
+        ))}
+      </div>
+      <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.45 }}>
+        They are not connections, so this drafts a {NOTE_LIMIT}-character connection note — no room for your CV link; the
+        referral message with it comes once they accept.
+        {!alumni.precise && ' Without your school’s LinkedIn slug this is a keyword search, so check each result really studied there.'}
+      </span>
+      <button className="btn-accent" onClick={onFind} disabled={busy}>
+        {busy ? 'Drafting the connection note…' : `Find ${alumni.school} alumni at ${company}`}
+      </button>
+    </div>
+  );
+}
+
+function AlumniNote({ referral, blocked, setToast }: { referral: { copy: string; open: string | null; name: string }; blocked: boolean; setToast: (s: string) => void }) {
+  const [text, setText] = useState(referral.copy);
+  return (
+    <div className="stack" style={{ gap: 10, padding: '12px 14px', borderRadius: 8, background: 'var(--ink)', color: 'var(--ground)', fontSize: 14, lineHeight: 1.5 }}>
+      <span>
+        Connection note for {referral.name}. Pick one person, press Connect → Add a note, and paste. This job is in Pending —
+        when they accept, press They accepted there for the referral message with your CV.
+      </span>
+      <textarea className="note-area" style={{ minHeight: 110, color: 'var(--ink)' }} value={text} onChange={(e) => setText(e.target.value)} />
+      <span className="mono" style={{ fontSize: 12, alignSelf: 'flex-end', color: text.length > NOTE_LIMIT ? 'var(--accent)' : 'inherit' }}>
+        {text.length}/{NOTE_LIMIT}{text.length > NOTE_LIMIT ? ' — LinkedIn will reject this' : ''}
+      </span>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button className="btn" onClick={() => copyText(text).then((ok) => setToast(ok ? 'Connection note copied.' : 'The browser blocked the clipboard; select the note and copy it.'))}>Copy note</button>
+        {referral.open && (
+          <a className={blocked ? 'btn-accent' : 'btn'} href={referral.open} target="_blank" rel="noopener noreferrer">
+            Open alumni search
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 type ChatTurn = { role: 'you' | 'claude'; text: string; at: string };
 type Cv = {
   pdfUrl: string;
@@ -306,6 +366,25 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
         : copied ? `Referral message copied. The browser blocked the new tab, so open ${res.name}'s profile below.`
         : `The browser blocked the clipboard. Use the buttons below to copy the message and open ${res.name}'s profile.`;
       setToast([did, cvNote].filter(Boolean).join(' '));
+    } catch (e) {
+      setToast((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const findAlumni = async () => {
+    setBusy('alumni');
+    try {
+      const { res, copied, opened } = await draftCopyOpen(post<{ copy: string; open: string; name: string }>('/api/outreach', { jobId: id, action: 'alumni' }));
+      setJob({ ...job, isSent: true, referral: { copy: res.copy, open: res.open, name: res.name, alumni: true } });
+      setBlocked(!opened);
+      await refresh();
+      setToast(
+        copied && opened ? `Connection note copied and the ${job.alumni.school} alumni search opened. Pick one person, press Connect → Add a note, and paste.`
+        : copied ? 'Connection note copied. The browser blocked the new tab, so open the alumni search below.'
+        : 'The browser blocked the clipboard. Copy the note below and open the alumni search.',
+      );
     } catch (e) {
       setToast((e as Error).message);
     } finally {
@@ -390,7 +469,7 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
           {job.routes.length === 0 && (
             <div className="empty" style={{ padding: 14, fontSize: 14 }}>
               No 1st-degree connection at {job.company} in your imported export. Re-upload a fresh export on the Resume
-              screen, or search LinkedIn for {state.profile?.[1]?.items?.[0]?.o || 'your school'} alumni there.
+              screen, or ask {job.alumni ? `a ${job.alumni.school}` : 'an'} alumnus there with a connection note.
             </div>
           )}
 
@@ -422,7 +501,11 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
             {!cv && <CvStatus busy={cvBusy} error={cvError} />}
           </div>
 
-          {!job.referral ? (
+          {job.referral?.alumni ? (
+            <AlumniNote key={id} referral={job.referral} blocked={blocked} setToast={setToast} />
+          ) : !job.referral && !best && job.alumni ? (
+            <AlumniAsk alumni={job.alumni} company={job.company} city={job.city} busy={busy === 'alumni'} onFind={findAlumni} />
+          ) : !job.referral ? (
             <button className="btn-accent" onClick={findContact} disabled={busy === 'send' || !best}>
               {busy === 'send' ? 'Drafting the referral and your CV…' : best ? `Find contact: ${best.name}` : 'No contact to ask'}
             </button>

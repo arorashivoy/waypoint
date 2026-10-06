@@ -108,6 +108,58 @@ export function renderReferral(v: ReferralFill) {
   });
 }
 
+/** LinkedIn rejects a connection note over this, with no partial send. */
+export const NOTE_LIMIT = 300;
+
+/**
+ * For an alumnus who is not a connection yet. A connection request is the only
+ * way to reach them without InMail, and its note is capped at 300 characters,
+ * so there is no room for a CV link or a name: the recipient is picked from a
+ * search after this is drafted, so "Hi," is all the frame can know. The full
+ * referral message, with the CV, goes out once they accept.
+ */
+export const ALUMNI_NOTE_TEMPLATE = `Hi, fellow {school} alum here. I'm applying for {role} at {company}.{hook} Would you be open to referring me, or pointing me to the right person?`;
+
+export type AlumniNoteFill = { school: string; role: string; company: string; hook: string };
+
+/** "(m/w/d)" is a legal formality of German adverts, not part of the job title,
+ *  and it costs characters the note does not have. */
+const bareRole = (role: string) => role.replace(/\s*\((?:[mfwdx](?:\s*\/\s*[mfwdx])+|all genders)\)/gi, '');
+
+/** School and company are capped short enough that the frame with an empty
+ *  hook and a 120-character role always fits in the limit. */
+const noteFrame = (v: Omit<AlumniNoteFill, 'hook'>) => ({
+  school: clampToWords(span(v.school, 400), 60),
+  company: clampToWords(span(v.company, 400), 60),
+  role: clampToWords(span(bareRole(v.role), 400), 120),
+});
+
+const renderNote = (f: ReturnType<typeof noteFrame>, hook: string) =>
+  fill(ALUMNI_NOTE_TEMPLATE, { ...f, hook: hook ? ` ${hook}.` : '' });
+
+/** A hook cut down to a few words reads as a typo, not a reason. */
+export const MIN_HOOK = 30;
+
+/** Characters left for the hook once the frame is filled, so the prompt can ask
+ *  for a span that fits instead of one that gets cut. The 2 is the space and
+ *  full stop the frame wraps it in. */
+export const alumniHookBudget = (v: Omit<AlumniNoteFill, 'hook'>) => NOTE_LIMIT - renderNote(noteFrame(v), '').length - 2;
+
+/**
+ * Over the limit, the hook gives way first, then the role title. The ask sits
+ * in the frame after both, so it is never what gets cut: a note that loses its
+ * question is a note that gets accepted and never answered.
+ */
+export function renderAlumniNote(v: AlumniNoteFill) {
+  const f = noteFrame(v);
+  let hook = span(v.hook, 220);
+  const over = () => renderNote(f, hook).length - NOTE_LIMIT;
+  if (over() > 0) hook = clampToWords(hook, Math.max(0, hook.length - over()));
+  if (hook.length < MIN_HOOK) hook = '';
+  if (over() > 0) f.role = clampToWords(f.role, Math.max(0, f.role.length - over()));
+  return renderNote(f, hook);
+}
+
 /**
  * The model is told to copy `highlight` verbatim from the profile. This checks
  * that it did. A near miss (case, surrounding punctuation) is repaired against

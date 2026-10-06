@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { copyAndOpen, patch, post } from './api';
+import { copyAndOpen, draftCopyOpen, patch, post } from './api';
 
 /**
  * Nothing on this board can be driven by LinkedIn, so every transition is the
@@ -13,6 +13,31 @@ export default function PendingScreen({ state, refresh, setToast }: { state: any
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [replying, setReplying] = useState<string | null>(null);
   const [incoming, setIncoming] = useState('');
+  const [accepting, setAccepting] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState({ name: '', url: '' });
+
+  // An alumnus who accepted is a connection now, so they get the same referral
+  // message, with the CV link, that a 1st-degree contact would.
+  const draftReferral = async (a: any) => {
+    setBusy(a.id);
+    try {
+      const { res, copied, opened } = await draftCopyOpen(
+        post<{ copy: string; open: string | null; name: string }>('/api/outreach', { jobId: a.jobId, action: 'accepted', name: accepted.name, profileUrl: accepted.url }),
+      );
+      setAccepting(null);
+      await refresh();
+      const first = res.name.split(' ')[0];
+      setToast(
+        copied && opened ? `Referral message copied and ${first}'s profile opened. Paste it into a message there.`
+        : copied ? `Referral message copied. The browser blocked the new tab; open ${first}'s profile from the job.`
+        : `The browser blocked the clipboard. Open the job to copy the message to ${first}.`,
+      );
+    } catch (e) {
+      setToast((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const send = async (n: any) => {
     setBusy(n.id);
@@ -114,10 +139,30 @@ export default function PendingScreen({ state, refresh, setToast }: { state: any
               <span style={{ fontSize: 13, color: 'var(--muted)' }}>{a.role}</span>
               <span className="mono" style={{ fontSize: 12, color: 'var(--muted-3)' }}>{a.when}{a.why ? ` · ${a.why}` : ''}</span>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {a.alumni && (
+                  <button className="btn btn-dark" style={{ height: 44, flexGrow: 1 }} onClick={() => { setAccepting(accepting === a.id ? null : a.id); setAccepted({ name: '', url: '' }); }}>
+                    They accepted
+                  </button>
+                )}
                 <button className="btn" style={{ height: 44, flexGrow: 1 }} onClick={() => { setReplying(replying === a.id ? null : a.id); setIncoming(''); }}>
                   They replied
                 </button>
+                {a.alumni && a.contactUrl && (
+                  <a className="btn" style={{ height: 44, flexGrow: 1 }} href={a.contactUrl} target="_blank" rel="noopener noreferrer">Alumni search</a>
+                )}
               </div>
+              {accepting === a.id && (
+                <div className="stack" style={{ gap: 8 }}>
+                  <label htmlFor={`acc-${a.id}`} style={{ fontSize: 13, color: 'var(--muted)' }}>
+                    Who accepted? Their name goes in the greeting; their profile link is optional.
+                  </label>
+                  <input id={`acc-${a.id}`} className="note-area" style={{ minHeight: 0 }} placeholder="Full name" value={accepted.name} onChange={(e) => setAccepted({ ...accepted, name: e.target.value })} />
+                  <input className="note-area" style={{ minHeight: 0 }} placeholder="https://www.linkedin.com/in/…" value={accepted.url} onChange={(e) => setAccepted({ ...accepted, url: e.target.value })} />
+                  <button className="btn btn-dark" style={{ height: 44 }} onClick={() => draftReferral(a)} disabled={busy === a.id || !accepted.name.trim()}>
+                    {busy === a.id ? 'Drafting the referral and your CV…' : 'Draft the referral message'}
+                  </button>
+                </div>
+              )}
               {replying === a.id && (
                 <div className="stack" style={{ gap: 8 }}>
                   <label htmlFor={`in-${a.id}`} style={{ fontSize: 13, color: 'var(--muted)' }}>Paste what they wrote. Waypoint drafts the answer and decides whether it is safe to send.</label>
