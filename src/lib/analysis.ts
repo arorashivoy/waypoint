@@ -23,6 +23,24 @@ export type Analysis = {
   by: 'claude' | 'heuristic';
 };
 
+/** The model sometimes wraps a list item it was asked for as a string in an
+ *  object (`must: [{ t: "…" }]`), and React throws on rendering an object.
+ *  Coerced on every read, so analyses already stored in that shape render too. */
+const text = (v: unknown): string =>
+  typeof v === 'string' ? v : v && typeof v === 'object' ? text(Object.values(v).find((x) => typeof x === 'string') ?? '') : String(v ?? '');
+
+function normalise(a: any, by: Analysis['by'] = a.by): Analysis {
+  return {
+    ...a,
+    requirements: (a.requirements || []).map((r: any) => ({ t: text(r?.t ?? r), ok: Boolean(r?.ok) })),
+    must: (a.must || []).map(text),
+    projects: (a.projects || []).map((p: any) => ({ n: text(p?.n ?? p), why: text(p?.why ?? '') })),
+    by,
+  };
+}
+
+const parseAnalysis = (raw: string) => normalise(JSON.parse(raw));
+
 /** The two fields claims.yml has the strongest job or project evidence for. Without
  *  a claims file, Backend: every software profile overlaps it. */
 function strongFields(doc: ClaimsDoc | null): string[] {
@@ -122,7 +140,7 @@ export const MAX_ANALYSIS_TRIES = 3;
  * two boards under two externalIds costs one call, not two.
  */
 export async function analyseJob(job: Job, userId: string, force = false): Promise<Analysis> {
-  if (job.analysedAt && job.analysis && !force) return JSON.parse(job.analysis) as Analysis;
+  if (job.analysedAt && job.analysis && !force) return parseAnalysis(job.analysis);
 
   const profile = await profileSummary(userId);
   let analysis: Analysis;
@@ -134,7 +152,7 @@ export async function analyseJob(job: Job, userId: string, force = false): Promi
   } else {
     try {
       const out = await askJsonCached<Omit<Analysis, 'by'>>('analysis', ANALYSE_SYSTEM, analysePrompt(profile, job));
-      analysis = { ...out, requirements: out.requirements || [], must: out.must || [], projects: out.projects || [], by: 'claude' };
+      analysis = normalise(out, 'claude');
       read = true;
     } catch {
       analysis = heuristicAnalysis(job, profile, fitFromClaims());
@@ -187,7 +205,7 @@ export async function makeJobViewer(userId: string) {
     db.contact.findMany({ where: { userId } }),
   ]);
   const fit = fitFromClaims();
-  return (job: Job) => viewOf(job, profile, contacts, job.analysis ? JSON.parse(job.analysis) : heuristicAnalysis(job, profile, fit), fit);
+  return (job: Job) => viewOf(job, profile, contacts, job.analysis ? parseAnalysis(job.analysis) : heuristicAnalysis(job, profile, fit), fit);
 }
 
 export async function jobView(job: Job, userId: string, opts: { analyse?: boolean } = {}) {
@@ -198,7 +216,7 @@ export async function jobView(job: Job, userId: string, opts: { analyse?: boolea
 
   const fit = fitFromClaims();
   const analysis: Analysis = job.analysis
-    ? JSON.parse(job.analysis)
+    ? parseAnalysis(job.analysis)
     : opts.analyse
       ? await analyseJob(job, userId)
       : heuristicAnalysis(job, profile, fit);
