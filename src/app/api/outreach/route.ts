@@ -17,6 +17,10 @@ export const maxDuration = 300;
 
 const ON_FILE = ['the CV', 'the job link', 'the job ID', 'the LinkedIn profile'];
 
+/** Outreach often continues after the application itself went in; moving an
+ *  applied job back to "sent" would drop it out of the Applied column. */
+const progress = (app: { status: string }, to: string) => (app.status === 'applied' ? 'applied' : to);
+
 /** Without a profile URL in the export, a people search for the name at the
  *  company is the closest LinkedIn gets to the person. */
 const profileLink = (c: { name: string; profileUrl: string | null }, company: string) =>
@@ -66,7 +70,7 @@ async function draftReferral(app: Application, job: Job, profile: ResolvedProfil
   // company read", and the message is the wrong place to go looking for it.
   await db.application.update({
     where: { id: app.id },
-    data: { status: 'sent', cvSentAt: resume ? new Date() : null },
+    data: { status: progress(app, 'sent'), cvSentAt: resume ? new Date() : null },
   });
   return { message, resume, driveReason };
 }
@@ -148,7 +152,7 @@ export async function POST(req: NextRequest) {
     const open = alumniSearch(school, job.company);
     const name = `${school.short} alumni at ${job.company}`;
 
-    await db.application.update({ where: { id: app.id }, data: { status: 'sent' } });
+    await db.application.update({ where: { id: app.id }, data: { status: progress(app, 'sent') } });
     await db.outreachEvent.create({
       data: {
         applicationId: app.id,
@@ -228,7 +232,7 @@ export async function POST(req: NextRequest) {
       drafted.reason = `Worth a careful read: ${probe.why}.`;
     }
 
-    await db.application.update({ where: { id: app.id }, data: { status: 'replied' } });
+    await db.application.update({ where: { id: app.id }, data: { status: progress(app, 'replied') } });
     await db.outreachEvent.create({
       data: {
         applicationId: app.id,
