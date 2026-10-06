@@ -24,8 +24,10 @@ export async function POST() {
   for (const j of jobs) {
     await db.job.upsert({
       where: { externalId: j.externalId },
-      update: { fetchedAt: new Date(), postedAt: j.postedAt, description: j.description, url: j.url, priority: j.priority },
-      create: j,
+      // An undated listing keeps the date it was first seen rather than being
+      // re-stamped today on every refresh.
+      update: { fetchedAt: new Date(), ...(j.postedAt && { postedAt: j.postedAt }), description: j.description, url: j.url, priority: j.priority },
+      create: { ...j, postedAt: j.postedAt ?? new Date() },
     });
   }
   const added = jobs.filter((j) => !known.has(j.externalId)).length;

@@ -17,7 +17,7 @@ export type RawJob = {
   sponsor: boolean;
   visa: string;
   description: string;
-  postedAt: Date;
+  postedAt: Date | null;
   priority: boolean;
 };
 
@@ -49,6 +49,14 @@ async function getJson(url: string): Promise<any> {
   const res = await fetch(url, { headers: UA, cache: 'no-store' });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
+}
+
+/** Null when the source gives no usable date. Falling back to now here would be
+ *  rewritten on every refresh, so a stale advert would read "posted today" forever. */
+function posted(v: unknown, scale = 1): Date | null {
+  if (v === undefined || v === null || v === '') return null;
+  const d = new Date(scale !== 1 ? Number(v) * scale : typeof v === 'number' ? v : String(v));
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function shape(partial: Omit<RawJob, 'field' | 'level' | 'mode' | 'sponsor' | 'visa' | 'priority'> & { field?: string }): RawJob {
@@ -85,7 +93,7 @@ async function greenhouse(e: Board): Promise<RawJob[]> {
       description: stripHtml(decodeEntities(j.content || '')),
       // first_published is the real posting date; updated_at moves whenever
       // anyone edits the advert, which would make "posted this week" meaningless.
-      postedAt: new Date(j.first_published || j.updated_at || Date.now()),
+      postedAt: posted(j.first_published || j.updated_at),
     });
   });
 }
@@ -102,7 +110,7 @@ async function lever(e: Board): Promise<RawJob[]> {
       ...resolvePlace(location),
       url: j.hostedUrl,
       description: stripHtml(j.descriptionPlain || j.description || ''),
-      postedAt: new Date(j.createdAt || Date.now()),
+      postedAt: posted(j.createdAt),
     });
   });
 }
@@ -119,7 +127,7 @@ async function ashby(e: Board): Promise<RawJob[]> {
       ...resolvePlace(location),
       url: j.jobUrl,
       description: stripHtml(j.descriptionHtml || j.descriptionPlain || ''),
-      postedAt: new Date(j.publishedAt || Date.now()),
+      postedAt: posted(j.publishedAt),
     });
   });
 }
@@ -136,7 +144,7 @@ async function workable(e: Board): Promise<RawJob[]> {
       ...resolvePlace(location),
       url: j.url || j.application_url,
       description: stripHtml(j.description || ''),
-      postedAt: new Date(j.published_on || Date.now()),
+      postedAt: posted(j.published_on),
     });
   });
 }
@@ -206,7 +214,7 @@ async function smartrecruiters(e: { company: string; token: string }, ccs: strin
           cc,
           url: d.postingUrl || `https://jobs.smartrecruiters.com/${e.token}/${p.id}`,
           description: stripHtml([sec.jobDescription?.text, sec.qualifications?.text].filter(Boolean).join('\n')),
-          postedAt: new Date(p.releasedDate || Date.now()),
+          postedAt: posted(p.releasedDate),
         });
       } catch {
         return null;
@@ -288,7 +296,7 @@ async function workday(e: { company: string; token: string }, ccs: string[]): Pr
           url: info.externalUrl || `${origin}/${site}${p.externalPath}`,
           description: stripHtml(info.jobDescription || ''),
           // The list only says "Posted 3 Days Ago"; the detail has the date.
-          postedAt: new Date(info.startDate || Date.now()),
+          postedAt: posted(info.startDate),
         });
       } catch {
         return null;
@@ -335,7 +343,7 @@ async function microsoft(e: { company: string }, ccs: string[]): Promise<RawJob[
           cc,
           url: d.publicUrl || `${origin}${p.positionUrl}`,
           description: stripHtml(d.jobDescription || ''),
-          postedAt: new Date((p.postedTs || Date.now() / 1000) * 1000),
+          postedAt: posted(p.postedTs, 1000),
         });
       } catch {
         return null;
@@ -372,7 +380,7 @@ async function amazon(e: { company: string }, ccs: string[]): Promise<RawJob[]> 
           cc,
           url: `https://www.amazon.jobs${j.job_path}`,
           description: stripHtml([j.description, j.basic_qualifications, j.preferred_qualifications].filter(Boolean).join('\n')),
-          postedAt: new Date(j.posted_date || Date.now()),
+          postedAt: posted(j.posted_date),
         }),
       );
     }
@@ -423,7 +431,7 @@ async function apple(e: { company: string }, ccs: string[]): Promise<RawJob[]> {
             cc,
             url: `https://jobs.apple.com/en-us/details/${j.positionId}/${j.transformedPostingTitle || ''}`,
             description: j.jobSummary || '',
-            postedAt: new Date(j.postingDate || Date.now()),
+            postedAt: posted(j.postingDate),
           }),
         );
       }
@@ -478,7 +486,7 @@ async function google(e: { company: string }, ccs: string[]): Promise<RawJob[]> 
           cc,
           url: tag(job, 'url'),
           description: stripHtml(tag(job, 'description')),
-          postedAt: new Date(tag(job, 'published') || Date.now()),
+          postedAt: posted(tag(job, 'published')),
         }),
       );
     }
@@ -507,7 +515,7 @@ async function arbeitnow(): Promise<RawJob[]> {
       cc: ccFromLocation(location) || '',
       url: j.url,
       description: stripHtml(text) + (j.visa_sponsorship ? '\n\nVisa sponsorship available.' : ''),
-      postedAt: new Date((j.created_at || Date.now() / 1000) * 1000),
+      postedAt: posted(j.created_at, 1000),
     });
   });
 }
@@ -549,7 +557,7 @@ async function themuse(cc: string, page: number): Promise<RawJob[]> {
         ...resolvePlace(location),
         url: j.refs?.landing_page || '',
         description: stripHtml(j.contents || ''),
-        postedAt: new Date(j.publication_date || Date.now()),
+        postedAt: posted(j.publication_date),
       });
     })
     // Their filter is advisory; ours is the one that decides.
@@ -576,7 +584,7 @@ async function adzuna(cc: string, what: string): Promise<RawJob[]> {
       cc,
       url: j.redirect_url,
       description: stripHtml(j.description || ''),
-      postedAt: new Date(j.created || Date.now()),
+      postedAt: posted(j.created),
     });
   });
 }
@@ -612,7 +620,11 @@ export async function fetchAll(activeCcs: string[], queries: string[]): Promise<
   settled.forEach((res, i) => {
     const t = tasks[i];
     if (res.status === 'rejected') {
-      report.push({ source: t.label, company: t.company, got: 0, kept: 0, error: String(res.reason).slice(0, 140) });
+      const error = String(res.reason).slice(0, 140);
+      // The report only reaches the browser, so a dead board would otherwise
+      // never show up in the server log.
+      console.warn(`[refresh] ${t.label}${t.company ? ` · ${t.company}` : ''} failed: ${error}`);
+      report.push({ source: t.label, company: t.company, got: 0, kept: 0, error });
       return;
     }
     const kept = keepInCountries(res.value, activeCcs);
