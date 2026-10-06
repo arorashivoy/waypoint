@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser } from '@/lib/user';
+import { profileSummary, requireUser } from '@/lib/user';
 import { analyseJob, jobView } from '@/lib/analysis';
+import { alumniSearch, isAlumniRequest } from '@/lib/match';
 import { readChat } from '@/lib/cv';
 
 export const dynamic = 'force-dynamic';
@@ -30,6 +31,7 @@ async function detail(jobId: string, userId: string, force: boolean) {
   });
 
   const referral = await db.outreachEvent.findFirst({ where: { applicationId: app.id, kind: 'request' }, orderBy: { createdAt: 'desc' } });
+  const { school } = await profileSummary(userId);
 
   return {
     id: fresh.id,
@@ -47,7 +49,10 @@ async function detail(jobId: string, userId: string, force: boolean) {
     match: view.match,
     // So the message can be copied again after a reload, or when the browser
     // blocked the clipboard the first time.
-    referral: referral && { copy: referral.body, open: referral.contactUrl, name: referral.contactName },
+    referral: referral && { copy: referral.body, open: referral.contactUrl, name: referral.contactName, alumni: isAlumniRequest(referral) },
+    // The fallback when `routes` is empty. Null without a school on the
+    // profile, since there is nobody to call a fellow alumnus.
+    alumni: school && { school: school.short, url: alumniSearch(school, fresh.company), precise: !!school.linkedin },
     isSent: app.status !== 'draft',
     isApplied: app.status === 'applied',
     // What was last generated, without rebuilding it: opening a job must not

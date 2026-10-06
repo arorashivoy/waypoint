@@ -6,6 +6,7 @@ import { analysisProgress } from './queue';
 import { profileSummary } from './user';
 import { claimsFailure, loadClaims } from './claims';
 import { projectPicks } from './resume';
+import { isAlumniRequest } from './match';
 import { watchlist } from './sources';
 
 const ago = (d: Date) => {
@@ -128,6 +129,9 @@ export async function buildState(userId: string) {
         when: `Sent ${ago(sent?.createdAt || a.updatedAt)}`,
         why: sent?.reason || '',
         contactUrl: sent?.contactUrl,
+        // A note to a stranger, so the next step is their accepting, after
+        // which the referral message with the CV can go.
+        alumni: isAlumniRequest(sent),
       };
     });
 
