@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { requireUser } from '@/lib/user';
 import { analyseJob, jobView } from '@/lib/analysis';
+import { readChat } from '@/lib/cv';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -48,6 +49,11 @@ async function detail(jobId: string, userId: string, force: boolean) {
     noteReady: app.note.length > 0,
     isSent: app.status !== 'draft',
     isApplied: app.status === 'applied',
+    // What was last generated, without rebuilding it: opening a job must not
+    // cost a LaTeX compile. Pressing "Generate" fills in the rest.
+    cv: app.cvPath
+      ? { pdfUrl: `/api/resume/${app.id}`, driveUrl: app.cvUrl, lead: app.cvLead, chat: readChat(app) }
+      : null,
   };
 }
 

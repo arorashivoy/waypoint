@@ -3,13 +3,13 @@ import { readFileSync } from 'fs';
 import { basename } from 'path';
 import { db } from '@/lib/db';
 import { requireUser } from '@/lib/user';
-import { loadClaims } from '@/lib/claims';
-import { buildResume } from '@/lib/resume';
+import { buildCv } from '@/lib/cv';
 
 export const maxDuration = 300;
 
 /**
- * The CV for one application, tailored to its posting.
+ * The CV for one application, tailored to its posting and to any refinement
+ * made with "Refine with Claude".
  *
  * Rebuilt rather than stored against the application row: `buildResume` keys
  * its output on a hash of the rendered LaTeX, so an unchanged selection is a
@@ -21,7 +21,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const app = await db.application.findFirst({ where: { id: params.id, userId: user.id }, include: { job: true } });
   if (!app) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
-  const resume = await buildResume(loadClaims(), `${app.job.role}\n${app.job.description}`, app.id);
+  const resume = await buildCv(app, app.job);
   if (!resume || !resume.path) {
     return NextResponse.json({ error: 'No CV configured. Set RESUME_PDF, and RESUME_TEX to tailor it.' }, { status: 404 });
   }

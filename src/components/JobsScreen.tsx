@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { api, copyAndOpen, patch, post } from './api';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { api, copyAndOpen, copyText, del, patch, post } from './api';
 import { FILTER_GROUPS, POSTED_WINDOWS } from '@/lib/countries';
 import type { Screen } from './Waypoint';
 
@@ -231,21 +231,45 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
   );
 }
 
+type ChatTurn = { role: 'you' | 'claude'; text: string; at: string };
+type Cv = {
+  pdfUrl: string;
+  driveUrl: string | null;
+  driveReason?: string | null;
+  tailored?: boolean;
+  lead?: string | null;
+  projects?: string[];
+  bullets?: string[];
+  skills?: string[];
+  reason?: string | null;
+  chat: ChatTurn[];
+};
+
 function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string; state: any; refresh: () => Promise<any>; setToast: (s: string) => void; onBack?: () => void; phone: boolean }) {
   const [job, setJob] = useState<any>(null);
   const [note, setNote] = useState('');
   const [drafting, setDrafting] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [cv, setCv] = useState<Cv | null>(null);
+  const [cvBusy, setCvBusy] = useState<'generate' | 'refine' | 'reset' | null>(null);
+  const [cvError, setCvError] = useState<string | null>(null);
+  // A compile outlives a click to another job; its answer must not land on that job.
+  const shown = useRef(id);
 
   useEffect(() => {
     let live = true;
+    shown.current = id;
     setJob(null);
     setNote('');
+    setCv(null);
+    setCvBusy(null);
+    setCvError(null);
     api(`/api/jobs/${id}`)
       .then(async (j: any) => {
         if (!live) return;
         setJob(j);
         setNote(j.note || '');
+        setCv(j.cv);
         if (j.noteReady) return;
         // Second round trip: the posting and the referral route are already on
         // screen while Claude writes the note.
@@ -319,6 +343,35 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
     await refresh();
   };
 
+  const cvCall = async (kind: 'generate' | 'refine' | 'reset', call: () => Promise<Cv>) => {
+    const forId = id;
+    setCvBusy(kind);
+    setCvError(null);
+    try {
+      const fresh = await call();
+      if (shown.current === forId) setCv(fresh);
+      return true;
+    } catch (e) {
+      if (shown.current === forId) setCvError((e as Error).message);
+      return false;
+    } finally {
+      if (shown.current === forId) setCvBusy(null);
+    }
+  };
+  const generateCv = () => cvCall('generate', () => post<Cv>(`/api/jobs/${id}/resume`));
+  const refineCv = (message: string) => cvCall('refine', () => post<Cv>(`/api/jobs/${id}/resume/refine`, { message }));
+  const resetCv = () => cvCall('reset', () => del<Cv>(`/api/jobs/${id}/resume/refine`));
+
+  const noteHasLink = !!cv?.driveUrl && note.includes(cv.driveUrl);
+  const insertCvLink = () => {
+    if (!cv?.driveUrl || noteHasLink) return;
+    const next = `${note.trim()} CV: ${cv.driveUrl}`;
+    saveNote(next);
+    if (next.length > 300) setToast(`Link added, but the note is now ${next.length}/300. Trim it before sending — LinkedIn rejects longer notes.`);
+  };
+
+  const cvProps = { cv, busy: cvBusy, onGenerate: generateCv };
+
   return (
     <div className="panel stack" style={{ gap: 28 }}>
       {onBack && (
@@ -340,7 +393,10 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
       </div>
 
       <div className="stack" style={{ gap: 12 }}>
-        <h3 className="label">What the description asks for</h3>
+        <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
+          <h3 className="label grow" style={{ margin: 0 }}>What the description asks for</h3>
+          <GenerateCv {...cvProps} />
+        </div>
         <div className="two-col-tight">
           {job.reqs.map((r: any, i: number) => (
             <div key={i} className="req" data-ok={r.ok}>
@@ -349,6 +405,14 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
             </div>
           ))}
         </div>
+        <CvStatus busy={cvBusy} error={cvError} />
+        {cv && (
+          <div className="stack" style={{ gap: 12, padding: 14, borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)' }}>
+            <CvLinks cv={cv} setToast={setToast} />
+            <CvSummary cv={cv} />
+            <RefineCv cv={cv} busy={cvBusy} onRefine={refineCv} onReset={resetCv} />
+          </div>
+        )}
       </div>
 
       <div className="two-col">
@@ -391,6 +455,27 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
             />
           </div>
 
+          <div className="stack" style={{ gap: 8 }}>
+            {cv ? (
+              <>
+                <CvLinks cv={cv} setToast={setToast} />
+                {cv.driveUrl && !job.isSent && (
+                  <button className="btn" style={{ alignSelf: 'flex-start', height: 36, fontSize: 14 }} onClick={insertCvLink} disabled={noteHasLink}>
+                    {noteHasLink ? 'CV link is in the note' : 'Insert CV link into note'}
+                  </button>
+                )}
+                {cv.driveUrl && (
+                  <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.45 }}>
+                    The referral message drafted when they accept links this same file, so refining it later updates what they see.
+                  </span>
+                )}
+              </>
+            ) : (
+              <GenerateCv {...cvProps} />
+            )}
+            {!cv && <CvStatus busy={cvBusy} error={cvError} />}
+          </div>
+
           {!job.isSent ? (
             <button className="btn-accent" onClick={sendRequest} disabled={busy === 'send' || drafting || !best}>
               {busy === 'send' ? 'Copying…' : drafting ? 'Waiting for the note…' : best ? `Send connect request to ${best.name}` : 'No contact to send to'}
@@ -427,6 +512,143 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+type CvBusy = 'generate' | 'refine' | 'reset' | null;
+
+function GenerateCv({ cv, busy, onGenerate }: { cv: Cv | null; busy: CvBusy; onGenerate: () => void }) {
+  return (
+    <button className="btn" style={{ alignSelf: 'flex-start', height: 36, fontSize: 14 }} onClick={onGenerate} disabled={!!busy}>
+      {busy === 'generate' ? 'Building résumé…' : cv ? 'Rebuild résumé' : 'Generate résumé for this job'}
+    </button>
+  );
+}
+
+function CvStatus({ busy, error }: { busy: CvBusy; error: string | null }) {
+  if (error) {
+    return <span role="alert" style={{ fontSize: 14, lineHeight: 1.45, color: 'var(--danger)' }}>{error}</span>;
+  }
+  if (!busy) return null;
+  return (
+    <span role="status" style={{ fontSize: 14, lineHeight: 1.45, color: 'var(--muted)' }}>
+      {busy === 'refine'
+        ? 'Claude is choosing what to change, then the CV recompiles and Drive updates…'
+        : 'Tailoring the CV, compiling the LaTeX and uploading to Drive. A first compile can take a minute.'}
+    </span>
+  );
+}
+
+function CvLinks({ cv, setToast }: { cv: Cv; setToast: (s: string) => void }) {
+  const copy = async () => {
+    if (!cv.driveUrl) return;
+    setToast((await copyText(cv.driveUrl)) ? 'Drive link copied.' : 'Could not reach the clipboard here; copy the link by hand.');
+  };
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      <div className="row" style={{ gap: 12, flexWrap: 'wrap', fontSize: 14 }}>
+        {cv.driveUrl ? (
+          <>
+            <a href={cv.driveUrl} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 600 }}>CV on Drive</a>
+            <input
+              readOnly
+              aria-label="Drive link"
+              className="field mono"
+              style={{ height: 32, fontSize: 12, flex: '1 1 180px', minWidth: 0 }}
+              value={cv.driveUrl}
+              onFocus={(e) => e.target.select()}
+            />
+            <button onClick={copy} style={{ border: 0, background: 'transparent', fontSize: 13, textDecoration: 'underline', padding: 0 }}>Copy</button>
+          </>
+        ) : (
+          <span style={{ color: 'var(--muted)' }}>No Drive link</span>
+        )}
+        <a href={cv.pdfUrl} target="_blank" rel="noopener noreferrer">Local PDF</a>
+      </div>
+      {!cv.driveUrl && cv.driveReason && (
+        <span style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--warn-ink)' }}>{cv.driveReason}. The local PDF is ready to attach by hand.</span>
+      )}
+    </div>
+  );
+}
+
+/** Says what the build actually did, because an untailored CV looks exactly
+ *  like a tailored one until someone reads it. */
+function CvSummary({ cv }: { cv: Cv }) {
+  // Opened from a saved job, before anything was rebuilt: only the lead is known.
+  if (cv.tailored === undefined) {
+    return cv.lead ? <span style={{ fontSize: 14, color: 'var(--muted)' }}>Leads with {cv.lead}.</span> : null;
+  }
+  return (
+    <div className="stack" style={{ gap: 4, fontSize: 14, lineHeight: 1.45 }}>
+      {cv.tailored ? (
+        <>
+          {cv.lead && <span>Leads with <strong>{cv.lead}</strong>.</span>}
+          {!!cv.projects?.length && <span style={{ color: 'var(--muted)' }}>Projects: {cv.projects.join(' · ')}</span>}
+          {!!cv.skills?.length && <span style={{ color: 'var(--muted)' }}>Skills up front: {cv.skills.join(', ')}</span>}
+        </>
+      ) : (
+        <span style={{ color: 'var(--warn-ink)' }}>Base CV, not tailored{cv.reason ? `: ${cv.reason}` : ''}.</span>
+      )}
+    </div>
+  );
+}
+
+function RefineCv({ cv, busy, onRefine, onReset }: { cv: Cv; busy: CvBusy; onRefine: (m: string) => Promise<boolean>; onReset: () => Promise<boolean> }) {
+  const [open, setOpen] = useState(cv.chat.length > 0);
+  const [draft, setDraft] = useState('');
+
+  const send = async () => {
+    const m = draft.trim();
+    if (!m || busy) return;
+    if (await onRefine(m)) setDraft('');
+  };
+
+  const turns = cv.chat.filter((t) => t.role === 'you').length;
+
+  return (
+    <div className="stack" style={{ gap: 10, borderTop: '1px solid var(--line-2)', paddingTop: 10 }}>
+      <button
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        style={{ alignSelf: 'flex-start', border: 0, background: 'transparent', padding: 0, fontSize: 14, fontWeight: 600 }}
+      >
+        {open ? '▾' : '▸'} Refine with Claude{turns ? ` · ${turns} change${turns === 1 ? '' : 's'}` : ''}
+      </button>
+      {open && (
+        <>
+          <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.45 }}>
+            Claude only reorders and chooses between entries already in your CV and claims.yml — it never writes new lines.
+            Each change recompiles the PDF and updates the same Drive file.
+          </span>
+          {cv.chat.map((t, i) => (
+            <p key={i} className={t.role === 'you' ? 'quote' : 'sent-body'} style={{ maxWidth: '85%', alignSelf: t.role === 'you' ? 'flex-end' : 'flex-start' }}>
+              {t.text}
+            </p>
+          ))}
+          <label className="sr-only" htmlFor="wp-refine">What to change</label>
+          <textarea
+            id="wp-refine"
+            className="note-area"
+            style={{ minHeight: 72 }}
+            value={draft}
+            placeholder="e.g. Emphasise the ROS 2 work and drop the hackathon"
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }}
+          />
+          <div className="row" style={{ gap: 12 }}>
+            <button className="btn btn-dark" style={{ height: 36, fontSize: 14 }} onClick={send} disabled={!!busy || !draft.trim()}>
+              {busy === 'refine' ? 'Refining…' : 'Send'}
+            </button>
+            {turns > 0 && (
+              <button onClick={onReset} disabled={!!busy} style={{ border: 0, background: 'transparent', fontSize: 13, textDecoration: 'underline', padding: 0 }}>
+                {busy === 'reset' ? 'Resetting…' : 'Start over from the posting'}
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

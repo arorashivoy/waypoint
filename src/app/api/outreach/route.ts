@@ -7,9 +7,8 @@ import { askJsonCached } from '@/lib/cache';
 import { renderReferral, resolveHighlight, type Slots } from '@/lib/templates';
 import { REFERRAL_SYSTEM, referralPrompt, REPLY_SYSTEM, replyPrompt } from '@/lib/prompts';
 import { checkForInjection } from '@/lib/injection';
-import { loadClaims } from '@/lib/claims';
-import { buildResume, resumeOffer } from '@/lib/resume';
-import { shareResume } from '@/lib/gdrive';
+import { resumeOffer } from '@/lib/resume';
+import { publishCv } from '@/lib/cv';
 
 export const maxDuration = 300;
 
@@ -70,16 +69,14 @@ export async function POST(req: NextRequest) {
 
     // The CV is built here rather than when the message is opened, so the
     // version he attaches is the one the message describes. Which projects lead
-    // is decided from the claim graph against this posting's own words — no
-    // model call, and the same answer every time for the same posting.
-    const resume = await buildResume(loadClaims(), `${job.role}\n${job.description}`, app.id);
-
+    // is decided from the claim graph against this posting's own words, plus
+    // whatever he chose in "Refine with Claude" — the same build the job screen
+    // generated, so the link here is the link he already saw.
+    //
     // Uploaded before the message is written, because the message quotes the
-    // link. One file per posting: a referrer who opens it weeks later still
-    // sees the CV that was tailored for their company, which a single
-    // overwritten link could not promise.
-    const shared = resume ? await shareResume(resume.path, job.company, job.role) : { url: null, reason: null };
-    if (resume && shared.url) resume.publicUrl = shared.url;
+    // link. One Drive file per posting: a referrer who opens it weeks later
+    // still sees the CV that was tailored for their company.
+    const { resume, driveReason } = await publishCv(app, job);
 
     const message = renderReferral({
       firstName: name.split(' ')[0],
@@ -93,18 +90,12 @@ export async function POST(req: NextRequest) {
       cv: resumeOffer(resume),
     });
 
-    // Kept on the application, not only in the message body: before an
-    // interview the question is "which CV did this company read", and the
-    // message is the wrong place to have to go looking for it.
+    // `publishCv` kept the link, path and lead on the application, not only in
+    // the message body: before an interview the question is "which CV did this
+    // company read", and the message is the wrong place to go looking for it.
     await db.application.update({
       where: { id: app.id },
-      data: {
-        status: 'accepted',
-        cvUrl: shared.url,
-        cvPath: resume?.path || null,
-        cvLead: resume?.lead || null,
-        cvSentAt: resume ? new Date() : null,
-      },
+      data: { status: 'accepted', cvSentAt: resume ? new Date() : null },
     });
     await db.outreachEvent.create({
       data: {
@@ -132,7 +123,7 @@ export async function POST(req: NextRequest) {
         matched: resume.matched,
         publicUrl: resume.publicUrl,
         reason: resume.reason,
-        shareReason: shared.reason,
+        shareReason: driveReason,
       },
     });
   }
