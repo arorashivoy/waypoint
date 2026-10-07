@@ -399,10 +399,10 @@ search for you to pick from, with a guide beside the button — recruiter, HR or
 first, then the most senior engineer in the role's field, then anyone from your programme, preferring
 people in the job's city.
 
-- **The search.** With the school's LinkedIn slug, it is the school's alumni list filtered by company,
-  `linkedin.com/school/<slug>/people/?keywords=<company>`. Set it as `linkedin:` on the education in
-  `claims.yml` (`linkedin: iiit-delhi`) or as `WAYPOINT_SCHOOL_LINKEDIN_SLUG`. Without one it falls back
-  to a people search for `<school> <company>`, which also matches people who merely mention both.
+- **The search.** LinkedIn's people search with its **Company** field set to the employer and its
+  **School** field set to your school's registered name or its first alias. The Company field matches
+  where someone works now; a plain keyword would also return people who left years ago or only
+  mention the company.
 - **The note.** Alumni are not connections, so the ask is a connection-request note, which LinkedIn
   caps at 300 characters: `ALUMNI_NOTE_TEMPLATE` plus one model-written hook. There is no room for the
   CV link or a name, since the recipient is picked after drafting. Over the cap, the hook is cut

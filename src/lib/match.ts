@@ -190,19 +190,21 @@ export function routeLabel(routes: Route[], company: string): string {
  *
  * Waypoint cannot run this search itself — LinkedIn has no people-search API
  * and scraping it breaks the User Agreement — so this is a link the user opens
- * and picks from. The school's own alumni page takes its vanity slug and a
- * `keywords` filter that matches current employer, which is the precise
- * version. Without a slug, a plain people search for "<school> <company>" is
- * the fallback: looser, since it also matches anyone who merely mentions both.
+ * and picks from. It uses the people search's own Company and School fields
+ * rather than `keywords`: a keyword matches anywhere on a profile, so a
+ * company keyword also returns people who left it years ago or only mention
+ * it, while the Company field matches the current employer. The school's
+ * registered name and its short form are both offered, since profiles carry
+ * either.
  *
  * Legal suffixes are dropped because a board lists "Stripe, Inc." and a
  * profile says "Stripe", and the keyword filter is literal.
  */
-export function alumniSearch(school: { short: string; linkedin: string | null }, company: string) {
+export function alumniSearch(school: { name: string; short: string }, company: string) {
   const name = company.replace(/[,\s]+(inc|ltd|llc|gmbh|ag|se|sa|nv|bv|b\.v|n\.v|plc|limited)\.?$/i, '').trim() || company;
-  return school.linkedin
-    ? `https://www.linkedin.com/school/${encodeURIComponent(school.linkedin)}/people/?keywords=${encodeURIComponent(name)}`
-    : `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${school.short} ${name}`)}`;
+  const schools = [...new Set([school.name, school.short])].map((s) => `"${s}"`).join(' OR ');
+  const q = new URLSearchParams({ company: `"${name}"`, schoolFreetext: schools, origin: 'FACETED_SEARCH' });
+  return `https://www.linkedin.com/search/results/people/?${q}`;
 }
 
 /** Marks an outreach row as a note to an alumnus rather than a message to a

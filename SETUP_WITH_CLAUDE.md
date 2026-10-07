@@ -63,7 +63,6 @@ Fill these in from `.env.example`. Ask the user for each value; do not invent an
 | `RESUME_TEX`, `RESUME_PDF` | absolute paths to the user's LaTeX CV and its compiled PDF. Tailoring needs the `.tex`; keep any custom `.cls` next to it |
 | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` | optional. Free at developer.adzuna.com. Without them the Adzuna source returns nothing, silently |
 | `GDRIVE_*` | section 5 |
-| `WAYPOINT_SCHOOL_LINKEDIN_SLUG` | only if the school slug is not set in `claims.yml` (section 4) |
 | `PORT` | only for a second copy on the same machine (section 8). Set it in the shell or service, not in `.env`: the npm scripts read it before `.env` is loaded |
 
 Check: `grep -c '^[A-Z]' .env` goes up, and `npm run dev` starts without errors.
@@ -91,19 +90,13 @@ profile:
       degree: <degree>
       field: <field>
       years: <years>
-      # LinkedIn's school page slug: linkedin.com/school/<slug>/
-      linkedin: <slug>
       # The forms alumni actually write in their headlines. The first one is used
-      # as the short name in the 300-character connection note, so keep it short.
+      # as the short name in the 300-character connection note and, with `school`,
+      # in LinkedIn's School search field, so keep it the common short form.
       aliases: [<short name>, <other spellings>]
 ```
 
-To find `<slug>`: the school's official website usually links its LinkedIn page. Read
-the slug from that link and **verify it** before writing it. Do not guess from the
-school's name. If you cannot verify it, leave `linkedin:` out. The app then falls back to
-a looser keyword search.
-
-Check: `npm run check:claims` exits 0. And this prints the school with its slug:
+Check: `npm run check:claims` exits 0. And this prints the school's name and short form:
 
 ```bash
 cat > .probe.ts <<'EOF'

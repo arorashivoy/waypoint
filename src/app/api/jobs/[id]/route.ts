@@ -52,7 +52,7 @@ async function detail(jobId: string, userId: string, force: boolean) {
     referral: referral && { copy: referral.body, open: referral.contactUrl, name: referral.contactName, alumni: isAlumniRequest(referral) },
     // The fallback when `routes` is empty. Null without a school on the
     // profile, since there is nobody to call a fellow alumnus.
-    alumni: school && { school: school.short, url: alumniSearch(school, fresh.company), precise: !!school.linkedin },
+    alumni: school && { school: school.short, url: alumniSearch(school, fresh.company) },
     isSent: app.status !== 'draft',
     isApplied: app.status === 'applied',
     // What was last generated, without rebuilding it: opening a job must not

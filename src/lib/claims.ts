@@ -119,11 +119,6 @@ export type EducationTarget = {
    *  name appears in nobody's LinkedIn headline, so without these the alumnus
    *  route in `rankRoutes` never fires. */
   aliases?: string[];
-  /** The school's LinkedIn page slug — `iiit-delhi` in
-   *  linkedin.com/school/iiit-delhi. It cannot be derived from the name, and
-   *  with it the alumni fallback opens the school's own alumni list filtered
-   *  by company instead of a loose keyword search across all of LinkedIn. */
-  linkedin?: string | null;
 };
 
 export type ClaimsDoc = {
@@ -137,7 +132,6 @@ export type Check = { errors: string[]; warnings: string[]; doc: ClaimsDoc | nul
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MONTH = /^\d{4}(-\d{2})?$/;
-const LINKEDIN_SLUG = /^[a-z0-9][a-z0-9_-]*$/i;
 /** A proof sentence is pasted into a prompt and, through it, into a message a
  *  human reads. Anything longer than this is a paragraph, and a paragraph in a
  *  300-character LinkedIn note is a bug rather than detail. */
@@ -183,9 +177,6 @@ export function validate(raw: unknown): Check {
       if (typeof a !== 'string' || !a.trim()) err(`targets.educations[${i}].aliases[${j}]`, 'must be a non-empty string');
       else if (a.replace(/[^a-z0-9]/gi, '').length < 4) err(`targets.educations[${i}].aliases[${j}]`, `"${a}" is too short to match on; under four characters it matches half the connection list`);
     });
-    if (e.linkedin !== undefined && e.linkedin !== null && (typeof e.linkedin !== 'string' || !LINKEDIN_SLUG.test(e.linkedin))) {
-      err(`targets.educations[${i}].linkedin`, `the slug from linkedin.com/school/<slug>, e.g. "iiit-delhi", got ${JSON.stringify(e.linkedin)}`);
-    }
   });
 
   projects.forEach((p: any, i) => {
@@ -423,16 +414,13 @@ export const renderMetric = (c: Claim) =>
  *  people — the first alias, since "Indraprastha Institute of Information
  *  Technology Delhi alum" spends a fifth of a 300-character note on a name
  *  nobody uses. */
-export type School = { name: string; short: string; linkedin: string | null };
+export type School = { name: string; short: string };
 
 export type ResolvedProfile = ProfileSummary & { levels: string[]; currentEmployer: string; schools: string[]; interests: string[]; school: School | null };
 
-/** Only the import path has no slug field of its own, so the env var is its
- *  way in; claims.yml wins when it states one. */
-export function schoolOf(e: { school: string; aliases?: string[]; linkedin?: string | null } | undefined): School | null {
+export function schoolOf(e: { school: string; aliases?: string[] } | undefined): School | null {
   if (!e?.school) return null;
-  const linkedin = e.linkedin || process.env.WAYPOINT_SCHOOL_LINKEDIN_SLUG?.trim() || null;
-  return { name: e.school, short: e.aliases?.[0] || e.school, linkedin: linkedin && LINKEDIN_SLUG.test(linkedin) ? linkedin : null };
+  return { name: e.school, short: e.aliases?.[0] || e.school };
 }
 
 export function profileFromClaims(doc: ClaimsDoc): ResolvedProfile {

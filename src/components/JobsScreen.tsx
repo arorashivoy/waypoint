@@ -239,7 +239,7 @@ const NOTE_LIMIT = 300;
  * Waypoint cannot search LinkedIn, so the search is a link and the choice of
  * person is the user's. The guide is what it would rank on if it could.
  */
-function AlumniAsk({ alumni, company, city, busy, onFind }: { alumni: { school: string; precise: boolean }; company: string; city: string; busy: boolean; onFind: () => void }) {
+function AlumniAsk({ alumni, company, city, busy, onFind }: { alumni: { school: string }; company: string; city: string; busy: boolean; onFind: () => void }) {
   return (
     <div className="stack" style={{ gap: 12 }}>
       <div className="must">
@@ -258,7 +258,6 @@ function AlumniAsk({ alumni, company, city, busy, onFind }: { alumni: { school: 
       <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.45 }}>
         They are not connections, so this drafts a {NOTE_LIMIT}-character connection note — no room for your CV link; the
         referral message with it comes once they accept.
-        {!alumni.precise && ' Without your school’s LinkedIn slug this is a keyword search, so check each result really studied there.'}
       </span>
       <button className="btn-accent" onClick={onFind} disabled={busy}>
         {busy ? 'Drafting the connection note…' : `Find ${alumni.school} alumni at ${company}`}
