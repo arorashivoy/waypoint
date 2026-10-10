@@ -28,6 +28,31 @@ order. Before you start, read `README.md`.
 
 ---
 
+## 0. Already installed? Upgrade instead
+
+If `data/waypoint.db` and `.env` already exist, this is an existing install. Do **not**
+run `npm run setup` or re-create `.env`. Instead:
+
+1. **Back up** before touching anything: copy `data/waypoint.db`, `.env` and
+   `data/profile/claims.yml`.
+2. `git pull`, then `npm install`, then `npx prisma db push`. The push adds new columns,
+   for example `cvDriveId`, `cvSteer` and `cvChat` on `Application`. Then run
+   `npx prisma generate`, from this checkout's root.
+3. Restart the server, and have the user hard-reload every open tab.
+4. Bring the setup that lives outside git up to date. **Check each item; don't assume
+   it's done.**
+   - **Drive token:** run the token check in section 5, step 8. If it returns
+     `invalid_grant`, the Google app is probably still in Testing. Do section 5, steps 2–4
+     (pages, Branding, Publish), then step 6 (`gdrive:auth`) to get a new token.
+   - **Drive folder:** if the folder check in step 8 returns 404, `GDRIVE_FOLDER_ID` is a
+     folder made by hand. Do section 5, step 7.
+   - **`claims.yml`:** make sure the first education has `aliases:` and that the first
+     alias is the short name people use. The alumni search uses it (section 4).
+   - **Obsolete settings:** remove `WAYPOINT_SCHOOL_LINKEDIN_SLUG` from `.env` and any
+     `linkedin:` key under an education in `claims.yml`. Neither is used any more.
+   - **Check:** `npm run check:claims` exits 0.
+5. Run the checklist in section 7.
+
 ## 1. Machine prerequisites
 
 | Need | Check | Install |
