@@ -8,7 +8,7 @@ import { fieldFit, levelFit, matchScore, rankRoutes, routeLabel } from './match'
 import { CV_COUNTRY_RULES, FIELD_QUERIES } from './countries';
 import { loadClaims, type ClaimsDoc } from './claims';
 import { claimsInPosting, projectPicks, rankEvidence, type ProjectPick } from './resume';
-import { fieldFromText } from './sources/geo';
+import { fieldFromText, levelFromPosting, requiredYears } from './sources/geo';
 
 export type Analysis = {
   field: string;
@@ -176,7 +176,24 @@ export async function analyseJob(job: Job, userId: string, force = false): Promi
 
 type Profile = Awaited<ReturnType<typeof profileSummary>>;
 
-function viewOf(job: Job, profile: Profile, contacts: { company: string | null; position: string | null; firstName: string; lastName: string; profileUrl: string | null }[], analysis: Analysis, fit: Fit) {
+/** Scanning every description on every page load costs ~300 ms on the Pi, so the
+ *  result is kept until the description it came from changes. */
+const statedLevels = new Map<string, { length: number; level: string | null }>();
+
+/** Years the posting states beat any stored level: analyses written before the
+ *  prompt defined levels by years carry the model's unanchored guess. */
+function levelOf(job: Job, analysis: Analysis): string {
+  let seen = statedLevels.get(job.id);
+  if (!seen || seen.length !== job.description.length) {
+    const level = requiredYears(job.description) === null ? null : levelFromPosting(job.role, job.description);
+    seen = { length: job.description.length, level };
+    statedLevels.set(job.id, seen);
+  }
+  return seen.level ?? analysis.level;
+}
+
+function viewOf(job: Job, profile: Profile, contacts: { company: string | null; position: string | null; firstName: string; lastName: string; profileUrl: string | null }[], stored: Analysis, fit: Fit) {
+  const analysis = { ...stored, level: levelOf(job, stored) };
   const routes = rankRoutes(contacts as any, {
     company: job.company,
     field: analysis.field,

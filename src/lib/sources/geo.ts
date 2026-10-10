@@ -70,6 +70,37 @@ export function levelFromTitle(title: string): 'Entry' | 'Mid' | 'Senior' {
   return 'Mid';
 }
 
+const COUNT = '(\\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)';
+const WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+// "3+ years of experience", "2-4 years' professional experience", "five years of Python work".
+const YEARS = new RegExp(
+  `\\b${COUNT}\\s*\\+?\\s*(?:(?:-|–|to)\\s*${COUNT}\\s*\\+?\\s*)?years?['’]?\\s*(?:of\\s+)?(?:[\\w-]+\\s+){0,4}?(?:experience|exp\\b|work)`,
+  'gi',
+);
+
+/** Fewest years of experience a posting asks for, or null when it names none.
+ *  The fewest, because "3+ years of Python, 5+ preferred" is open at 3. */
+export function requiredYears(description: string): number | null {
+  let fewest: number | null = null;
+  for (const m of description.matchAll(YEARS)) {
+    const n = WORDS[m[1].toLowerCase()] ?? Number(m[1]);
+    // "20 years of experience" is the company's age, not a requirement.
+    if (n <= 15 && (fewest === null || n < fewest)) fewest = n;
+  }
+  return fewest;
+}
+
+/** A senior title settles it; otherwise the years the posting asks for do, since
+ *  most titles are a bare "Software Engineer" whatever the level. Entry means at
+ *  most one year, because that is the bar a candidate with ~1.5 years clears. */
+export function levelFromPosting(title: string, description: string): 'Entry' | 'Mid' | 'Senior' {
+  const byTitle = levelFromTitle(title);
+  if (byTitle === 'Senior') return byTitle;
+  const years = requiredYears(description);
+  if (years === null) return byTitle;
+  return years <= 1 ? 'Entry' : years < 5 ? 'Mid' : 'Senior';
+}
+
 const SPONSOR = /visa sponsorship|sponsor(ship)? (is )?(available|provided|offered)|relocation (package|support|assistance)|blue card|work permit support|we sponsor/i;
 
 export function sponsorFromText(text: string): boolean {

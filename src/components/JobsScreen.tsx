@@ -19,8 +19,10 @@ type Props = {
 };
 
 // Defaults to the last 7 days: an advert older than that is usually filled, and
-// a referral request against a filled role wastes a connection.
-const DEFAULT_FILTERS = { field: 'All', mode: 'Any', level: 'Any', posted: 'This week' } as Record<string, string>;
+// a referral request against a filled role wastes a connection. Level defaults to
+// the profile's own, so roles asking for more experience than it has stay out of
+// the way until asked for.
+const DEFAULT_FILTERS = { field: 'All', mode: 'Any', level: 'From LinkedIn', posted: 'This week' } as Record<string, string>;
 
 export default function JobsScreen({ state, screen, refresh, setToast, openJob, selected, setSelected, toggleCountry, go, phone }: Props) {
   const [q, setQ] = useState('');

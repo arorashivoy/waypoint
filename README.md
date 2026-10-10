@@ -143,7 +143,10 @@ referral route, and the posting date.
 - A score shown as `~65% est.` is a keyword guess on a posting Claude has not read yet. Estimates are
   capped at 65 so a guess can never outrank a real read, and they resolve as the background pass
   works through the queue. The header shows its progress.
-- **Level → From LinkedIn** filters to the seniority inferred from your imported job titles and years.
+- **Level → From LinkedIn** (the default) filters to the seniority inferred from your imported job titles and
+  years: under 3 years is Entry only. A posting's level comes from the fewest years of experience it asks
+  for (at most 1 → Entry, 2–4 → Mid, 5+ → Senior) unless its title is senior; with no years stated, from
+  the title or Claude's reading.
 - **Sponsors visa** keeps only postings that state sponsorship or relocation support.
 - Country chips (phone) and the sidebar checkboxes (desktop) pause a country without losing it.
 

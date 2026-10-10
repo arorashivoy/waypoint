@@ -56,7 +56,8 @@ export function fieldFit(jobField: string, strongFields: string[]): number {
   return 0.3;
 }
 
-/** Engineering Analyst with a few years maps to Entry and Mid, per the brief. */
+/** Under 3 years is Entry only: Entry postings ask for at most a year, and a
+ *  Mid one's 2–4 years is a bar that profile does not yet clear. */
 export function inferLevels(positions: { title: string; startedAt?: Date | null; endedAt?: Date | null }[]): string[] {
   if (!positions.length) return ['Entry', 'Mid'];
   const years = positions.reduce((sum, p) => {
@@ -67,7 +68,7 @@ export function inferLevels(positions: { title: string; startedAt?: Date | null;
   const senior = positions.some((p) => /\b(senior|staff|principal|lead|vp|vice president|director)\b/i.test(p.title));
   if (senior || years >= 8) return ['Mid', 'Senior'];
   if (years >= 3) return ['Entry', 'Mid'];
-  return ['Entry', 'Mid'];
+  return ['Entry'];
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\b(inc|ltd|llc|gmbh|se|sa|nv|bv|plc|group|services|bank|europe|technology|technologies)\b/g, '').replace(/\s+/g, ' ').trim();
