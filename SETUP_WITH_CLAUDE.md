@@ -88,7 +88,7 @@ Fill these in from `.env.example`. Ask the user for each value; do not invent an
 | `RESUME_TEX`, `RESUME_PDF` | absolute paths to the user's LaTeX CV and its compiled PDF. Tailoring needs the `.tex`; keep any custom `.cls` next to it |
 | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` | optional. Free at developer.adzuna.com. Without them the Adzuna source returns nothing, silently |
 | `GDRIVE_*` | section 5 |
-| `PORT` | only for a second copy on the same machine (section 8). Set it in the shell or service, not in `.env`: the npm scripts read it before `.env` is loaded |
+| `PORT` | only for a second copy on the same machine (section 8), e.g. `PORT=3118`. Read by `npm run dev`, `npm start` and `remote.sh`; a `PORT` in the shell or systemd unit wins over `.env`. If LinkedIn sign-in is configured, change the port in `LINKEDIN_REDIRECT_URI` to match |
 
 Check: `grep -c '^[A-Z]' .env` goes up, and `npm run dev` starts without errors.
 
@@ -252,7 +252,7 @@ Run each copy in production mode under systemd. Do not use `npm run dev` on a Pi
 compiles pages on demand and uses about 1 GB more memory.
 
 ```ini
-# /etc/systemd/system/waypoint-alice.service   (copy for bob with PORT=3118)
+# /etc/systemd/system/waypoint-alice.service   (copy for bob; each port comes from its clone's .env)
 [Unit]
 Description=Waypoint (alice)
 After=network-online.target
@@ -260,7 +260,6 @@ After=network-online.target
 [Service]
 User=pi
 WorkingDirectory=/home/pi/waypoint-alice
-Environment=PORT=3117
 ExecStart=/usr/bin/npm start
 Restart=on-failure
 
