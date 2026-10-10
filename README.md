@@ -593,6 +593,7 @@ Copy `.env.example` to `.env`. Everything has a working default except the optio
 | `npm run gdrive:auth` | One-time Google consent; prints the `GDRIVE_REFRESH_TOKEN` for `.env` |
 | `npm run check:claims` | Validate `data/profile/claims.yml` and report coverage gaps |
 | `./scripts/remote.sh` | Server plus a public HTTPS tunnel, passcode enforced |
+| `./scripts/start.sh` | Same, but builds and serves in production mode — use on the Pi |
 
 ## Troubleshooting
 

@@ -216,6 +216,7 @@ LinkedIn's User Agreement and puts the user's account at risk.
 npm run dev                      # development, http://localhost:3117
 npm run build && npm start       # production. Stop the dev server first: build overwrites .next
 ./scripts/remote.sh              # dev server plus a public tunnel. Refuses to start without WAYPOINT_ACCESS_CODE
+./scripts/start.sh               # same, but builds and runs the production server
 ```
 
 Checklist with the user:

@@ -8,6 +8,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 PORT="$(node scripts/port.mjs)"
+MODE="${WAYPOINT_MODE:-dev}"
+case "$MODE" in
+  dev)  SERVE=dev ;;
+  prod) SERVE=start ;;
+  *) echo "WAYPOINT_MODE must be dev or prod, got '$MODE'" >&2; exit 1 ;;
+esac
+LOG="/tmp/waypoint-$MODE.log"
 
 if ! grep -q '^WAYPOINT_ACCESS_CODE="..*"' .env 2>/dev/null; then
   echo "Refusing to expose Waypoint with no passcode." >&2
@@ -16,33 +23,39 @@ if ! grep -q '^WAYPOINT_ACCESS_CODE="..*"' .env 2>/dev/null; then
   exit 1
 fi
 
-command -v cloudflared >/dev/null || { echo "cloudflared not found: brew install cloudflared" >&2; exit 1; }
+command -v cloudflared >/dev/null || { echo "cloudflared not found: brew install cloudflared (macOS) or the arm64 .deb from github.com/cloudflare/cloudflared/releases (Pi)" >&2; exit 1; }
 
 cleanup() { kill $(jobs -p) 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 
 # Whether the port already answers decides everything below. Polling the port
 # alone is not enough to know *our* server started: an earlier server (or
-# another session) holding the port makes a doomed `npm run dev` look healthy,
+# another session) holding the port makes a doomed server look healthy,
 # and the tunnel then quietly depends on a process this script does not own.
 if curl -sf -o /dev/null "http://localhost:$PORT" 2>/dev/null; then
   if [ -z "${WAYPOINT_DEV_FROM_START:-}" ]; then
     echo "Something is already serving :$PORT — reusing it."
-    echo "  (If that is not your own \`npm run dev\`, stop it first: lsof -nP -iTCP:$PORT -sTCP:LISTEN)"
+    echo "  (If that is not your own \`npm run $SERVE\`, stop it first: lsof -nP -iTCP:$PORT -sTCP:LISTEN)"
   fi
   OWN_SERVER=0
 else
-  echo "Starting Waypoint on :$PORT ..."
-  npm run dev >/tmp/waypoint-dev.log 2>&1 &
-  DEV_PID=$!
+  # Built here rather than in start.sh so a build never rewrites .next under a
+  # server that is already running from it.
+  if [ "$MODE" = prod ]; then
+    echo "Building ..."
+    npm run build >"$LOG" 2>&1 || { echo "Build failed. Last lines:" >&2; tail -15 "$LOG" >&2; exit 1; }
+  fi
+  echo "Starting Waypoint ($MODE) on :$PORT ..."
+  npm run "$SERVE" >>"$LOG" 2>&1 &
+  SERVER_PID=$!
   OWN_SERVER=1
 
   for _ in $(seq 1 60); do
     # Check the child is alive as well as the port: if it exited (a port clash,
     # a bad build), fail loudly instead of tunnelling to whatever else answers.
-    if ! kill -0 "$DEV_PID" 2>/dev/null; then
-      echo "The dev server exited during startup. Last lines:" >&2
-      tail -15 /tmp/waypoint-dev.log >&2
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+      echo "The $MODE server exited during startup. Last lines:" >&2
+      tail -15 "$LOG" >&2
       exit 1
     fi
     curl -sf -o /dev/null "http://localhost:$PORT" 2>/dev/null && break
@@ -50,7 +63,7 @@ else
   done
 
   if ! curl -sf -o /dev/null "http://localhost:$PORT" 2>/dev/null; then
-    echo "The dev server never became ready; see /tmp/waypoint-dev.log" >&2
+    echo "The $MODE server never became ready; see $LOG" >&2
     exit 1
   fi
 fi
