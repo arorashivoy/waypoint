@@ -504,9 +504,9 @@ source, because the description and posting date come from the employer.
 
 | `ats` | How it is fetched | Companies shipped |
 |---|---|---|
-| `greenhouse`, `lever`, `ashby`, `workable` | Documented public job-board APIs | Anthropic, OpenAI, Scale AI, Cohere, Perplexity, Isomorphic Labs, Hugging Face, ElevenLabs, Helsing, DeepL, Synthesia, Faculty, Waymo, Wayve, Figure AI, 1X, Physical Intelligence, Snowflake, Cloudflare, Celonis, Databricks, Sereact, plus the fintech and trading list |
-| `smartrecruiters` | Documented public Posting API | Bosch, Continental |
-| `workday` | The search API behind the company's Workday careers site; token is `tenant\|host\|site` | NVIDIA, Intel, Boston Dynamics |
+| `greenhouse`, `lever`, `ashby`, `workable` | Documented public job-board APIs | Anthropic, OpenAI, Scale AI, Cohere, Perplexity, Isomorphic Labs, Hugging Face, ElevenLabs, Helsing, DeepL, Synthesia, Faculty, Waymo, Wayve, Figure AI, 1X, Physical Intelligence, Snowflake, Cloudflare, Celonis, Databricks, Sereact, plus the fintech and trading list, and for India: Razorpay, Groww, CRED, Meesho, Paytm, Zeta, Hevo Data, Sarvam AI, SpotDraft, Atlan, Plane, Tekion, HighRadius, InMobi, Druva, Mindtickle, Observe.AI, MongoDB, Okta, Zscaler, Rubrik, Twilio, Netskope, Graviton, Squarepoint, Tower Research, Jump Trading and more |
+| `smartrecruiters` | Documented public Posting API | Bosch, Continental, Wise, Freshworks, Swiggy, ServiceNow, Grab |
+| `workday` | The search API behind the company's Workday careers site; token is `tenant\|host\|site` | NVIDIA, Intel, Boston Dynamics, and India-heavy employers: Salesforce, Adobe, Analog Devices, Cadence, Morgan Stanley, Citi, Deutsche Bank, State Street, Wells Fargo, Target |
 | `google` | Google's published jobs feed (`/about/careers/applications/jobs/feed.xml`, every open role, DeepMind and YouTube included). Its `robots.txt` blocks the results pages, not the feed | Google |
 | `microsoft`, `amazon`, `apple` | The search endpoint the company's own careers page calls, permitted by its `robots.txt` | Microsoft, Amazon, Apple |
 | `link` | **Never fetched** — shown as a link on the Countries screen | Meta: its terms forbid automated collection and metacareers.com rejects non-browser clients. The Muse's Meta listings stopped updating in January 2026, so there is no current feed to use |
@@ -518,6 +518,14 @@ company is capped at 30 detailed listings per country with at most four requests
 
 A board that stops resolving is reported by name in the refresh toast instead of failing the whole
 fetch.
+
+Refresh only asks for the countries you have switched on. The careers sites and aggregators are queried
+per country. A job-board API returns a company's openings worldwide in one response, so an entry's
+optional `countries` list lets a refresh skip that board when none of its countries is on.
+
+**India.** Naukri, foundit, Instahyre, Cutshort and Wellfound forbid automated access, so they stay
+links on the Countries screen. Indian coverage comes from the Indian companies and India-heavy employers
+in the watchlist, plus Adzuna's India feed once `ADZUNA_APP_ID` and `ADZUNA_APP_KEY` are set.
 
 **Aggregators**
 

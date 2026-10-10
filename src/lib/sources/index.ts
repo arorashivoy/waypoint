@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { ccFromLocation, cityFromLocation, decodeEntities, fieldFromText, levelFromTitle, modeFromText, resolvePlace, sponsorFromText, stripHtml } from './geo';
+import { ccFromLocation, cityFromLocation, decodeEntities, fieldFromText, levelFromPosting, modeFromText, resolvePlace, sponsorFromText, stripHtml } from './geo';
 import { COUNTRIES, VISA_ROUTE } from '../countries';
 
 export type RawJob = {
@@ -28,9 +28,12 @@ type Ats = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'smartrecruiters' | '
 /** `ats: 'link'` is a company with no feed Waypoint may fetch (its robots.txt or
  *  terms forbid it). It is still listed so its `priority` applies to copies the
  *  aggregators carry, and so the UI can link to its careers site. */
+/** `countries` lists where a company hires. A board API returns every opening
+ *  worldwide in one response, so an entry whose countries are all paused is not
+ *  fetched at all. Left out, the board is always fetched and filtered after. */
 export type WatchEntry =
-  | { company: string; ats: Ats; token: string; priority?: boolean }
-  | { company: string; ats: 'link'; url: string; priority?: boolean };
+  | { company: string; ats: Ats; token: string; priority?: boolean; countries?: string[] }
+  | { company: string; ats: 'link'; url: string; priority?: boolean; countries?: string[] };
 
 type Board = { company: string; token: string };
 
@@ -65,7 +68,7 @@ function shape(partial: Omit<RawJob, 'field' | 'level' | 'mode' | 'sponsor' | 'v
     ...partial,
     priority: false,
     field: partial.field || fieldFromText(text),
-    level: levelFromTitle(partial.role),
+    level: levelFromPosting(partial.role, partial.description),
     mode: modeFromText(`${partial.city} ${text}`),
     sponsor: sponsorFromText(text),
     visa: sponsorFromText(text) ? VISA_ROUTE[partial.cc] || 'Sponsorship stated' : 'Sponsorship not stated',
@@ -604,6 +607,7 @@ export async function fetchAll(activeCcs: string[], queries: string[]): Promise<
   const tasks: { label: string; company?: string; run: () => Promise<RawJob[]> }[] = [];
   for (const e of list) {
     if (e.ats === 'link') continue;
+    if (e.countries && !e.countries.some((cc) => activeCcs.includes(cc))) continue;
     const run = e.ats in boards
       ? () => boards[e.ats as keyof typeof boards](e as Board)
       : () => careers[e.ats as keyof typeof careers](e as Board, activeCcs);

@@ -1,5 +1,5 @@
 {
-  "_comment": "Companies whose openings Waypoint pulls straight from their applicant-tracking system. Greenhouse, Lever, Ashby and Workable each publish these endpoints so a company's own jobs can be republished, which is why they are the reliable source — unlike LinkedIn, Indeed, StepStone or Glassdoor, which forbid it. 'token' is the board slug in the careers URL, e.g. boards.greenhouse.io/<token>, jobs.lever.co/<token>, jobs.ashbyhq.com/<token>, apply.workable.com/<token>. Every board listed here was probed and had live postings at the time it was added; a token that later stops resolving is reported by name in the Refresh feeds toast rather than failing the whole fetch. Add your own targets the same way — this is the highest-quality source in the app, because the descriptions and posting dates come from the employer. Beyond the four ATSs: 'smartrecruiters' (token = company id), 'workday' (token = tenant|host|site from <tenant>.<host>.myworkdayjobs.com/<site>), 'microsoft', 'amazon', 'apple' for those companies' own careers search, and 'google' for Google's published jobs feed (DeepMind and YouTube included). 'link' entries (Meta) are never fetched — its terms forbid it — but appear as links on the Countries screen. 'priority': true puts a company's jobs first in the analysis queue and lifts them 10 points in list order (not in the score shown); it applies to copies found on aggregators too, matched on the company name.",
+  "_comment": "Companies whose openings Waypoint pulls straight from their applicant-tracking system. Greenhouse, Lever, Ashby and Workable each publish these endpoints so a company's own jobs can be republished, which is why they are the reliable source — unlike LinkedIn, Indeed, StepStone or Glassdoor, which forbid it. 'token' is the board slug in the careers URL, e.g. boards.greenhouse.io/<token>, jobs.lever.co/<token>, jobs.ashbyhq.com/<token>, apply.workable.com/<token>. Every board listed here was probed and had live postings at the time it was added; a token that later stops resolving is reported by name in the Refresh feeds toast rather than failing the whole fetch. Add your own targets the same way — this is the highest-quality source in the app, because the descriptions and posting dates come from the employer. Beyond the four ATSs: 'smartrecruiters' (token = company id), 'workday' (token = tenant|host|site from <tenant>.<host>.myworkdayjobs.com/<site>), 'microsoft', 'amazon', 'apple' for those companies' own careers search, and 'google' for Google's published jobs feed (DeepMind and YouTube included). 'link' entries (Meta) are never fetched — its terms forbid it — but appear as links on the Countries screen. 'priority': true puts a company's jobs first in the analysis queue and lifts them 10 points in list order (not in the score shown); it applies to copies found on aggregators too, matched on the company name. 'countries' (optional) lists where a company hires: a board whose countries are all paused is skipped on refresh instead of fetched and thrown away. The lists on the original boards were read off the postings each had actually returned; widen one if a company opens an office in a new country. Leave it out to always fetch.",
   "companies": [
     {
       "company": "Google",
@@ -65,31 +65,53 @@
       "company": "OpenAI",
       "ats": "ashby",
       "token": "openai",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "DE",
+        "IE",
+        "IN",
+        "PL"
+      ]
     },
     {
       "company": "Anthropic",
       "ats": "greenhouse",
       "token": "anthropic",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "BE",
+        "DE",
+        "IE",
+        "IN"
+      ]
     },
     {
       "company": "Scale AI",
       "ats": "greenhouse",
       "token": "scaleai",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "BE",
+        "IN"
+      ]
     },
     {
       "company": "Cohere",
       "ats": "ashby",
       "token": "cohere",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "DE"
+      ]
     },
     {
       "company": "Perplexity",
       "ats": "ashby",
       "token": "perplexity",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "DE"
+      ]
     },
     {
       "company": "Isomorphic Labs",
@@ -107,25 +129,41 @@
       "company": "ElevenLabs",
       "ats": "ashby",
       "token": "elevenlabs",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "BE",
+        "DE",
+        "IN",
+        "NL",
+        "PL"
+      ]
     },
     {
       "company": "Helsing",
       "ats": "greenhouse",
       "token": "helsing",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "DE"
+      ]
     },
     {
       "company": "DeepL",
       "ats": "ashby",
       "token": "deepl",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "DE"
+      ]
     },
     {
       "company": "Synthesia",
       "ats": "ashby",
       "token": "synthesia",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "DE"
+      ]
     },
     {
       "company": "Faculty",
@@ -137,13 +175,21 @@
       "company": "Waymo",
       "ats": "greenhouse",
       "token": "waymo",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "DE",
+        "IN",
+        "PL"
+      ]
     },
     {
       "company": "Wayve",
       "ats": "ashby",
       "token": "wayve",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "DE"
+      ]
     },
     {
       "company": "Figure AI",
@@ -167,146 +213,281 @@
       "company": "Snowflake",
       "ats": "ashby",
       "token": "snowflake",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "BE",
+        "DE",
+        "IE",
+        "IN",
+        "NL",
+        "PL"
+      ]
     },
     {
       "company": "Cloudflare",
       "ats": "greenhouse",
       "token": "cloudflare",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "IN",
+        "PT"
+      ]
     },
     {
       "company": "Celonis",
       "ats": "greenhouse",
       "token": "celonis",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "DE",
+        "IN",
+        "NL"
+      ]
     },
     {
       "company": "IMC Trading",
       "ats": "greenhouse",
-      "token": "imc"
+      "token": "imc",
+      "countries": [
+        "IN",
+        "NL"
+      ]
     },
     {
       "company": "Flow Traders",
       "ats": "greenhouse",
-      "token": "flowtraders"
+      "token": "flowtraders",
+      "countries": [
+        "NL"
+      ]
     },
     {
       "company": "Adyen",
       "ats": "greenhouse",
-      "token": "adyen"
+      "token": "adyen",
+      "countries": [
+        "DE",
+        "IN",
+        "NL",
+        "PL"
+      ]
     },
     {
       "company": "Mollie",
       "ats": "ashby",
-      "token": "mollie"
+      "token": "mollie",
+      "countries": [
+        "DE",
+        "NL",
+        "PL",
+        "PT"
+      ]
     },
     {
       "company": "N26",
       "ats": "greenhouse",
-      "token": "n26"
+      "token": "n26",
+      "countries": [
+        "DE"
+      ]
     },
     {
       "company": "Trade Republic",
       "ats": "greenhouse",
-      "token": "traderepublic"
+      "token": "traderepublic",
+      "countries": [
+        "DE"
+      ]
     },
     {
       "company": "Wise",
-      "ats": "greenhouse",
+      "ats": "smartrecruiters",
       "token": "wise"
     },
     {
       "company": "Monzo",
       "ats": "greenhouse",
-      "token": "monzo"
+      "token": "monzo",
+      "countries": [
+        "IE"
+      ]
     },
     {
       "company": "SumUp",
       "ats": "greenhouse",
-      "token": "sumup"
+      "token": "sumup",
+      "countries": [
+        "BE",
+        "DE",
+        "IE",
+        "IN",
+        "NL",
+        "PL",
+        "PT"
+      ]
     },
     {
       "company": "Databricks",
       "ats": "greenhouse",
       "token": "databricks",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "DE",
+        "IE",
+        "IN",
+        "NL"
+      ]
     },
     {
       "company": "Datadog",
       "ats": "greenhouse",
-      "token": "datadog"
+      "token": "datadog",
+      "countries": [
+        "DE",
+        "IE",
+        "IN",
+        "NL",
+        "PT"
+      ]
     },
     {
       "company": "GitLab",
       "ats": "greenhouse",
-      "token": "gitlab"
+      "token": "gitlab",
+      "countries": [
+        "DE",
+        "IE",
+        "IN",
+        "NL",
+        "PL"
+      ]
     },
     {
       "company": "Intercom",
       "ats": "greenhouse",
-      "token": "intercom"
+      "token": "intercom",
+      "countries": [
+        "DE",
+        "IE"
+      ]
     },
     {
       "company": "Flexport",
       "ats": "greenhouse",
-      "token": "flexport"
+      "token": "flexport",
+      "countries": [
+        "BE",
+        "DE",
+        "IE",
+        "IN",
+        "NL",
+        "PL"
+      ]
     },
     {
       "company": "Contentful",
       "ats": "greenhouse",
-      "token": "contentful"
+      "token": "contentful",
+      "countries": [
+        "DE"
+      ]
     },
     {
       "company": "Docplanner",
       "ats": "ashby",
-      "token": "docplanner"
+      "token": "docplanner",
+      "countries": [
+        "PL"
+      ]
     },
     {
       "company": "Sereact",
       "ats": "ashby",
       "token": "sereact",
-      "priority": true
+      "priority": true,
+      "countries": [
+        "DE"
+      ]
     },
     {
       "company": "Bird (MessageBird)",
       "ats": "greenhouse",
-      "token": "bird"
+      "token": "bird",
+      "countries": [
+        "IN"
+      ]
     },
     {
       "company": "Elastic",
       "ats": "greenhouse",
-      "token": "elastic"
+      "token": "elastic",
+      "countries": [
+        "BE",
+        "DE",
+        "IE",
+        "IN",
+        "NL",
+        "PL",
+        "PT"
+      ]
     },
     {
       "company": "Stripe",
       "ats": "greenhouse",
-      "token": "stripe"
+      "token": "stripe",
+      "countries": [
+        "DE",
+        "IE",
+        "IN",
+        "LU",
+        "PL"
+      ]
     },
     {
       "company": "Workhuman",
       "ats": "ashby",
-      "token": "workhuman"
+      "token": "workhuman",
+      "countries": [
+        "IE"
+      ]
     },
     {
       "company": "Showpad",
       "ats": "greenhouse",
-      "token": "showpad"
+      "token": "showpad",
+      "countries": [
+        "BE",
+        "DE",
+        "IN",
+        "NL"
+      ]
     },
     {
       "company": "Feedzai",
       "ats": "greenhouse",
-      "token": "feedzai"
+      "token": "feedzai",
+      "countries": [
+        "DE",
+        "NL",
+        "PT"
+      ]
     },
     {
       "company": "Sword Health",
       "ats": "greenhouse",
-      "token": "swordhealth"
+      "token": "swordhealth",
+      "countries": [
+        "DE",
+        "PT"
+      ]
     },
     {
       "company": "Brainly",
       "ats": "ashby",
-      "token": "brainly"
+      "token": "brainly",
+      "countries": [
+        "PL"
+      ]
     },
     {
       "company": "Ramp",
@@ -316,12 +497,282 @@
     {
       "company": "Udemy",
       "ats": "greenhouse",
-      "token": "udemy"
+      "token": "udemy",
+      "countries": [
+        "IE"
+      ]
     },
     {
       "company": "CRED",
       "ats": "lever",
-      "token": "cred"
+      "token": "cred",
+      "countries": [
+        "IN"
+      ]
+    },
+    {
+      "company": "Razorpay",
+      "ats": "greenhouse",
+      "token": "razorpaysoftwareprivatelimited",
+      "countries": [
+        "IN"
+      ]
+    },
+    {
+      "company": "Groww",
+      "ats": "greenhouse",
+      "token": "groww",
+      "countries": [
+        "IN"
+      ]
+    },
+    {
+      "company": "Druva",
+      "ats": "greenhouse",
+      "token": "druva"
+    },
+    {
+      "company": "HighRadius",
+      "ats": "greenhouse",
+      "token": "highradius"
+    },
+    {
+      "company": "InMobi",
+      "ats": "greenhouse",
+      "token": "inmobi"
+    },
+    {
+      "company": "MongoDB",
+      "ats": "greenhouse",
+      "token": "mongodb"
+    },
+    {
+      "company": "Okta",
+      "ats": "greenhouse",
+      "token": "okta"
+    },
+    {
+      "company": "Rubrik",
+      "ats": "greenhouse",
+      "token": "rubrik"
+    },
+    {
+      "company": "Zscaler",
+      "ats": "greenhouse",
+      "token": "zscaler"
+    },
+    {
+      "company": "Twilio",
+      "ats": "greenhouse",
+      "token": "twilio"
+    },
+    {
+      "company": "Harness",
+      "ats": "greenhouse",
+      "token": "harnessinc"
+    },
+    {
+      "company": "Observe.AI",
+      "ats": "greenhouse",
+      "token": "observeai"
+    },
+    {
+      "company": "Zeta Global",
+      "ats": "greenhouse",
+      "token": "zetaglobal"
+    },
+    {
+      "company": "Coinbase",
+      "ats": "greenhouse",
+      "token": "coinbase"
+    },
+    {
+      "company": "Fivetran",
+      "ats": "greenhouse",
+      "token": "fivetran"
+    },
+    {
+      "company": "Netskope",
+      "ats": "greenhouse",
+      "token": "netskope"
+    },
+    {
+      "company": "New Relic",
+      "ats": "greenhouse",
+      "token": "newrelic"
+    },
+    {
+      "company": "Agoda",
+      "ats": "greenhouse",
+      "token": "agoda"
+    },
+    {
+      "company": "Samsara",
+      "ats": "greenhouse",
+      "token": "samsara"
+    },
+    {
+      "company": "Sumo Logic",
+      "ats": "greenhouse",
+      "token": "sumologic"
+    },
+    {
+      "company": "Graviton Research Capital",
+      "ats": "greenhouse",
+      "token": "gravitonresearchcapital",
+      "countries": [
+        "IN"
+      ]
+    },
+    {
+      "company": "Squarepoint Capital",
+      "ats": "greenhouse",
+      "token": "squarepointcapital"
+    },
+    {
+      "company": "Tower Research Capital",
+      "ats": "greenhouse",
+      "token": "towerresearchcapital"
+    },
+    {
+      "company": "Jump Trading",
+      "ats": "greenhouse",
+      "token": "jumptrading"
+    },
+    {
+      "company": "Meesho",
+      "ats": "lever",
+      "token": "meesho",
+      "countries": [
+        "IN"
+      ]
+    },
+    {
+      "company": "Mindtickle",
+      "ats": "lever",
+      "token": "mindtickle"
+    },
+    {
+      "company": "Paytm",
+      "ats": "lever",
+      "token": "paytm",
+      "countries": [
+        "IN"
+      ]
+    },
+    {
+      "company": "Zeta",
+      "ats": "lever",
+      "token": "zeta",
+      "countries": [
+        "IN"
+      ]
+    },
+    {
+      "company": "Hevo Data",
+      "ats": "lever",
+      "token": "hevodata",
+      "countries": [
+        "IN"
+      ]
+    },
+    {
+      "company": "Atlan",
+      "ats": "ashby",
+      "token": "atlan"
+    },
+    {
+      "company": "Sarvam AI",
+      "ats": "ashby",
+      "token": "sarvam",
+      "countries": [
+        "IN"
+      ]
+    },
+    {
+      "company": "Plane",
+      "ats": "ashby",
+      "token": "plane"
+    },
+    {
+      "company": "SpotDraft",
+      "ats": "ashby",
+      "token": "spotdraft"
+    },
+    {
+      "company": "Tekion",
+      "ats": "ashby",
+      "token": "tekion"
+    },
+    {
+      "company": "Freshworks",
+      "ats": "smartrecruiters",
+      "token": "freshworks"
+    },
+    {
+      "company": "Swiggy",
+      "ats": "smartrecruiters",
+      "token": "swiggy"
+    },
+    {
+      "company": "ServiceNow",
+      "ats": "smartrecruiters",
+      "token": "servicenow"
+    },
+    {
+      "company": "Grab",
+      "ats": "smartrecruiters",
+      "token": "grab"
+    },
+    {
+      "company": "Salesforce",
+      "ats": "workday",
+      "token": "salesforce|wd12|External_Career_Site"
+    },
+    {
+      "company": "Adobe",
+      "ats": "workday",
+      "token": "adobe|wd5|external_experienced"
+    },
+    {
+      "company": "Analog Devices",
+      "ats": "workday",
+      "token": "analogdevices|wd1|External"
+    },
+    {
+      "company": "Morgan Stanley",
+      "ats": "workday",
+      "token": "ms|wd5|External"
+    },
+    {
+      "company": "Cadence",
+      "ats": "workday",
+      "token": "cadence|wd1|External_Careers"
+    },
+    {
+      "company": "Deutsche Bank",
+      "ats": "workday",
+      "token": "db|wd3|DBWebsite"
+    },
+    {
+      "company": "State Street",
+      "ats": "workday",
+      "token": "statestreet|wd1|Global"
+    },
+    {
+      "company": "Wells Fargo",
+      "ats": "workday",
+      "token": "wf|wd1|WellsFargoJobs"
+    },
+    {
+      "company": "Citi",
+      "ats": "workday",
+      "token": "citi|wd5|2"
+    },
+    {
+      "company": "Target",
+      "ats": "workday",
+      "token": "target|wd5|targetcareers"
     }
   ]
 }
