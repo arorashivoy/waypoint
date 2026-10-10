@@ -279,6 +279,59 @@ WantedBy=multi-user.target
   machine that is always on, prefer Tailscale (a stable private address) or a named
   Cloudflare tunnel.
 
+## 9. Keep `claims.yml` in sync with an always-on machine
+
+If the user also runs a copy of Waypoint on another machine (for example the Raspberry Pi in
+section 8), that copy reads its own `claims.yml`. So every edit made on the laptop has to be
+copied across, or the always-on copy keeps scoring and drafting from old facts. Set up the
+rule once, so every future Claude session does the copy without being asked.
+
+**Values.** Ask the user for:
+- the SSH login (`<user>@<host>`);
+- their working directory on that machine.
+
+This guide is an exception to the "never reuse values from this file" rule only for this
+one known case:
+
+| Person | SSH login | Working directory |
+|---|---|---|
+| Ritisha (on the shared Pi) | ask her which account on `raspberrypi.local` she was given | `~/waypoint-ritisha` |
+
+Anyone else: ask; do not guess.
+
+1. **[USER]** Key-based SSH must work without a password prompt. Check:
+   `ssh -o BatchMode=yes -o ConnectTimeout=8 <user>@<host> true`. If that fails, the user
+   runs `ssh-copy-id <user>@<host>` once (it asks for the password one last time).
+2. **Confirm the directory exists. Don't create it:**
+   `ssh <user>@<host> 'cd <dir> && pwd && ls data/profile/claims.yml'`.
+   If it's missing, the remote copy has not been set up yet. Do section 8 first.
+3. **Compare the two files** before anything is overwritten:
+   `shasum -a 256 data/profile/claims.yml` locally and
+   `ssh <user>@<host> 'sha256sum <dir>/data/profile/claims.yml'`.
+   If they differ, show the user the diff and ask which one wins.
+4. **Write the rule** into `CLAUDE.local.md` at the repo root.
+   - Claude Code loads it in every session in this folder.
+   - It is gitignored, so it stays on this machine. **Not** `CLAUDE.md`: that one is
+     committed, and would make everyone else's Claude sync to this user's machine.
+   - The rule says: whenever `data/profile/claims.yml` changes and `npm run check:claims`
+     passes (never a failing file), in the same turn:
+
+   ```bash
+   ssh -o ConnectTimeout=8 <user>@<host> 'cp <dir>/data/profile/claims.yml <dir>/data/profile/claims.yml.bak'
+   rsync -t data/profile/claims.yml <user>@<host>:<dir-without-~/>/data/profile/claims.yml
+   shasum -a 256 data/profile/claims.yml | cut -c1-16
+   ssh <user>@<host> 'sha256sum <dir>/data/profile/claims.yml | cut -c1-16'   # must match
+   ```
+
+   It also says:
+   - The sync goes one way only, laptop → remote.
+   - If the remote can't be reached, say so and don't retry in a loop.
+   - If the remote copy differs before syncing and isn't just the previous version, stop
+     and show the diff.
+   - The remote app re-reads the file when it changes, so no restart is needed.
+5. **Check:** `rsync -tn --itemize-changes data/profile/claims.yml <user>@<host>:<dir-without-~/>/data/profile/claims.yml`
+   succeeds. This is a dry run and writes nothing.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
