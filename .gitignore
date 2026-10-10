@@ -21,3 +21,6 @@ data/profile/
 resume/
 *_Resume*.pdf
 *_Resume*.tex
+
+# personal Claude instructions
+CLAUDE.local.md
