@@ -2,7 +2,7 @@ import { env } from '../env';
 import { askApi } from './api';
 import { askCli, cliBinary } from './cli';
 import { extractJson } from './json';
-import type { AskRequest, AskResult, Credential } from './types';
+import { ClaudeCallError, type AskRequest, type AskResult, type Credential, type Usage } from './types';
 
 /**
  * The one way to call Claude.
@@ -40,6 +40,18 @@ export async function detectMode(force = false): Promise<{ mode: ClaudeMode; det
   return cachedMode;
 }
 
+/** Both CLI calls use the same model, so the token fields and the cost add up. */
+function addUsage(a: Usage, b: Usage): Usage {
+  return {
+    model: a.model,
+    inputTokens: a.inputTokens + b.inputTokens,
+    outputTokens: a.outputTokens + b.outputTokens,
+    cacheReadTokens: a.cacheReadTokens + b.cacheReadTokens,
+    cacheWriteTokens: a.cacheWriteTokens + b.cacheWriteTokens,
+    costUsd: a.costUsd + b.costUsd,
+  };
+}
+
 export async function askJson<T>(req: AskRequest<T>, credential?: Credential | null): Promise<AskResult<T>> {
   const cred = credential === undefined ? await serverCredential() : credential;
   if (!cred) throw new Error('No Claude is available. Set ANTHROPIC_API_KEY in .env, or run `claude login` on the server.');
@@ -62,6 +74,7 @@ export async function askJson<T>(req: AskRequest<T>, credential?: Credential | n
   const repair = `${req.prompt}\n\nYour previous reply did not match the required JSON shape: ${String(a.error.message).slice(0, 600)}\nReply again with JSON only, with exactly the keys asked for.`;
   const second = await askCli(req.system, repair);
   const b = tryParse(second.text);
-  if (b.success) return { data: b.data as T, raw: second.text, usage: second.usage };
-  throw new Error(`The Claude reply did not match the schema after one repair: ${String(b.error.message).slice(0, 300)}`);
+  const usage = addUsage(first.usage, second.usage);
+  if (b.success) return { data: b.data as T, raw: second.text, usage };
+  throw new ClaudeCallError(`The Claude reply did not match the schema after one repair: ${String(b.error.message).slice(0, 300)}`, usage);
 }

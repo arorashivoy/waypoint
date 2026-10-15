@@ -585,10 +585,9 @@ Copy `.env.example` to `.env`. Everything has a working default except the optio
 | `WAYPOINT_NAME` | `Shivoy Arora` | Name on the local account. |
 | `WAYPOINT_EMAIL` | `you@local` | Identifier for the local account. |
 | `WAYPOINT_ACCESS_CODE` | *(unset)* | Passcode required at sign-in. **Set before exposing beyond localhost.** Unset means no passcode field appears. |
-| `WAYPOINT_CLAUDE_MODE` | `cli` | `cli` uses your subscription via the Claude Code CLI; `api` forces the HTTP API. |
 | `WAYPOINT_CLAUDE_BIN` | `claude` | Full path to the CLI if it is not on `PATH`. |
 | `WAYPOINT_CLAUDE_TIMEOUT_MS` | `120000` | Per-call timeout. Raise it on a slow connection. |
-| `ANTHROPIC_API_KEY` | *(unset)* | Only to bypass the subscription and pay API credit. Stripped from the CLI's environment so it cannot silently bill you. |
+| `ANTHROPIC_API_KEY` | *(unset)* | If this is set in `.env`, Waypoint uses it (API credit). If it is not set, Waypoint uses the `claude` CLI and your subscription. A failed API call does not fall back to the CLI. |
 | `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | *(unset)* | Free key from [developer.adzuna.com](https://developer.adzuna.com). Best lever for broader NL/PL/IN coverage. |
 | `LINKEDIN_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` | *(unset)* | Real OIDC sign-in. Returns name, email and photo only. |
 | `GDRIVE_CLIENT_ID` / `_SECRET` / `_REFRESH_TOKEN` | *(unset)* | Upload each tailored CV to your Drive and put its link in the referral message. See [First run, step 4](#first-run-getting-your-real-data-in). |

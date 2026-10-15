@@ -49,6 +49,23 @@ describe('CLI repair retry', () => {
     expect(cli.askCli.mock.calls[1][1]).toMatch(/did not match/);
   });
 
+  it('sums the usage of both calls after a repair', async () => {
+    const { claude, cli } = await load();
+    const u2 = { ...usage, inputTokens: 10, outputTokens: 20, cacheReadTokens: 3, cacheWriteTokens: 4, costUsd: 0.5 };
+    cli.askCli.mockResolvedValueOnce({ text: '{"hok":"x"}', usage, denials: 0 }).mockResolvedValueOnce({ text: '{"hook":"fixed"}', usage: u2, denials: 0 });
+    const r = await claude.askJson(req);
+    expect(r.usage).toEqual({ ...usage, inputTokens: 11, outputTokens: 21, cacheReadTokens: 3, cacheWriteTokens: 4, costUsd: 0.5 });
+  });
+
+  it('keeps the summed usage on a failed repair', async () => {
+    const { claude, cli } = await load();
+    cli.askCli.mockResolvedValue({ text: '{"hok":"x"}', usage, denials: 0 });
+    const err = await claude.askJson(req).catch((e) => e);
+    expect(err).toBeInstanceOf(claude.ClaudeCallError);
+    expect(err.message).toMatch(/schema/);
+    expect(err.usage).toEqual({ ...usage, inputTokens: 2, outputTokens: 2 });
+  });
+
   it('fails after one repair', async () => {
     const { claude, cli } = await load();
     cli.askCli.mockResolvedValue({ text: '{"hok":"x"}', usage, denials: 0 });
