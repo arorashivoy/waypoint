@@ -7,6 +7,7 @@ import { jobView } from '@/lib/analysis';
 import { alumniSearch, ALUMNI_REASON, isAlumniRequest } from '@/lib/match';
 import { askJson, detectMode } from '@/lib/claude';
 import { askJsonCached } from '@/lib/cache';
+import { DraftReply, HookReply, SlotsReply } from '@/lib/schemas';
 import { alumniHookBudget, MIN_HOOK, renderAlumniNote, renderReferral, resolveHighlight, type Slots } from '@/lib/templates';
 import { ALUMNI_SYSTEM, alumniPrompt, REFERRAL_SYSTEM, referralPrompt, REPLY_SYSTEM, replyPrompt } from '@/lib/prompts';
 import { checkForInjection } from '@/lib/injection';
@@ -41,7 +42,7 @@ async function draftReferral(app: Application, job: Job, profile: ResolvedProfil
   const slots: Slots =
     mode === 'none'
       ? { highlight: candidates[0] || '', hook: 'it lines up closely with what I build today', proof: `I ${profile.headline.toLowerCase()}` }
-      : await askJsonCached<Slots>('referral', REFERRAL_SYSTEM, referralPrompt(profile, job, contactName));
+      : await askJsonCached('referral', 'v1', { system: REFERRAL_SYSTEM, prompt: referralPrompt(profile, job, contactName), schema: SlotsReply, effort: 'low' });
 
   // Which projects lead is decided from the claim graph against this
   // posting's own words, plus whatever was chosen in "Refine with Claude" —
@@ -147,7 +148,7 @@ export async function POST(req: NextRequest) {
     const hook =
       mode === 'none' || budget < MIN_HOOK
         ? ''
-        : (await askJsonCached<{ hook: string }>('note', ALUMNI_SYSTEM, alumniPrompt(profile, job, school.short, budget))).hook;
+        : (await askJsonCached('note', 'v1', { system: ALUMNI_SYSTEM, prompt: alumniPrompt(profile, job, school.short, budget), schema: HookReply, effort: 'low' })).hook;
     const note = renderAlumniNote({ ...frame, hook });
     const open = alumniSearch(school, job.company);
     const name = `${school.short} alumni at ${job.company}`;
@@ -214,10 +215,7 @@ export async function POST(req: NextRequest) {
     const drafted =
       mode === 'none'
         ? { draft: `Thank you, ${name.split(' ')[0]}!`, certain: false, reason: 'Claude is not connected, so this reply was not checked. Read it before sending.' }
-        : await askJson<{ draft: string; certain: boolean; reason: string }>(
-            REPLY_SYSTEM,
-            replyPrompt(profile, job, name, incoming, ON_FILE),
-          );
+        : (await askJson({ system: REPLY_SYSTEM, prompt: replyPrompt(profile, job, name, incoming, ON_FILE), schema: DraftReply, effort: 'medium' })).data;
 
     // The model is instructed to refuse manipulation and does. This does not
     // depend on that: a message shaped like an instruction to a model is

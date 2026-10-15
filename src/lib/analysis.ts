@@ -2,6 +2,7 @@ import type { Job } from '@prisma/client';
 import { db } from './db';
 import { detectMode } from './claude';
 import { askJsonCached } from './cache';
+import { AnalysisReply, coerceText } from './schemas';
 import { ANALYSE_SYSTEM, analysePrompt } from './prompts';
 import { profileSummary } from './user';
 import { fieldFit, levelFit, matchScore, rankRoutes, routeLabel } from './match';
@@ -25,8 +26,7 @@ export type Analysis = {
 /** The model sometimes wraps a list item it was asked for as a string in an
  *  object (`must: [{ t: "…" }]`), and React throws on rendering an object.
  *  Coerced on every read, so analyses already stored in that shape render too. */
-const text = (v: unknown): string =>
-  typeof v === 'string' ? v : v && typeof v === 'object' ? text(Object.values(v).find((x) => typeof x === 'string') ?? '') : String(v ?? '');
+const text = coerceText;
 
 function normalise(a: any, by: Analysis['by'] = a.by): Analysis {
   return {
@@ -150,7 +150,7 @@ export async function analyseJob(job: Job, userId: string, force = false): Promi
     analysis = heuristicAnalysis(job, profile, fitFromClaims());
   } else {
     try {
-      const out = await askJsonCached<Omit<Analysis, 'by'>>('analysis', ANALYSE_SYSTEM, analysePrompt(profile, job));
+      const out = await askJsonCached('analysis', 'v1', { system: ANALYSE_SYSTEM, prompt: analysePrompt(profile, job), schema: AnalysisReply, effort: 'medium' });
       analysis = normalise(out, 'claude');
       read = true;
     } catch {

@@ -1,6 +1,7 @@
 import type { Application, Job } from '@prisma/client';
 import { db } from './db';
 import { askJson, detectMode } from './claude';
+import { RefineReply } from './schemas';
 import { loadClaims } from './claims';
 import { shareResume } from './gdrive';
 import { checkForInjection } from './injection';
@@ -99,16 +100,20 @@ export async function refineCv(app: Application, job: Job, request: string) {
 
   const current = await buildCv(app, job);
   const history = readChat(app);
-  const out = await askJson<{ projects?: unknown; bullets?: unknown; skills?: unknown; reply?: unknown }>(
-    REFINE_SYSTEM,
-    refinePrompt(
-      menu,
-      { projects: current?.order || [], bullets: current?.experience || [], skills: current?.skillsLead || [] },
-      job,
-      history.slice(-10),
-      text,
-    ),
-  );
+  const out = (
+    await askJson({
+      system: REFINE_SYSTEM,
+      prompt: refinePrompt(
+        menu,
+        { projects: current?.order || [], bullets: current?.experience || [], skills: current?.skillsLead || [] },
+        job,
+        history.slice(-10),
+        text,
+      ),
+      schema: RefineReply,
+      effort: 'medium',
+    })
+  ).data;
 
   const rejected: string[] = [];
   /** Null keeps the previous choice; anything else is filtered to the menu. */

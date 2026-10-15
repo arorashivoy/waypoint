@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { db } from './db';
-import { ask, extractJson, MODEL } from './claude';
+import { askJson, extractJson, MODEL, type AskRequest } from './claude';
 
 /**
  * A content-addressed cache in front of `ask`.
@@ -19,9 +19,10 @@ import { ask, extractJson, MODEL } from './claude';
  */
 
 /** NUL separates the operands so no re-partitioning of the concatenation can
- *  collide — it cannot occur in a JS string that came from a prompt template. */
-export function cacheKey(system: string, prompt: string, model = MODEL) {
-  return createHash('sha256').update(`${model}\0${system}\0${prompt}`).digest('hex');
+ *  collide. The prompt version is part of the key, so a reworded prompt can
+ *  never get an old reply. */
+export function cacheKey(version: string, system: string, prompt: string, model = MODEL) {
+  return createHash('sha256').update(`${model}\0${version}\0${system}\0${prompt}`).digest('hex');
 }
 
 /** Kinds are for pruning and for keeping the reply path out; they are not part
@@ -30,42 +31,51 @@ export type CacheKind = 'analysis' | 'note' | 'referral';
 
 /** Concurrent callers with the same key share one in-flight call, so a refresh
  *  that queues two copies of the same advert side by side still asks once. */
-const inFlight = new Map<string, Promise<string>>();
+const inFlight = new Map<string, Promise<unknown>>();
 
-export async function askCached(kind: CacheKind, system: string, prompt: string): Promise<string> {
-  const key = cacheKey(system, prompt);
+/**
+ * The cache stores the raw JSON text, not the parsed object, so a schema fix
+ * reads every stored reply again for free. A stored reply that no longer
+ * matches the schema is a miss, not an error.
+ */
+export async function askJsonCached<T>(kind: CacheKind, version: string, req: AskRequest<T>): Promise<T> {
+  const key = cacheKey(version, req.system, req.prompt);
 
   const hit = await db.llmCache.findUnique({ where: { key } });
   if (hit) {
-    // usedAt drives pruning: a hot entry written months ago is the one worth
-    // keeping, so recency of use is the signal, not recency of creation.
-    await db.llmCache.update({ where: { key }, data: { hits: { increment: 1 }, usedAt: new Date() } });
-    return hit.value;
+    const parsed = req.schema.safeParse(safeJson(hit.value));
+    if (parsed.success) {
+      // usedAt drives pruning: a hot entry written months ago is the one worth
+      // keeping, so recency of use is the signal, not recency of creation.
+      await db.llmCache.update({ where: { key }, data: { hits: { increment: 1 }, usedAt: new Date() } });
+      return parsed.data as T;
+    }
   }
 
-  let work = inFlight.get(key);
+  let work = inFlight.get(key) as Promise<T> | undefined;
   if (!work) {
     work = (async () => {
-      const value = await ask(system, prompt);
+      const { data, raw } = await askJson(req);
       // Only a successful call is written. Caching a throw would remember one
       // rate limit forever.
       await db.llmCache.upsert({
         where: { key },
-        update: { usedAt: new Date() },
-        create: { key, kind, model: MODEL, value },
+        update: { value: raw, usedAt: new Date() },
+        create: { key, kind, model: MODEL, value: raw },
       });
-      return value;
+      return data;
     })().finally(() => inFlight.delete(key));
     inFlight.set(key, work);
   }
   return work;
 }
 
-/** The raw text is what gets stored, not the parsed object, so a fix to
- *  `extractJson` replays against every cached reply instead of needing a
- *  re-call. Parsing is free; the model call is not. */
-export async function askJsonCached<T>(kind: CacheKind, system: string, prompt: string): Promise<T> {
-  return extractJson(await askCached(kind, system, prompt)) as T;
+function safeJson(text: string): unknown {
+  try {
+    return extractJson(text);
+  } catch {
+    return null;
+  }
 }
 
 export async function cacheStats() {
