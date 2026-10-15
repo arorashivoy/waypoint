@@ -39,6 +39,21 @@ npm run dev
 
 Open <http://localhost:3117>.
 
+## Checks
+
+```bash
+npm run typecheck   # TypeScript
+npm run lint        # includes the rule that only src/lib/exec.ts starts processes
+npm test            # unit tests, no Claude calls
+npm run test:live   # a few real Claude calls; spends a little quota
+```
+
+`npm run build` runs `npm run lint` first, so a lint error fails the build.
+
+Claude calls go to Sonnet only. The `claude` CLI runs with no tools, no settings files and an
+empty folder, so text in a posting cannot make it read files. For the credential order, see the
+`ANTHROPIC_API_KEY` row in the settings table.
+
 ## Running it again
 
 Local only, on this machine:

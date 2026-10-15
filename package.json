@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev -p $(node scripts/port.mjs)",
     "lint": "eslint .",
+    "prebuild": "npm run lint",
     "build": "prisma generate && next build",
     "start": "next start -p $(node scripts/port.mjs)",
     "db:migrate": "prisma migrate dev",
