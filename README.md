@@ -608,7 +608,8 @@ Copy `.env.example` to `.env`. Everything has a working default except the optio
 | `npm run setup` | Generate the Prisma client, create the database, register the account and countries |
 | `npm run dev` | Dev server on :3117 |
 | `npm run build` / `npm start` | Production build and serve |
-| `npm run db:push` | Apply schema changes to the database |
+| `npm run db:deploy` | Apply the migrations in `prisma/migrations/` to the database |
+| `npm run db:migrate` | Make a new migration after a change to `prisma/schema.prisma` |
 | `npm run db:seed` | Re-run the seed (placeholder data only with `WAYPOINT_SEED_SAMPLES=1`) |
 | `npm run gdrive:auth` | One-time Google consent; prints the `GDRIVE_REFRESH_TOKEN` for `.env` |
 | `npm run check:claims` | Validate `data/profile/claims.yml` and report coverage gaps |

@@ -17,12 +17,12 @@ order. Before you start, read `README.md`.
   click, and wait for them. Never claim one of these steps is done without checking it
   (each step says how to check).
 - Ask before anything public: pushing to their GitHub, publishing pages.
-- Run `npx prisma generate` and `npx prisma db push` **only from this checkout's root**,
+- Run `npx prisma generate` and `npx prisma migrate deploy` **only from this checkout's root**,
   never from a git worktree that shares this `node_modules`. The generated client stores
   the absolute path of the schema it was generated from. Generating from a worktree points
   the app at that worktree's database, and the app then fails with
   `Error code 14: Unable to open the database file`.
-- After pulling new code, run `npx prisma db push` (to add any new columns), then restart
+- After pulling new code, run `npx prisma migrate deploy` (to apply new migrations), then restart
   the server, and tell the user to hard-reload the tab (Cmd/Ctrl+Shift+R). An open tab
   keeps running old client code. Buttons that call removed routes then return 404.
 
@@ -35,7 +35,7 @@ run `npm run setup` or re-create `.env`. Instead:
 
 1. **Back up** before touching anything: copy `data/waypoint.db`, `.env` and
    `data/profile/claims.yml`.
-2. `git pull`, then `npm install`, then `npx prisma db push`. The push adds new columns,
+2. `git pull`, then `npm install`, then `npx prisma migrate deploy`. It applies new migrations, which add columns,
    for example `cvDriveId`, `cvSteer` and `cvChat` on `Application`. Then run
    `npx prisma generate`, from this checkout's root.
 3. Restart the server, and have the user hard-reload every open tab.
@@ -71,7 +71,7 @@ bill the same Claude subscription.
 ## 2. Install and database
 
 ```bash
-npm install && npm run setup     # prisma generate + db push + seed the account and country list
+npm install && npm run setup     # prisma generate + migrate deploy + seed the account and country list
 cp .env.example .env
 ```
 

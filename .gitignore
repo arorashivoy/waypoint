@@ -24,3 +24,6 @@ resume/
 
 # personal Claude instructions
 CLAUDE.local.md
+data/backups/
+data/*.db-wal
+data/*.db-shm
