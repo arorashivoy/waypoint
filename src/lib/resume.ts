@@ -55,7 +55,7 @@ export function resumeConfig(): ResumeConfig {
     publicUrl: env('RESUME_PUBLIC_URL'),
     outDir: expand(env('RESUME_OUT_DIR') || 'data/resumes'),
     maxProjects: Number.isFinite(max) && max > 0 ? max : null,
-    timeoutMs: Number(env('RESUME_TIMEOUT_MS')) || 180_000,
+    timeoutMs: Number(env('RESUME_TIMEOUT_MS')) || 60_000,
   };
 }
 

@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { baseEnv, findOnPath, LATEX_ENGINES, runProgram, type Program } from './exec';
@@ -16,6 +16,23 @@ import { baseEnv, findOnPath, LATEX_ENGINES, runProgram, type Program } from './
 export type Engine = { program: Program; bin: string };
 
 const ASSET = /\.(cls|sty|bst|png|jpg|jpeg|pdf|eps|ttf|otf)$/i;
+const MAX_COMPILE_MS = 60_000;
+
+/** One compile gets at most 60 s, all passes together. */
+export function compileBudget(timeoutMs: number): number {
+  return Math.min(timeoutMs, MAX_COMPILE_MS);
+}
+
+/** Keep the first 20 lines that start with "!". Show the work folder as "." and
+ *  any other absolute path as "<path>", so an error never names a host path. */
+function cleanLog(text: string, work: string): string {
+  return text
+    .split('\n')
+    .filter((l) => l.startsWith('!'))
+    .slice(0, 20)
+    .map((l) => l.split(work).join('.').replace(/(?<![\w.])\/[^\s'"`]+/g, '<path>'))
+    .join(' ');
+}
 
 /** RESUME_ENGINE wins when its file name is an engine on the list. A path to
  *  anything else is refused, not run. A path that is not absolute is refused
@@ -46,8 +63,11 @@ export async function compileLatex(opts: { source: string; assetsDir: string | n
   try {
     if (opts.assetsDir) {
       for (const f of readdirSync(opts.assetsDir)) {
+        // A link could point outside the folder, so copy regular files only.
         if (ASSET.test(f)) {
-          try { copyFileSync(join(opts.assetsDir, f), join(work, f)); } catch { /* an unreadable asset; LaTeX reports it */ }
+          try {
+            if (lstatSync(join(opts.assetsDir, f)).isFile()) copyFileSync(join(opts.assetsDir, f), join(work, f));
+          } catch { /* an unreadable asset; LaTeX reports it */ }
         }
       }
     }
@@ -58,10 +78,14 @@ export async function compileLatex(opts: { source: string; assetsDir: string | n
     const env = baseEnv({ openin_any: 'p', openout_any: 'p', TEXMFOUTPUT: work });
     // pdflatex needs a second pass for its own cross-references; tectonic loops by itself.
     const passes = program === 'tectonic' ? 1 : 2;
+    const budget = compileBudget(opts.timeoutMs);
+    const start = Date.now();
     for (let i = 0; i < passes; i++) {
-      const r = await runProgram(program, engineArgs(program, name, work), { cwd: work, timeoutMs: opts.timeoutMs, env, memoryMb: 512, bin });
+      const left = budget - (Date.now() - start);
+      if (left < 1) throw new Error(`the compile took longer than ${budget / 1000} s`);
+      const r = await runProgram(program, engineArgs(program, name, work), { cwd: work, timeoutMs: Math.floor(left), env, memoryMb: 512, bin });
       if (r.code !== 0) {
-        const log = (r.stdout + r.stderr).split('\n').filter((l) => l.startsWith('!')).slice(0, 3).join(' ');
+        const log = cleanLog(r.stdout + r.stderr, work);
         throw new Error(`${program} failed${log ? `: ${log}` : ''}`);
       }
     }
