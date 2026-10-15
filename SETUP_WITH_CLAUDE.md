@@ -22,7 +22,7 @@ order. Before you start, read `README.md`.
   the absolute path of the schema it was generated from. Generating from a worktree points
   the app at that worktree's database, and the app then fails with
   `Error code 14: Unable to open the database file`.
-- After pulling new code, run `npx prisma migrate deploy` (to apply new migrations), then restart
+- After pulling new code, run `npx prisma migrate deploy` (to apply new migrations; on an old install, do step 3 of section 0 first), then restart
   the server, and tell the user to hard-reload the tab (Cmd/Ctrl+Shift+R). An open tab
   keeps running old client code. Buttons that call removed routes then return 404.
 
@@ -35,11 +35,17 @@ run `npm run setup` or re-create `.env`. Instead:
 
 1. **Back up** before touching anything: copy `data/waypoint.db`, `.env` and
    `data/profile/claims.yml`.
-2. `git pull`, then `npm install`, then `npx prisma migrate deploy`. It applies new migrations, which add columns,
+2. `git pull`, then `npm install`.
+3. Do this step one time only, and only if the database was made before the `0_init`
+   migration existed. Run `npx prisma migrate status`. If it says the database is not
+   managed by Prisma Migrate, run `npx prisma migrate resolve --applied 0_init`. The
+   old `db push` did not make a `_prisma_migrations` table, so without this step
+   `migrate deploy` fails with error P3005. Do not run this step on a new database.
+4. Run `npx prisma migrate deploy`. It applies new migrations, which add columns,
    for example `cvDriveId`, `cvSteer` and `cvChat` on `Application`. Then run
    `npx prisma generate`, from this checkout's root.
-3. Restart the server, and have the user hard-reload every open tab.
-4. Bring the setup that lives outside git up to date. **Check each item; don't assume
+5. Restart the server, and have the user hard-reload every open tab.
+6. Bring the setup that lives outside git up to date. **Check each item; don't assume
    it's done.**
    - **Drive token:** run the token check in section 5, step 8. If it returns
      `invalid_grant`, the Google app is probably still in Testing. Do section 5, steps 2–4
