@@ -27,7 +27,14 @@ export type AskRequest<T> = {
 export type AskResult<T> = { data: T; raw: string; usage: Usage };
 
 export class RefusalError extends Error {
-  constructor(public category: string | null) {
+  constructor(public category: string | null, public usage?: Usage) {
     super(`Claude declined this request${category ? ` (${category})` : ''}.`);
+  }
+}
+
+/** A failed call that still used tokens. `usage` lets the caller count the spend. */
+export class ClaudeCallError extends Error {
+  constructor(message: string, public usage?: Usage) {
+    super(message);
   }
 }

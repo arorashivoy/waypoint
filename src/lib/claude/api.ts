@@ -2,21 +2,25 @@ import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { assertSonnet, costUsd, MODEL } from './model';
 import { clearFailures, setAuthFailure, setQuotaFailure } from './failures';
-import { RefusalError, type AskRequest, type Usage } from './types';
+import { ClaudeCallError, RefusalError, type AskRequest, type Usage } from './types';
 
 /**
  * An API key, through the official SDK, with structured output.
  *
- * The reply is checked against the task's zod schema by the API itself, so it
- * always has the right shape. No tools are sent, so the model cannot ask the
- * app to do anything. Sonnet 5.5 refuses a forced tool call, which is why the
- * shape comes from output_config.format and not from a tool.
+ * The API checks the reply against the task's schema, and the code checks it
+ * again with zod. No tools are sent, so the model cannot ask the app to do
+ * anything. Sonnet 5.5 refuses a forced tool call, which is why the shape
+ * comes from output_config.format and not from a tool.
+ *
+ * The code calls `create`, not `parse`. `parse` reads the text before the code
+ * can read stop_reason, so a refusal or a cut-off reply would lose its category
+ * and its usage. Every failure after a reply carries `usage` for spend tracking.
  *
  * No `fallbacks`: a server-side fallback can send a refused request to an
  * Opus model. A refusal is a failed call here.
  */
 
-export type MessagesClient = { messages: { parse: (params: any) => Promise<any> } };
+export type MessagesClient = { messages: { create: (params: any) => Promise<any> } };
 
 const clients = new Map<string, Anthropic>();
 function clientFor(key: string): Anthropic {
@@ -28,19 +32,26 @@ function clientFor(key: string): Anthropic {
   return c;
 }
 
+// `create` takes the JSON schema format only ({ type: 'json_schema', schema }).
+// The code drops the `parse` function of zodOutputFormat and checks the reply itself.
+function jsonFormat(schema: unknown) {
+  const { type, schema: jsonSchema } = zodOutputFormat(schema as any);
+  return { type, schema: jsonSchema };
+}
+
 export async function askApi<T>(key: string, req: AskRequest<T>, client: MessagesClient = clientFor(key)): Promise<{ data: T; raw: string; usage: Usage }> {
   assertSonnet(MODEL);
   let res: any;
   try {
-    res = await client.messages.parse({
+    res = await client.messages.create({
       model: MODEL,
-      max_tokens: req.maxTokens ?? 4096,
+      max_tokens: req.maxTokens ?? 16000,
       // The system prompt is the same for every job of a refresh, so it is
       // cached. Prompts shorter than the model's minimum are not cached; that
       // costs nothing.
       system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: req.prompt }],
-      output_config: { effort: req.effort, format: zodOutputFormat(req.schema as any) },
+      output_config: { effort: req.effort, format: jsonFormat(req.schema) },
     });
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
@@ -51,9 +62,7 @@ export async function askApi<T>(key: string, req: AskRequest<T>, client: Message
     throw e;
   }
 
-  if (res.stop_reason === 'refusal') throw new RefusalError(res.stop_details?.category ?? null);
-  if (res.parsed_output == null) throw new Error(`The API reply did not match the schema (stop_reason ${res.stop_reason}).`);
-
+  // Compute the usage first, so that every failure below can carry it.
   const u = res.usage || {};
   const tokens = {
     inputTokens: Number(u.input_tokens) || 0,
@@ -61,7 +70,24 @@ export async function askApi<T>(key: string, req: AskRequest<T>, client: Message
     cacheReadTokens: Number(u.cache_read_input_tokens) || 0,
     cacheWriteTokens: Number(u.cache_creation_input_tokens) || 0,
   };
+  const usage: Usage = { model: MODEL, ...tokens, costUsd: costUsd(tokens) };
+
+  if (res.stop_reason === 'refusal') throw new RefusalError(res.stop_details?.category ?? null, usage);
+  if (res.stop_reason === 'max_tokens') throw new ClaudeCallError('The Claude reply was cut off at max_tokens; raise maxTokens', usage);
+
+  const raw: string = (res.content || []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    throw new ClaudeCallError(`The API reply was not valid JSON (stop_reason ${res.stop_reason}).`, usage);
+  }
+  const parsed = req.schema.safeParse(json);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const where = issue ? `${issue.path.join('.') || '(root)'} ${issue.message}` : 'unknown issue';
+    throw new ClaudeCallError(`The API reply did not match the schema: ${where}`, usage);
+  }
   clearFailures();
-  const raw = (res.content || []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
-  return { data: res.parsed_output as T, raw: raw || JSON.stringify(res.parsed_output), usage: { model: MODEL, ...tokens, costUsd: costUsd(tokens) } };
+  return { data: parsed.data, raw, usage };
 }
