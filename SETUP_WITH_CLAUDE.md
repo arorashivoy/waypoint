@@ -38,12 +38,18 @@ run `npm run setup` or re-create `.env`. Instead:
 2. `git pull`, then `npm install`.
 3. Do this step one time only, and only if the database was made before the `0_init`
    migration existed. Run `npx prisma migrate status`. If it says the database is not
-   managed by Prisma Migrate, run `npx prisma migrate resolve --applied 0_init`. The
-   old `db push` did not make a `_prisma_migrations` table, so without this step
-   `migrate deploy` fails with error P3005. Do not run this step on a new database.
-4. Run `npx prisma migrate deploy`. It applies new migrations, which add columns,
-   for example `cvDriveId`, `cvSteer` and `cvChat` on `Application`. Then run
-   `npx prisma generate`, from this checkout's root.
+   managed by Prisma Migrate, do these sub-steps. The old `db push` did not make a
+   `_prisma_migrations` table, so without them `migrate deploy` fails with error P3005.
+   Do not run them on a new database.
+   1. From the checkout root, run
+      `npx prisma migrate diff --from-url "file:$PWD/data/waypoint.db" --to-schema-datamodel prisma/schema.prisma --exit-code`.
+   2. If the exit code is 2, the database differs from the schema. Stop. Check that the
+      backup from step 1 exists. Run `npx prisma db push` one time (the old tool, only
+      for this catch-up). Run the diff again. Repeat until the exit code is 0.
+   3. If the exit code is 0, run `npx prisma migrate resolve --applied 0_init`. If you
+      skip the check, this command hides a missing column and no error shows.
+4. Run `npx prisma migrate deploy`. It applies the migrations that come after `0_init`,
+   if there are any. Then run `npx prisma generate`, from this checkout's root.
 5. Restart the server, and have the user hard-reload every open tab.
 6. Bring the setup that lives outside git up to date. **Check each item; don't assume
    it's done.**
