@@ -1,4 +1,7 @@
 /** @type {import('next').NextConfig} */
 export default {
-  experimental: { serverComponentsExternalPackages: ['@prisma/client', 'adm-zip'] },
+  experimental: {
+    instrumentationHook: true,
+    serverComponentsExternalPackages: ['@prisma/client', 'adm-zip'],
+  },
 };
