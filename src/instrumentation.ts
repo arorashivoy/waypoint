@@ -3,5 +3,11 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
   const { env } = await import('./lib/env');
-  env();
+  try {
+    env();
+  } catch (err) {
+    // Next 14.2 logs a failed hook and keeps serving, so exit here.
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  }
 }
