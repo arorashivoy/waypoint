@@ -1,13 +1,10 @@
 import { createHash } from 'crypto';
-import { execFile } from 'child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
-import { homedir, tmpdir } from 'os';
+import { existsSync, readFileSync, statSync } from 'fs';
+import { homedir } from 'os';
 import { dirname, join, resolve } from 'path';
-import { promisify } from 'util';
 import type { Claim, ClaimsDoc } from './claims';
 import { FIELD_QUERIES } from './countries';
-
-const run = promisify(execFile);
+import { compileLatex, findEngine } from './latex';
 
 /**
  * Per-job CVs.
@@ -60,26 +57,6 @@ export function resumeConfig(): ResumeConfig {
     maxProjects: Number.isFinite(max) && max > 0 ? max : null,
     timeoutMs: Number(env('RESUME_TIMEOUT_MS')) || 180_000,
   };
-}
-
-/** Explicit engine wins; otherwise the first one on PATH. Tectonic is tried
- *  first because it fetches its own packages, so a fresh machine compiles
- *  without a full TeX distribution installed. */
-const ENGINES = ['tectonic', 'pdflatex', 'xelatex', 'lualatex'];
-
-async function findEngine(): Promise<string | null> {
-  const forced = env('RESUME_ENGINE');
-  if (forced) return forced;
-  for (const e of ENGINES) {
-    try {
-      const { stdout } = await run('which', [e]);
-      const hit = String(stdout).trim().split('\n')[0];
-      if (hit) return hit;
-    } catch {
-      // not installed; try the next
-    }
-  }
-  return null;
 }
 
 const norm = (s: string) =>
@@ -629,36 +606,6 @@ export function tailorSkills(tex: string, doc: ClaimsDoc, weights: Map<string, n
   };
 }
 
-async function compile(source: string, texPath: string, outPdf: string, engine: string, timeoutMs: number) {
-  // The document is compiled beside copies of its own class file and assets,
-  // because a CV class lives next to the .tex rather than in a TeX tree.
-  const work = join(tmpdir(), `waypoint-cv-${createHash('sha1').update(outPdf).digest('hex').slice(0, 12)}`);
-  mkdirSync(work, { recursive: true });
-  const srcDir = dirname(texPath);
-  for (const f of readdirSync(srcDir)) {
-    if (/\.(cls|sty|bst|png|jpg|jpeg|pdf|eps|ttf|otf)$/i.test(f)) {
-      try { copyFileSync(join(srcDir, f), join(work, f)); } catch { /* unreadable asset, let LaTeX complain */ }
-    }
-  }
-  const name = 'tailored';
-  writeFileSync(join(work, `${name}.tex`), source);
-
-  const isTectonic = /tectonic/.test(engine);
-  const args = isTectonic
-    ? ['-X', 'compile', '--outdir', work, '--keep-logs', `${name}.tex`]
-    : ['-interaction=nonstopmode', '-halt-on-error', `-output-directory=${work}`, `${name}.tex`];
-
-  // pdflatex needs a second pass for its own cross-references; tectonic loops
-  // internally and does not.
-  const passes = isTectonic ? 1 : 2;
-  for (let i = 0; i < passes; i++) await run(engine, args, { cwd: work, timeout: timeoutMs });
-
-  const built = join(work, `${name}.pdf`);
-  if (!existsSync(built)) throw new Error('the engine produced no PDF');
-  mkdirSync(dirname(outPdf), { recursive: true });
-  copyFileSync(built, outPdf);
-}
-
 export type BuiltResume = {
   path: string;
   tailored: boolean;
@@ -805,12 +752,12 @@ export async function buildResume(doc: ClaimsDoc | null, postingText: string, ke
 
   if (source === template) return bail('the CV already leads with the most relevant work for this posting', skipped);
 
-  const engine = await findEngine();
-  if (!engine) return bail('no LaTeX engine found — install tectonic, or set RESUME_ENGINE');
+  const engine = findEngine(env('RESUME_ENGINE'));
+  if (!engine) return bail('no LaTeX engine found. Install pdflatex (texlive), or set RESUME_ENGINE to an engine on the list');
 
   // Keyed on the rendered source, so two postings that select the same order
   // share one PDF and an unchanged CV is never rebuilt.
-  const hash = createHash('sha1').update(source).update(engine).digest('hex').slice(0, 16);
+  const hash = createHash('sha1').update(source).update(engine.program).digest('hex').slice(0, 16);
   const out = join(cfg.outDir, `${key}-${hash}.pdf`);
 
   const order = 'why' in projects ? [] : projects.order;
@@ -835,7 +782,7 @@ export async function buildResume(doc: ClaimsDoc | null, postingText: string, ke
   if (existsSync(out) && statSync(out).size > 0) return result;
 
   try {
-    await compile(source, cfg.tex, out, engine, cfg.timeoutMs);
+    await compileLatex({ source, assetsDir: dirname(cfg.tex), outPdf: out, engine, timeoutMs: cfg.timeoutMs });
     return result;
   } catch (e) {
     return bail(`the CV did not compile: ${(e as Error).message.split('\n')[0]}`, skipped);
