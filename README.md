@@ -193,8 +193,11 @@ with a breakdown of which companies you know people at, and your inferred level.
 
 ## Remote access
 
-`./scripts/remote.sh` opens a Cloudflare quick tunnel. Before it will run you must set
-`WAYPOINT_ACCESS_CODE` in `.env`, and that is not bureaucracy: past the sign-in page sit the names,
+`./scripts/remote.sh` starts the server and a public tunnel in the background and hands the
+terminal back; `./scripts/remote.sh stop` stops both (`restart`, `status` and `logs` also work, and
+`./scripts/start.sh` takes the same commands in production mode). By default the tunnel is a
+Cloudflare quick tunnel, and before it will open one you must set `WAYPOINT_ACCESS_CODE` in `.env`,
+and that is not bureaucracy: past the sign-in page sit the names,
 employers and job titles of **every LinkedIn connection you have** — other people's personal data,
 not only yours — plus your CV and a button that spends your Claude subscription.
 
@@ -215,13 +218,20 @@ Alternatives, in rough order of safety:
   code. Needs a free Cloudflare account and a domain.
 - **Quick tunnel** (what `remote.sh` uses) — instant, no account, but the URL is public and changes
   every run. The passcode is what makes it acceptable.
+- **zrok** (`WAYPOINT_TUNNEL=zrok` in `.env`) — a fixed `https://<name>.shares.zrok.io` URL behind
+  HTTP basic auth, on a free zrok.io account. Install `zrok2`, run `zrok2 enable <token>` and
+  `zrok2 create name waypoint`, and put one `user:password` line in
+  `~/.config/waypoint/zrok-basic-auth` (or point `WAYPOINT_ZROK_AUTH_FILE` elsewhere). The basic
+  auth is the lock, so the passcode is optional. zrok's Google sign-in loops on the hosted service
+  ([openziti/zrok#1276](https://github.com/openziti/zrok/issues/1276)), which is why this uses a
+  password.
 
 `nginx` alone will not do this: your machine sits behind NAT, so you would also need port forwarding,
 dynamic DNS and your own TLS — and none of that works at all if your ISP uses CGNAT.
 
 **Your Mac is the server.** The `claude` CLI is what your subscription authenticates, so this cannot
-be hosted elsewhere. Sleep the laptop and the URL goes dead. `caffeinate -s ./scripts/remote.sh`
-keeps it awake.
+be hosted elsewhere. Sleep the laptop and the URL goes dead. After starting,
+`caffeinate -s -w "$(cat /tmp/waypoint-3117/server.pid)" &` keeps it awake until the server stops.
 
 ## How Claude is connected, and why it runs locally
 
@@ -603,8 +613,8 @@ Copy `.env.example` to `.env`. Everything has a working default except the optio
 | `npm run db:seed` | Re-run the seed (placeholder data only with `WAYPOINT_SEED_SAMPLES=1`) |
 | `npm run gdrive:auth` | One-time Google consent; prints the `GDRIVE_REFRESH_TOKEN` for `.env` |
 | `npm run check:claims` | Validate `data/profile/claims.yml` and report coverage gaps |
-| `./scripts/remote.sh` | Server plus a public HTTPS tunnel, passcode enforced |
-| `./scripts/start.sh` | Same, but builds and serves in production mode — use on the Pi |
+| `./scripts/remote.sh [start\|stop\|restart\|status\|logs]` | Server plus a public HTTPS tunnel, in the background |
+| `./scripts/start.sh [start\|stop\|restart\|status\|logs]` | Same, but builds and serves in production mode — use on the Pi |
 
 ## Troubleshooting
 
