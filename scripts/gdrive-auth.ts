@@ -21,7 +21,6 @@
  * https://myaccount.google.com/permissions.
  */
 import { createServer } from 'http';
-import { execFile } from 'child_process';
 
 const CLIENT_ID = (process.env.GDRIVE_CLIENT_ID || '').trim();
 const CLIENT_SECRET = (process.env.GDRIVE_CLIENT_SECRET || '').trim();
@@ -85,6 +84,5 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Listening on ${REDIRECT}\nOpening the consent screen. If nothing opens, paste this:\n\n${url}\n`);
-  execFile('open', [url], () => {});
+  console.log(`Listening on ${REDIRECT}\nOpen this URL in a browser on this machine:\n\n${url}\n`);
 });
