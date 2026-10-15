@@ -14,7 +14,7 @@ export const MODEL = 'claude-sonnet-5';
 export class ModelError extends Error {}
 
 export function assertSonnet(id: string): void {
-  if (!/^claude-sonnet-\d/.test(id)) throw new ModelError(`Model ${id || '(none)'} is not a Sonnet model. Waypoint sends calls only to Sonnet.`);
+  if (!/^claude-sonnet-\d+(-\d+)*$/.test(id)) throw new ModelError(`Model ${id || '(none)'} is not a Sonnet model. Waypoint sends calls only to Sonnet.`);
 }
 
 /** US dollars for each million tokens, for claude-sonnet-5 and claude-sonnet-5-5

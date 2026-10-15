@@ -6,7 +6,23 @@ describe('assertSonnet', () => {
     expect(() => assertSonnet(MODEL)).not.toThrow();
     expect(MODEL.startsWith('claude-sonnet-')).toBe(true);
   });
-  it.each(['claude-opus-5-5', 'claude-fable-5-1', 'claude-haiku-5-5', 'sonnet', '', 'claude-sonnet'])('refuses %s', (id) => {
+  it('accepts Sonnet IDs with more version parts', () => {
+    expect(() => assertSonnet('claude-sonnet-5-5')).not.toThrow();
+    expect(() => assertSonnet('claude-sonnet-5')).not.toThrow();
+  });
+  it.each([
+    'claude-opus-5-5',
+    'claude-fable-5-1',
+    'claude-haiku-5-5',
+    'sonnet',
+    '',
+    'claude-sonnet',
+    'claude-sonnet-5-opus',
+    'claude-sonnet-5\n',
+    'claude-sonnet-5\nclaude-opus-5',
+    'claude-sonnet-5 --model x',
+    'claude-sonnet-5-20260101x',
+  ])('refuses %j', (id) => {
     expect(() => assertSonnet(id)).toThrow(ModelError);
   });
 });
