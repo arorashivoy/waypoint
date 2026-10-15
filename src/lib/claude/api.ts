@@ -58,6 +58,13 @@ export async function askApi<T>(key: string, req: AskRequest<T>, client: Message
       setAuthFailure('The Anthropic API refused the key (401/403). Update ANTHROPIC_API_KEY in .env.');
     } else if (e instanceof Anthropic.RateLimitError) {
       setQuotaFailure('The Anthropic API is limiting requests (429). Wait, or add credit in the Anthropic Console.');
+    } else if (e instanceof Anthropic.BadRequestError) {
+      const message = String((e as Error).message);
+      if (/credit balance|billing|purchase credits/i.test(message)) {
+        setQuotaFailure('The Anthropic account has no credit left. Add credit in the Anthropic Console, or remove ANTHROPIC_API_KEY to use the CLI subscription.');
+      } else {
+        console.error('[claude] API request refused (400):', message.slice(0, 300));
+      }
     }
     throw e;
   }
@@ -70,7 +77,15 @@ export async function askApi<T>(key: string, req: AskRequest<T>, client: Message
     cacheReadTokens: Number(u.cache_read_input_tokens) || 0,
     cacheWriteTokens: Number(u.cache_creation_input_tokens) || 0,
   };
-  const usage: Usage = { model: MODEL, ...tokens, costUsd: costUsd(tokens) };
+  const model: string = typeof res.model === 'string' ? res.model : MODEL;
+  const usage: Usage = { model, ...tokens, costUsd: costUsd(tokens) };
+
+  // The reply names the model that ran. Refuse it if it is not Sonnet.
+  try {
+    assertSonnet(model);
+  } catch (e) {
+    throw new ClaudeCallError((e as Error).message, usage);
+  }
 
   if (res.stop_reason === 'refusal') throw new RefusalError(res.stop_details?.category ?? null, usage);
   if (res.stop_reason === 'max_tokens') throw new ClaudeCallError('The Claude reply was cut off at max_tokens; raise maxTokens', usage);

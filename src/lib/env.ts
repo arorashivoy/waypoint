@@ -23,7 +23,7 @@ const schema = z.object({
   ANTHROPIC_API_KEY: z.preprocess(empty, z.string().optional()),
   CLAUDE_CODE_OAUTH_TOKEN: z.preprocess(empty, z.string().optional()),
   WAYPOINT_CLAUDE_BIN: z.preprocess(empty, z.string().default('claude')),
-  WAYPOINT_CLAUDE_TIMEOUT_MS: z.preprocess(empty, z.coerce.number().int().positive().default(120_000)),
+  WAYPOINT_CLAUDE_TIMEOUT_MS: z.preprocess(empty, z.coerce.number().int().positive().max(600_000, { error: 'must be 600000 (10 minutes) or less' }).default(120_000)),
 });
 
 export type Env = z.infer<typeof schema>;

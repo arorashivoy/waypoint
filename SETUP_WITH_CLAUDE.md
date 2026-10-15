@@ -33,8 +33,9 @@ order. Before you start, read `README.md`.
 If `data/waypoint.db` and `.env` already exist, this is an existing install. Do **not**
 run `npm run setup` or re-create `.env`. Instead:
 
-1. **Back up** before touching anything: copy `data/waypoint.db`, `.env` and
-   `data/profile/claims.yml`.
+1. **Back up** before touching anything. Stop the server first (`./scripts/remote.sh stop`).
+   Then copy `data/waypoint.db` and, if they exist, `data/waypoint.db-wal` and
+   `data/waypoint.db-shm` together. Also copy `.env` and `data/profile/claims.yml`.
 2. `git pull`, then `npm install`.
 3. Do this step one time only, and only if the database was made before the `0_init`
    migration existed. Run `npx prisma migrate status`. If it says the database is not

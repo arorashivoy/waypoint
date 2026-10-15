@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { askApi } from '@/lib/claude/api';
 import { HookReply } from '@/lib/schemas';
 import { ClaudeCallError, RefusalError } from '@/lib/claude/types';
-import { claudeAuthFailure, clearFailures } from '@/lib/claude/failures';
+import { claudeAuthFailure, claudeQuotaFailure, clearFailures } from '@/lib/claude/failures';
 
 const ok = {
   stop_reason: 'end_turn',
@@ -83,5 +83,38 @@ describe('askApi', () => {
     });
     await expect(askApi('bad', req, client)).rejects.toThrow();
     expect(claudeAuthFailure()?.message).toMatch(/ANTHROPIC_API_KEY/);
+  });
+
+  const badRequest = (message: string) =>
+    new Anthropic.BadRequestError(400, { type: 'error', error: { type: 'invalid_request_error', message } }, message, new Headers());
+
+  it('sets the quota banner on a 400 about credit and rethrows', async () => {
+    clearFailures();
+    const client = fake(() => { throw badRequest('Your credit balance is too low to access the Anthropic API.'); });
+    await expect(askApi('k', req, client)).rejects.toBeInstanceOf(Anthropic.BadRequestError);
+    expect(claudeQuotaFailure()?.message).toMatch(/no credit left/);
+  });
+
+  it('logs any other 400, sets no banner and rethrows', async () => {
+    clearFailures();
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const client = fake(() => { throw badRequest('output_config.format is not valid'); });
+    await expect(askApi('k', req, client)).rejects.toBeInstanceOf(Anthropic.BadRequestError);
+    expect(claudeQuotaFailure()).toBeNull();
+    expect(spy).toHaveBeenCalledWith('[claude] API request refused (400):', expect.stringContaining('output_config.format'));
+    spy.mockRestore();
+  });
+
+  it('refuses a reply from a model that is not Sonnet and keeps the usage', async () => {
+    const client = fake(() => ({ ...ok, model: 'claude-opus-4-1' }));
+    const e: any = await askApi('k', req, client).catch((x) => x);
+    expect(e).toBeInstanceOf(ClaudeCallError);
+    expect(e.message).toMatch(/not a Sonnet model/);
+    expect(e.usage.inputTokens).toBe(100);
+  });
+
+  it('reports the model that the API says it used', async () => {
+    const client = fake(() => ({ ...ok, model: 'claude-sonnet-5-5' }));
+    expect((await askApi('k', req, client)).usage.model).toBe('claude-sonnet-5-5');
   });
 });

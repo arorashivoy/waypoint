@@ -8,6 +8,17 @@ const noChildProcess = {
       { name: 'node:child_process', message: 'Start processes only through src/lib/exec.ts.' },
     ],
   }],
+  // The import rule does not see require() or import(). These selectors do.
+  'no-restricted-syntax': ['error',
+    {
+      selector: "CallExpression[callee.name='require'][arguments.0.value=/^(node:)?child_process$/]",
+      message: 'Start processes only through src/lib/exec.ts.',
+    },
+    {
+      selector: "ImportExpression[source.value=/^(node:)?child_process$/]",
+      message: 'Start processes only through src/lib/exec.ts.',
+    },
+  ],
 };
 
 export default tseslint.config(
@@ -20,5 +31,5 @@ export default tseslint.config(
     plugins: { 'react-hooks': reactHooks },
     rules: noChildProcess,
   },
-  { files: ['src/lib/exec.ts'], rules: { 'no-restricted-imports': 'off' } },
+  { files: ['src/lib/exec.ts'], rules: { 'no-restricted-imports': 'off', 'no-restricted-syntax': 'off' } },
 );

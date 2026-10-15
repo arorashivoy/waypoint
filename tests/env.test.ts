@@ -28,4 +28,9 @@ describe('parseEnv', () => {
   it('reads the timeout as a number', () => {
     expect(parseEnv({ ...ok, WAYPOINT_CLAUDE_TIMEOUT_MS: '9000' }).WAYPOINT_CLAUDE_TIMEOUT_MS).toBe(9000);
   });
+
+  it('refuses a timeout above 600000 and names the limit', () => {
+    expect(() => parseEnv({ ...ok, WAYPOINT_CLAUDE_TIMEOUT_MS: '600001' })).toThrow(/WAYPOINT_CLAUDE_TIMEOUT_MS must be 600000 \(10 minutes\) or less/);
+    expect(parseEnv({ ...ok, WAYPOINT_CLAUDE_TIMEOUT_MS: '600000' }).WAYPOINT_CLAUDE_TIMEOUT_MS).toBe(600_000);
+  });
 });

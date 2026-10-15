@@ -601,7 +601,7 @@ Copy `.env.example` to `.env`. Everything has a working default except the optio
 | `WAYPOINT_EMAIL` | `you@local` | Identifier for the local account. |
 | `WAYPOINT_ACCESS_CODE` | *(unset)* | Passcode required at sign-in. **Set before exposing beyond localhost.** Unset means no passcode field appears. |
 | `WAYPOINT_CLAUDE_BIN` | `claude` | Full path to the CLI if it is not on `PATH`. |
-| `WAYPOINT_CLAUDE_TIMEOUT_MS` | `120000` | Per-call timeout. Raise it on a slow connection. |
+| `WAYPOINT_CLAUDE_TIMEOUT_MS` | `120000` | Per-call timeout. Raise it on a slow connection, up to 600000. |
 | `ANTHROPIC_API_KEY` | *(unset)* | If this is set in `.env`, Waypoint uses it (API credit). If it is not set, Waypoint uses the `claude` CLI and your subscription. A failed API call does not fall back to the CLI. |
 | `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | *(unset)* | Free key from [developer.adzuna.com](https://developer.adzuna.com). Best lever for broader NL/PL/IN coverage. |
 | `LINKEDIN_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` | *(unset)* | Real OIDC sign-in. Returns name, email and photo only. |
