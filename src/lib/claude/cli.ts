@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { isAbsolute, join } from 'node:path';
-import { baseEnv, findOnPath, runProgram } from '../exec';
+import { basename, isAbsolute, join } from 'node:path';
+import { baseEnv, findOnPath, runProgram, type RunResult } from '../exec';
 import { env } from '../env';
 import { assertSonnet, MODEL } from './model';
 import { clearFailures, setAuthFailure, setQuotaFailure } from './failures';
@@ -26,6 +26,8 @@ export class CliError extends Error {}
 const AUTH_HINT = /(not logged in|login|log in|logged out|not authenticated|unauthenticated|unauthorized|expired|invalid_token|401)/i;
 const QUOTA_HINT = /(rate[_ -]?limit|rate limited|too many requests|quota|usage[_ -]?limit|out of credit|429)/i;
 
+export type CliReply = { text: string; usage: Usage; denials: number };
+
 export function cliArgs(model: string, system: string, mcpConfigPath: string): string[] {
   assertSonnet(model);
   return [
@@ -35,12 +37,29 @@ export function cliArgs(model: string, system: string, mcpConfigPath: string): s
   ];
 }
 
-/** A plain name such as `claude` is found on PATH. A path must be absolute,
- *  because exec.ts refuses any other path. */
-export function claudeBinOption(bin: string): string | undefined {
-  if (!bin.includes('/')) return undefined;
-  if (!isAbsolute(bin)) throw new CliError('WAYPOINT_CLAUDE_BIN must be absolute (for example /usr/local/bin/claude), or a plain name found on PATH.');
-  return bin;
+/** Find the claude binary that askCli runs. A plain name must be exactly
+ *  `claude` and is found on PATH. A path must be absolute, and an executable
+ *  file named `claude`. Returns null if there is no such binary. A relative
+ *  path with a slash throws, because exec.ts refuses it. */
+export function resolveClaudeBin(bin: string): string | null {
+  if (!bin.includes('/')) return bin === 'claude' ? findOnPath('claude') : null;
+  if (!isAbsolute(bin)) throw new CliError('WAYPOINT_CLAUDE_BIN must be absolute (for example /usr/local/bin/claude), or the plain name claude.');
+  try {
+    if (!statSync(bin).isFile() || basename(bin) !== 'claude') return null;
+    accessSync(bin, constants.X_OK);
+    return bin;
+  } catch {
+    return null;
+  }
+}
+
+/** The claude binary that the settings in .env name, or null. */
+export function cliBinary(): string | null {
+  try {
+    return resolveClaudeBin(env().WAYPOINT_CLAUDE_BIN);
+  } catch {
+    return null;
+  }
 }
 
 function record(detail: string) {
@@ -55,7 +74,7 @@ function record(detail: string) {
   }
 }
 
-export function parseCliReply(stdout: string, model: string): { text: string; usage: Usage } {
+export function parseCliReply(stdout: string, model: string): CliReply {
   let r: any;
   try {
     r = JSON.parse(stdout);
@@ -68,6 +87,7 @@ export function parseCliReply(stdout: string, model: string): { text: string; us
     throw new CliError(msg);
   }
   if (r.stop_reason === 'refusal') throw new RefusalError(null);
+  if (r.subtype !== 'success') throw new CliError(`The CLI reply has subtype ${JSON.stringify(r.subtype)}, not "success".`);
 
   const ran = Object.keys(r.modelUsage || {});
   const other = ran.filter((m) => m !== model);
@@ -78,6 +98,7 @@ export function parseCliReply(stdout: string, model: string): { text: string; us
   const u = r.modelUsage[model] || {};
   return {
     text: String(r.result ?? ''),
+    denials: Array.isArray(r.permission_denials) ? r.permission_denials.length : 0,
     usage: {
       model,
       inputTokens: Number(u.inputTokens) || 0,
@@ -93,10 +114,28 @@ function childEnv() {
   return baseEnv({ CLAUDE_CODE_OAUTH_TOKEN: env().CLAUDE_CODE_OAUTH_TOKEN });
 }
 
-export async function askCli(system: string, prompt: string): Promise<{ text: string; usage: Usage }> {
+/** Decide what a finished run means. A non-zero exit code is a failure, even
+ *  if stdout holds JSON that looks like a success. */
+export function interpretCliRun(res: RunResult, model: string): CliReply {
+  if (res.code !== 0) {
+    let detail = (res.stderr || res.stdout).slice(0, 400);
+    try {
+      const r = JSON.parse(res.stdout);
+      if (r && typeof r.result === 'string' && r.result) detail = r.result.slice(0, 400);
+    } catch {
+      /* keep the text above */
+    }
+    record(detail);
+    throw new CliError(`claude exited ${res.code}: ${detail}`);
+  }
+  return parseCliReply(res.stdout, model);
+}
+
+export async function askCli(system: string, prompt: string): Promise<CliReply> {
   const { WAYPOINT_CLAUDE_BIN, WAYPOINT_CLAUDE_TIMEOUT_MS: timeoutMs } = env();
-  // Check the path before any folder or process exists.
-  const bin = claudeBinOption(WAYPOINT_CLAUDE_BIN);
+  // Find the binary before any folder or process exists.
+  const bin = resolveClaudeBin(WAYPOINT_CLAUDE_BIN);
+  if (!bin) throw new CliError('The claude CLI is not installed.');
   const work = mkdtempSync(join(tmpdir(), 'waypoint-claude-'));
   try {
     const mcp = join(work, '.mcp-empty.json');
@@ -108,12 +147,7 @@ export async function askCli(system: string, prompt: string): Promise<{ text: st
       env: childEnv(),
       bin,
     });
-    if (res.code !== 0 && !res.stdout.trim().startsWith('{')) {
-      const detail = (res.stderr || res.stdout).slice(0, 400);
-      record(detail);
-      throw new CliError(`claude exited ${res.code}: ${detail}`);
-    }
-    const out = parseCliReply(res.stdout, MODEL);
+    const out = interpretCliRun(res, MODEL);
     clearFailures();
     return out;
   } finally {
@@ -121,19 +155,25 @@ export async function askCli(system: string, prompt: string): Promise<{ text: st
   }
 }
 
-export async function cliVersion(): Promise<string | null> {
-  // `--version` is not an allowed argument shape in exec.ts on purpose; the
-  // self-test below is the real check. Here we only look for the binary.
-  const bin = env().WAYPOINT_CLAUDE_BIN;
-  return claudeBinOption(bin) ?? findOnPath(bin);
+/** The self-test passes only if the model saw no files (no tool ran) and the
+ *  CLI denied no tool call. The work folder holds .mcp-empty.json, so a run
+ *  with tools would name it. */
+export function selfTestVerdict(text: string, denials: number): { ok: true } | { ok: false; why: string } {
+  if (denials > 0) return { ok: false, why: `The CLI denied ${denials} tool call(s), so the model tried to use a tool.` };
+  if (/mcp-empty/i.test(text)) return { ok: false, why: 'The model listed a file in the work folder, so tools are on.' };
+  if (!/^\s*NONE\s*\.?\s*$/i.test(text)) return { ok: false, why: `The self-test answer was not NONE: ${text.slice(0, 200)}` };
+  return { ok: true };
 }
 
-/** One canary call: it asks the model to use a tool. parseCliReply refuses
- *  the reply if a tool ran (more than 1 turn) or another model answered. */
+/** One canary call. parseCliReply refuses the reply if a tool ran (more than
+ *  1 turn) or another model answered. selfTestVerdict checks the answer. */
 export async function cliSelfTest(): Promise<{ ok: true } | { ok: false; why: string }> {
   try {
-    await askCli('You are a self-test. Answer in one word.', 'Use any tool you have to list the files here. If you have no tools, answer NONE.');
-    return { ok: true };
+    const r = await askCli(
+      'You are a self-test. Answer in one word.',
+      'List the names of the files in your current working folder. If you cannot see any files, answer exactly NONE.',
+    );
+    return selfTestVerdict(r.text, r.denials);
   } catch (e) {
     return { ok: false, why: (e as Error).message };
   }
