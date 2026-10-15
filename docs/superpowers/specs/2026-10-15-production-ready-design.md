@@ -273,8 +273,9 @@ Each process is a `systemd` user unit, with `Restart=on-failure` and start at bo
 
 ### 4.4 Backups
 
-- A `systemd` timer runs each night at 03:00. It runs `sqlite3 data/waypoint.db ".backup …"` into
-  `data/backups/`, and it also packs `data/users/` with `tar`.
+- A `systemd` timer runs each night at 03:00. It runs `npm run backup`, which writes a copy of the
+  database with `VACUUM INTO 'data/backups/<date>.db'` through Prisma (the Pi has no `sqlite3`
+  CLI), and packs `data/users/` into a `.tar.gz` with Node.
 - It keeps 14 daily and 8 weekly copies.
 - Optional: `rclone` copies the backup to Google Drive if `WAYPOINT_BACKUP_REMOTE` is set.
 - `npm run restore -- <file>` restores a backup. It refuses to run while `waypoint-web` or
@@ -381,9 +382,16 @@ shape.
   is never used. The CLI self-test (section 6.2) checks the model name in the CLI JSON reply.
 - The model moves from `claude-sonnet-5` to the latest Sonnet (`claude-sonnet-5-5`) only after
   `npm run eval` passes on it. The plan checks the current model IDs with the `claude-api` skill.
-- **API mode:** each task sends its JSON schema as a forced tool call. The profile block goes first
-  in the system prompt with `cache_control`, so a refresh of 50 jobs pays for the profile only one
-  time.
+- **API mode:** use the official `@anthropic-ai/sdk` package, not raw `fetch`. Each task sends its
+  `zod` schema as a structured output (`client.messages.parse` with
+  `output_config.format = zodOutputFormat(schema)`). Sonnet 5.5 refuses a forced tool call
+  (`tool_choice` `any` or `tool` returns HTTP 400), so the design does not use one. Each task sets
+  `output_config.effort` explicitly (`low` for labels and slots, `medium` for the job check and
+  résumé work). The profile block goes first in the system prompt with `cache_control`, so a
+  refresh of 50 jobs pays for the profile only one time.
+- **No refusal fallback.** The server-side `fallbacks` option can send a refused request to an
+  Opus model, so the app never sets it. A response with `stop_reason: "refusal"` is a failed
+  call, and the task records the refusal category.
 - **CLI mode:** `extractJson`, then a `zod` check, then one repair retry if the check fails.
 - Each prompt has a `promptVersion`. The version is part of the cache key.
 
@@ -414,16 +422,19 @@ tools, the project's `CLAUDE.md` files and the full server environment. The new 
 
 - `--tools ""` (no built-in tools)
 - `--strict-mcp-config` with an empty MCP config (no MCP servers)
-- `--bare` (no hooks, plugins or `CLAUDE.md`)
-- `--setting-sources` with no project or local settings
+- `--setting-sources ""` (no user, project or local settings, so no hooks and no plugins)
 - `--no-session-persistence`
 - `--system-prompt` (ours only), in place of `--append-system-prompt`
 - `--model <sonnet id>` and `--output-format json`
-- `cwd`: a new empty temporary folder for each call, deleted after the call
+- `cwd`: a new empty temporary folder for each call, deleted after the call. With the empty
+  folder, `--setting-sources ""` and `--system-prompt`, no `CLAUDE.md` reaches the model
+  (checked on 2026-10-15).
+- Not `--bare`: it turns off the subscription login (checked on 2026-10-15: "Not logged in").
 - environment: only `PATH`, `HOME`, `LANG` and `CLAUDE_CODE_OAUTH_TOKEN`
 - `spawn(cmd, argsArray)`, never a shell; the prompt goes through stdin
 
-The plan checks each flag against the installed `claude --help`.
+These flags were checked with Claude Code 2.1.300 on 2026-10-15. The CLI JSON reply has a
+`modelUsage` object whose keys are the model IDs that ran, and `num_turns`.
 
 **Self-test:** when the worker starts, it sends one canary prompt that asks the model to use a
 tool and to name its model. If the reply shows that a tool ran, or the model is not Sonnet, the app
@@ -461,9 +472,10 @@ turns off CLI mode and logs an error.
 ### 6.5 LaTeX safety
 
 - Built-in templates escape every value: `\ { } $ & # % _ ^ ~`.
-- Every compile runs with shell escape disabled (`tectonic --untrusted`, or `pdflatex
-  -no-shell-escape`), with `openin_any=p` and `openout_any=p`, in a temporary folder for that user,
-  with a 60-second timeout and a 512 MB memory limit.
+- Every compile runs with shell escape disabled (`pdflatex -no-shell-escape`, or
+  `tectonic --untrusted`), with `openin_any=p` and `openout_any=p`, in a temporary folder for that
+  user, with a 60-second timeout and a 512 MB memory limit (`prlimit --as`). The Pi has `pdflatex`
+  and no `tectonic`.
 - An uploaded `.tex` file is refused if it contains `\write18`, `\immediate\write`, `\openin`,
   `\openout`, `\catcode`, `\input`/`\include` with an absolute path or `..`, or
   `\usepackage{shellesc}`.
@@ -471,7 +483,8 @@ turns off CLI mode and logs an error.
 ### 6.6 Processes and network
 
 - `src/lib/exec.ts` is the only module that can start a process. It allows only `claude`,
-  `tectonic`/`pdflatex`, `pdftotext` and `sqlite3`, each with fixed argument templates. Arguments
+  the LaTeX engines (`pdflatex`, `xelatex`, `lualatex`, `tectonic`), `pdftotext` and `prlimit`
+  (the memory limit wrapper), each with fixed argument templates. Arguments
   from users are only IDs or temporary paths that the app makes.
 - A lint rule fails the build if code imports `child_process` outside `exec.ts`.
 - Outbound fetches go only to fixed hosts: the boards in `config/watchlist.json` and the
@@ -646,6 +659,7 @@ layout does not change after the page loads.
 | Key | Required | Purpose |
 |---|---|---|
 | `WAYPOINT_SECRET_KEY` | Yes | AES-256-GCM key for secrets of each user (32 bytes, base64) |
+| `ANTHROPIC_API_KEY` | No | The shared key. If set, it wins over the CLI subscription (section 2.8). |
 | `WAYPOINT_SHARED_MONTHLY_USD` | No (default 5) | Monthly cap for each user on the shared API key |
 | `WAYPOINT_BACKUP_REMOTE` | No | `rclone` remote for backups |
 | `WAYPOINT_ZROK_NAME`, `WAYPOINT_ZROK_NAMESPACE` | No | Kept from `remote.sh` |
