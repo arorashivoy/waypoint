@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { handle, HttpError } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
-import { createDrafts } from '@/lib/profile/drafts';
+import { createDrafts, MAX_PENDING } from '@/lib/profile/drafts';
 import { checkExportUpload, checkUploadLength, linkedinDrafts, parseExport } from '@/lib/linkedin-import';
 
 export const maxDuration = 300;
@@ -36,6 +36,12 @@ export const POST = handle(async (req) => {
   if (!parsed.contacts.length && !drafts.length) {
     // Zero rows means the wrong file. An empty file must not erase the contacts.
     return NextResponse.json({ error: 'No connections or profile data found in that file. Upload Connections.csv or the full LinkedIn archive.' }, { status: 400 });
+  }
+
+  // Check the cap before any write, so a refused import changes nothing.
+  const pending = await db.profileDraft.count({ where: { userId, status: 'pending' } });
+  if (pending + drafts.length > MAX_PENDING) {
+    throw new HttpError(409, 'You have too many drafts to review. Accept or reject some drafts, then import again.');
   }
 
   // Contacts are not profile claims, so they go in directly (spec 3.3). An

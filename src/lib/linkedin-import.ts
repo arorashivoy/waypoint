@@ -164,7 +164,7 @@ export function linkedinDrafts(p: ImportedProfile, name: string): NewDraft[] {
   const taken = { position: new Set<string>(), education: new Set<string>(), project: new Set<string>(), claim: new Set<string>() };
   const out: NewDraft[] = [];
   if (p.headline.trim()) out.push({ type: 'meta', data: { name: name.slice(0, 400), headline: p.headline.trim().slice(0, 400) } });
-  for (const x of p.positions.slice(0, 100)) {
+  for (const x of p.positions.slice(0, 50)) {
     out.push({
       type: 'position',
       data: {
@@ -179,16 +179,16 @@ export function linkedinDrafts(p: ImportedProfile, name: string): NewDraft[] {
       },
     });
   }
-  for (const x of p.educations.slice(0, 50)) {
+  for (const x of p.educations.slice(0, 20)) {
     out.push({ type: 'education', data: { id: slugify(x.school, taken.education, 'school'), school: x.school.slice(0, 400), degree: clip(x.degree, 4000), field: clip(x.field, 4000), years: clip(x.years, 4000), aliases: [] } });
   }
-  for (const x of p.projects.slice(0, 200)) {
+  for (const x of p.projects.slice(0, 100)) {
     out.push({
       type: 'project',
       data: { id: slugify(x.title, taken.project, 'project'), title: x.title.slice(0, 400), org: null, description: clip(x.description, 4000), url: x.url && /^https?:\/\/\S+$/i.test(x.url) ? x.url.slice(0, 4000) : null, source: 'linkedin' },
     });
   }
-  for (const s of p.skills.slice(0, 300)) {
+  for (const s of p.skills.slice(0, 200)) {
     out.push({ type: 'claim', data: { slug: slugify(s, taken.claim, 'skill'), kind: 'skill', label: s.slice(0, 400), aliases: [], links: [], evidence: [], mentions: [{ surface: 'linkedin-skills', listed: true }] } });
   }
   return out;

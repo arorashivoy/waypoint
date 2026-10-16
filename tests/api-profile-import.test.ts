@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import AdmZip from 'adm-zip';
 import { POST as importExport } from '@/app/api/profile/import/route';
 import { db } from '@/lib/db';
-import { listDrafts } from '@/lib/profile/drafts';
+import { listDrafts, MAX_PENDING } from '@/lib/profile/drafts';
 import { linkedinDrafts, MAX_EXPORT_BYTES, MAX_UNPACKED_BYTES, parseExport } from '@/lib/linkedin-import';
 import { ctx, formRequest, makeUser } from './helpers/http';
 
@@ -112,10 +112,12 @@ describe('linkedinDrafts', () => {
 describe('POST /api/profile/import makes drafts', () => {
   it('replaces the contacts, makes drafts and leaves the profile alone', async () => {
     const u = await makeUser();
+    await db.contact.create({ data: { userId: u.user.id, firstName: 'Old', lastName: 'Contact' } });
     const res = await importExport(await formRequest('/api/profile/import', upload(FULL), { cookie: u.cookie }), ctx());
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ ok: true, scope: 'full', drafts: 6 });
-    expect(await db.contact.count({ where: { userId: u.user.id } })).toBe(1);
+    const contacts = await db.contact.findMany({ where: { userId: u.user.id } });
+    expect(contacts.map((c) => c.firstName)).toEqual(['Ada']);
     expect(await db.profileMeta.findUnique({ where: { userId: u.user.id } })).toBeNull();
     const drafts = await listDrafts(u.user.id);
     expect(new Set(drafts.map((d) => d.batchId)).size).toBe(1);
@@ -134,5 +136,21 @@ describe('POST /api/profile/import makes drafts', () => {
   it('refuses an archive with neither connections nor profile data', async () => {
     const u = await makeUser();
     expect((await importExport(await formRequest('/api/profile/import', upload({ 'Other.csv': 'A\n1\n' }), { cookie: u.cookie }), ctx())).status).toBe(400);
+  });
+
+  it('answers scope contacts and 0 drafts for a bare Connections.csv', async () => {
+    const u = await makeUser();
+    const res = await importExport(await formRequest('/api/profile/import', csvForm(), { cookie: u.cookie }), ctx());
+    expect(await res.json()).toMatchObject({ ok: true, scope: 'contacts', drafts: 0 });
+  });
+
+  it('refuses with 409 and writes nothing when the drafts would pass the cap', async () => {
+    const u = await makeUser();
+    await db.contact.create({ data: { userId: u.user.id, firstName: 'Old', lastName: 'Contact' } });
+    await db.profileDraft.createMany({ data: Array.from({ length: MAX_PENDING - 2 }, (_, i) => ({ userId: u.user.id, batchId: 'x', source: 'test', type: 'project', data: JSON.stringify({ id: `p${i}`, title: 'x' }) })) });
+    const res = await importExport(await formRequest('/api/profile/import', upload(FULL), { cookie: u.cookie }), ctx());
+    expect(res.status).toBe(409);
+    expect((await db.contact.findMany({ where: { userId: u.user.id } })).map((c) => c.firstName)).toEqual(['Old']);
+    expect(await db.profileImport.count({ where: { userId: u.user.id } })).toBe(0);
   });
 });
