@@ -14,7 +14,8 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { NoCredentialError } from '@/lib/claude';
 import { findOnPath } from '@/lib/exec';
-import { listDrafts } from '@/lib/profile/drafts';
+import { db } from '@/lib/db';
+import { listDrafts, MAX_PENDING } from '@/lib/profile/drafts';
 import { buildResumeDrafts, resumeImportPrompt, type ResumeReplyData } from '@/lib/profile/resume-import';
 import { quoteCheck } from '@/lib/profile/quotes';
 import { usersRoot } from '@/lib/user-files';
@@ -96,6 +97,20 @@ describe('buildResumeDrafts', () => {
     expect((items.find((i) => i.type === 'project')!.data as { title: string }).title).toBe('12345');
   });
 
+  it('drops items with an unknown kind, an unknown depth or a null title, and keeps the valid items', () => {
+    const r = reply();
+    r.skills = [
+      { label: 'Java', kind: 'language', quote: 'Skills: Java', evidence: [] },
+      { label: 'Rust', kind: 'tool' as never, quote: 'written in Rust', evidence: [] },
+      { label: 'PostgreSQL', kind: 'skill', quote: 'PostgreSQL', evidence: [{ ref: 'p1', depth: 'expert' as never }] },
+    ];
+    r.positions.push({ title: null as never, company: 'Acme GmbH', location: null, start: null, end: null, quote: 'Developer, Acme GmbH, Berlin', bullets: [] });
+    const { items, dropped } = buildResumeDrafts(r, TEXT, 'Jane Doe');
+    expect(dropped).toBe(4); // the invented bullet, the tool, the expert depth, the null title
+    expect(items.filter((i) => i.type === 'claim').length).toBe(1);
+    expect(items.filter((i) => i.type === 'position').length).toBe(1);
+  });
+
   it('sets a month that is not YYYY or YYYY-MM to null', () => {
     const r = reply();
     r.positions[0].start = 'March 2021';
@@ -161,6 +176,16 @@ describe('POST /api/profile/resume-import', () => {
     expect((await res.json()).error).toMatch(/hidden text/);
     expect(ask.calls.length).toBe(0);
     expect((await listDrafts(u.user.id)).length).toBe(0);
+  });
+
+  it('answers 409 before it calls Claude when the user has too many pending drafts', async () => {
+    const u = await makeUser();
+    await db.profileDraft.createMany({
+      data: Array.from({ length: MAX_PENDING }, () => ({ userId: u.user.id, batchId: 'b', source: 'resume', type: 'claim', data: '{}', warnings: '[]' })),
+    });
+    const res = await resumeRoute(await pdfUpload(u.cookie, Buffer.from(TEXT.repeat(2)), 'cv.tex', ''), ctx());
+    expect(res.status).toBe(409);
+    expect(ask.calls.length).toBe(0);
   });
 
   it('allows 10 imports in 24 hours', async () => {
