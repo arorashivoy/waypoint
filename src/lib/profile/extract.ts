@@ -14,7 +14,18 @@ export type Extracted = { text: string; hidden: string[] };
 export const MAX_TEXT = 60_000;
 /** A word box under 3.7 pt high is a font under 4 pt. */
 const TINY_HEIGHT = 3.7;
+/** A word with an estimated font size under 4 pt is hidden, for any rotation. */
+const TINY_FONT = 3.7;
 const MAX_HIDDEN = 20;
+const MAX_TEX = 500_000;
+
+/**
+ * Estimated font size of a word from its box. For a box of width w and height h,
+ * w * h is about chars * size^2 / 2 for any rotation, so size = sqrt(2wh / chars).
+ */
+function isTiny(w: number, h: number, chars: number): boolean {
+  return h < TINY_HEIGHT || Math.sqrt((2 * w * h) / Math.max(chars, 1)) < TINY_FONT;
+}
 
 const decode = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 
@@ -25,9 +36,11 @@ export function wordsFromBbox(html: string): Extracted {
   for (const line of html.split(/<\/line>/)) {
     const shown: string[] = [];
     const tiny: string[] = [];
-    for (const m of line.matchAll(/<word xMin="[\d.]+" yMin="([\d.]+)" xMax="[\d.]+" yMax="([\d.]+)">([^<]*)<\/word>/g)) {
-      const word = decode(m[3]);
-      (Number(m[2]) - Number(m[1]) < TINY_HEIGHT ? tiny : shown).push(word);
+    for (const m of line.matchAll(/<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">([^<]*)<\/word>/g)) {
+      const word = decode(m[5]);
+      const w = Number(m[3]) - Number(m[1]);
+      const h = Number(m[4]) - Number(m[2]);
+      (isTiny(w, h, [...word].length) ? tiny : shown).push(word);
     }
     if (shown.length) lines.push(shown.join(' '));
     const phrase = tiny.join(' ').slice(0, 200);
@@ -52,15 +65,33 @@ export async function extractPdf(buf: Buffer): Promise<Extracted> {
 
 const HIDDEN_TEX = /\\(?:text)?color\s*\{\s*white\s*\}|\\fontsize\s*\{\s*[0-3](?:\.\d+)?\s*(?:pt)?\s*\}/i;
 
+/** Remove each `open ... close` span with a linear scan. An open without a close stays. */
+function cut(t: string, open: string, close: string): string {
+  let out = '';
+  let from = 0;
+  for (;;) {
+    const a = t.indexOf(open, from);
+    if (a < 0) break;
+    const b = t.indexOf(close, a + open.length);
+    if (b < 0) break;
+    out += t.slice(from, a) + ' ';
+    from = b + close.length;
+  }
+  return out + t.slice(from);
+}
+
 /** The words of a .tex file: no comments, no environments, macro arguments kept. */
-export function extractTex(src: string): Extracted {
+export function extractTex(srcIn: string): Extracted {
+  const src = srcIn.slice(0, MAX_TEX);
   const hidden = HIDDEN_TEX.test(src) ? ['The .tex file sets white text or a font under 4 pt.'] : [];
   let t = src
-    .replace(/(^|[^\\])%.*$/gm, '$1')
-    .replace(/\\(begin|end)\s*\{[^}]*\}/g, '\n')
+    .replace(/(^|[^\\])%.*$/gm, '$1');
+  t = cut(cut(t, '\\iffalse', '\\fi'), '\\begin{comment}', '\\end{comment}');
+  t = t
+    .replace(/\\(begin|end)\s{0,20}\{[^}]{0,200}\}/g, '\n')
     .replace(/\\item\b/g, '\n');
-  // Keep the argument of a macro: \textbf{x} → x. Repeat for nested macros.
-  for (let i = 0; i < 5; i++) t = t.replace(/\\[a-zA-Z]+\*?(?:\[[^\]]*\])?\{([^{}]*)\}/g, '$1');
+  // Keep the argument of a macro: \textbf{x} -> x. Repeat for nested macros.
+  for (let i = 0; i < 5; i++) t = t.replace(/\\[a-zA-Z]{1,40}\*?(?:\[[^\][\\]{0,200}\])?\{([^{}]{0,2000})\}/g, '$1');
   t = t
     .replace(/\\([&%$#_{}])/g, '$1')
     .replace(/\\[a-zA-Z]+\*?/g, ' ')
