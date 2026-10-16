@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { SESSION_COOKIE } from '@/lib/auth/cookie-name';
-import { createSession, endUserSessions, readSession, TOUCH_MS } from '@/lib/auth/session';
+import { createSession, endUserSessions, isHttps, readSession, TOUCH_MS } from '@/lib/auth/session';
 import { hashToken } from '@/lib/auth/tokens';
 import { makeUser, request } from './helpers/http';
 
@@ -59,5 +59,26 @@ describe('sessions', () => {
     await endUserSessions(user.id, keep.id);
     expect(await readSession(reqWith(token))).not.toBeNull();
     expect(await readSession(reqWith(second))).toBeNull();
+  });
+});
+
+describe('isHttps', () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const plain = () => new Request('http://localhost:3117/api/auth/login');
+
+  it('is true for x-forwarded-proto https and false for plain http', () => {
+    vi.stubEnv('WAYPOINT_PUBLIC_URL', '');
+    expect(isHttps(new Request('http://localhost:3117/', { headers: { 'x-forwarded-proto': 'https' } }))).toBe(true);
+    expect(isHttps(plain())).toBe(false);
+  });
+
+  it('is true when WAYPOINT_PUBLIC_URL is an https URL', () => {
+    vi.stubEnv('WAYPOINT_PUBLIC_URL', 'https://wp.shares.zrok.io');
+    expect(isHttps(plain())).toBe(true);
+  });
+
+  it('is false when WAYPOINT_PUBLIC_URL is an http URL', () => {
+    vi.stubEnv('WAYPOINT_PUBLIC_URL', 'http://raspberrypi.local:3117');
+    expect(isHttps(plain())).toBe(false);
   });
 });

@@ -62,9 +62,11 @@ export async function endUserSessions(userId: string, exceptSessionId?: string):
 }
 
 /** Behind a tunnel the browser uses https, but Next.js sees plain http. */
+/** True behind an https tunnel, for an https request, or when the public URL is https. */
 export function isHttps(req: Request): boolean {
   const fwd = (req.headers.get('x-forwarded-proto') ?? '').split(',')[0].trim();
-  return fwd === 'https' || new URL(req.url).protocol === 'https:';
+  const publicUrl = process.env.WAYPOINT_PUBLIC_URL?.trim().toLowerCase() ?? '';
+  return fwd === 'https' || new URL(req.url).protocol === 'https:' || publicUrl.startsWith('https:');
 }
 
 export function setSessionCookie(res: NextResponse, token: string, req: Request): void {
