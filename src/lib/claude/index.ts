@@ -15,6 +15,7 @@ import { recordUsage } from './usage';
  * one `LlmUsage` row.
  */
 
+export { forgetClient } from './api';
 export { MODEL } from './model';
 export { extractJson } from './json';
 export { RefusalError, ClaudeCallError, NoCredentialError } from './types';

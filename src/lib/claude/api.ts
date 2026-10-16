@@ -34,6 +34,11 @@ function clientFor(key: string): Anthropic {
   return c;
 }
 
+/** Removes the cached client of a key that the user replaced or deleted. */
+export function forgetClient(key: string): void {
+  clients.delete(createHash('sha256').update(key).digest('hex'));
+}
+
 // `create` takes the JSON schema format only ({ type: 'json_schema', schema }).
 // The code drops the `parse` function of zodOutputFormat and checks the reply itself.
 function jsonFormat(schema: unknown) {
