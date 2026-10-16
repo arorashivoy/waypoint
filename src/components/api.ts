@@ -37,6 +37,13 @@ export const patch = <T = Json>(url: string, body: unknown) =>
 
 export const put = <T = Json>(url: string, body: unknown) => api<T>(url, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
+/** A file upload as the form field "file". The browser sets the multipart header and the length. */
+export const upload = <T = Json>(url: string, file: File) => {
+  const form = new FormData();
+  form.append('file', file);
+  return api<T>(url, { method: 'POST', body: form });
+};
+
 export const del = <T = Json>(url: string) => api<T>(url, { method: 'DELETE' });
 
 /**

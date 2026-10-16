@@ -31,7 +31,6 @@ export default function LinkedInPanel({ state, refresh, setToast }: { state: any
   const lastImport = state.lastImport;
   const contacts: any[] = state.contacts ?? [];
   const contactCount: number = state.contactCount ?? 0;
-  const contactLimit: number = state.contactLimit ?? contacts.length;
   const topCompanies: any[] = state.topContactCompanies ?? [];
   const capped = contactCount > contacts.length;
   const shown = useMemo(() => {

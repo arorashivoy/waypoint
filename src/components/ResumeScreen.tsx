@@ -98,8 +98,8 @@ export default function ResumeScreen({ state, refresh, setToast }: { state: any;
             <div className="panel stack" style={{ gap: 8, padding: 24 }}>
               <h2 className="display" style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Level inferred from your positions</h2>
               <span style={{ fontSize: 15, lineHeight: 1.5, color: 'var(--muted)' }}>
-                The “From LinkedIn” level filter shows roles at {state.levels.join(' and ')}, read from your imported
-                titles and years.
+                The “From LinkedIn” level filter shows roles at {state.levels.join(' and ')}, read from the titles and
+                dates of the positions in your profile.
               </span>
             </div>
           </div>

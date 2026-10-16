@@ -6,7 +6,7 @@ import { api } from './api';
 import ExperienceTab from './profile/ExperienceTab';
 import ProjectsTab from './profile/ProjectsTab';
 import ClaimsTab from './profile/ClaimsTab';
-import LinkedInPanel from './profile/LinkedInPanel';
+import ImportsTab from './profile/ImportsTab';
 
 type Tab = 'experience' | 'projects' | 'claims' | 'imports';
 export type ProfileData = { doc: ClaimsDoc; warnings: string[]; version: number; pendingDrafts: number };
@@ -36,6 +36,8 @@ export default function ProfileScreen({ state, refresh, setToast }: { state: any
     changed().catch((e) => setToast((e as Error).message));
   }, [changed, setToast]);
 
+  const onCount = useCallback((n: number) => setData((d) => (d && d.pendingDrafts !== n ? { ...d, pendingDrafts: n } : d)), []);
+
   const onKey = (e: React.KeyboardEvent, i: number) => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
     const next = TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length];
@@ -62,13 +64,13 @@ export default function ProfileScreen({ state, refresh, setToast }: { state: any
           {!data ? (
             <div className="empty">Loading the profile…</div>
           ) : tab === 'experience' ? (
-            <ExperienceTab key={data.version} doc={data.doc} onSaved={onSaved} setToast={setToast} />
+            <ExperienceTab key={data.version} doc={data.doc} levels={state?.levels} onSaved={onSaved} setToast={setToast} />
           ) : tab === 'projects' ? (
             <ProjectsTab doc={data.doc} onSaved={onSaved} setToast={setToast} />
           ) : tab === 'claims' ? (
             <ClaimsTab doc={data.doc} warnings={data.warnings} onSaved={onSaved} setToast={setToast} />
           ) : (
-            <LinkedInPanel state={state} refresh={changed} setToast={setToast} />
+            <ImportsTab doc={data.doc} version={data.version} state={state} changed={changed} setToast={setToast} onCount={onCount} />
           )}
         </div>
       </div>

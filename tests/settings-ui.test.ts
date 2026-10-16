@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { ApiError, leaveSession } from '@/components/api';
+import { ApiError, leaveSession, upload } from '@/components/api';
 
 describe('globals.css: .settings-body', () => {
   it('puts the base rule before the phone rule, so the phone rule wins', () => {
@@ -41,5 +41,20 @@ describe('leaveSession (sign out from Settings)', () => {
     await leaveSession(async () => { throw new ApiError('Something went wrong.', 500); }, toast, go);
     expect(toast).toHaveBeenCalledWith('Something went wrong.');
     expect(go).not.toHaveBeenCalled();
+  });
+});
+
+describe('upload', () => {
+  it('posts the file as the form field "file" and gives the error body to ApiError', async () => {
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      expect((init.body as FormData).get('file')).toBeInstanceOf(File);
+      return new Response(JSON.stringify({ error: 'The file has errors.', errors: ['a: b'] }), { status: 422 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(upload('/api/profile/yaml', new File(['x'], 'claims.yml'))).rejects.toMatchObject({ status: 422, data: { errors: ['a: b'] } });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
