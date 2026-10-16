@@ -36,6 +36,11 @@ import * as refresh from '@/app/api/jobs/refresh/route';
 import * as outreach from '@/app/api/outreach/route';
 import * as outreachEvent from '@/app/api/outreach/[id]/route';
 import * as profileImport from '@/app/api/profile/import/route';
+import * as profileDrafts from '@/app/api/profile/drafts/route';
+import * as draftsAccept from '@/app/api/profile/drafts/accept/route';
+import * as draftsReject from '@/app/api/profile/drafts/reject/route';
+import * as draftOne from '@/app/api/profile/drafts/[id]/route';
+import * as draftApprove from '@/app/api/profile/drafts/[id]/approve/route';
 import * as resumeFile from '@/app/api/resume/[id]/route';
 import * as stateRoute from '@/app/api/state/route';
 import * as password from '@/app/api/account/password/route';
@@ -75,6 +80,11 @@ describe('every route refuses a request without a session', () => {
     ['POST /api/outreach', outreach.POST as Handler],
     ['PATCH /api/outreach/[id]', outreachEvent.PATCH as Handler, { id: 'x' }],
     ['POST /api/profile/import', profileImport.POST as Handler],
+    ['GET /api/profile/drafts', profileDrafts.GET as Handler],
+    ['POST /api/profile/drafts/accept', draftsAccept.POST as Handler],
+    ['POST /api/profile/drafts/reject', draftsReject.POST as Handler],
+    ['PUT /api/profile/drafts/[id]', draftOne.PUT as Handler, { id: 'x' }],
+    ['POST /api/profile/drafts/[id]/approve', draftApprove.POST as Handler, { id: 'x' }],
     ['GET /api/resume/[id]', resumeFile.GET as Handler, { id: 'x' }],
     ['GET /api/state', stateRoute.GET as Handler],
     ['POST /api/account/password', password.POST as Handler],
