@@ -62,8 +62,9 @@ export async function clearLimit(key: string): Promise<void> {
   await db.rateLimit.deleteMany({ where: { key } });
 }
 
-/** The first X-Forwarded-For entry. The tunnel sets it. It can be false, so
- *  sign-in also counts tries for each email. */
+/** The last X-Forwarded-For entry: the nearest proxy (the tunnel) adds it.
+ *  A client can write the entries before it, so they are not used. Sign-in
+ *  also counts tries for each email and for all clients together. */
 export function clientIp(headers: Headers): string {
-  return (headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'local';
+  return (headers.get('x-forwarded-for') ?? '').split(',').at(-1)!.trim() || 'local';
 }

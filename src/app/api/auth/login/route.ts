@@ -13,10 +13,13 @@ export const POST = handle(async (req) => {
   const email = normEmail(body.email);
   const password = typeof body.password === 'string' ? body.password : '';
 
+  // Each try runs one argon2 check (19 MiB, about 0.2 s on the Pi). The limit
+  // for all clients together stops a flood of new IP addresses and emails.
+  const all = await hitLimit('login:all', 100, FIFTEEN_MINUTES);
   const byIp = await hitLimit(`login:ip:${clientIp(req.headers)}`, 10, FIFTEEN_MINUTES);
   const byEmail = await hitLimit(`login:email:${email}`, 10, FIFTEEN_MINUTES);
-  if (!byIp.ok || !byEmail.ok) {
-    const mins = Math.max(1, Math.ceil(Math.max(byIp.retryAfterSec, byEmail.retryAfterSec) / 60));
+  if (!all.ok || !byIp.ok || !byEmail.ok) {
+    const mins = Math.max(1, Math.ceil(Math.max(all.retryAfterSec, byIp.retryAfterSec, byEmail.retryAfterSec) / 60));
     throw new HttpError(429, `Too many tries. Try again in ${mins} minute${mins === 1 ? '' : 's'}.`);
   }
 

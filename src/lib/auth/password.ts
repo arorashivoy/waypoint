@@ -14,12 +14,34 @@ const OPTIONS = { memoryCost: 19456, timeCost: 2, parallelism: 1 };
 export const MIN_PASSWORD = 12;
 export const MAX_PASSWORD = 256;
 
-export const hashPassword = (pw: string) => hash(pw, OPTIONS);
+/**
+ * At most 2 hashes or checks run at the same time. Each one holds 19 MiB and
+ * a libuv thread, so a flood of sign-in tries must wait here and not fill
+ * the thread pool. Calls start in the order they arrive.
+ */
+const MAX_PARALLEL = 2;
+let running = 0;
+const waiting: (() => void)[] = [];
+
+async function gated<T>(fn: () => Promise<T>): Promise<T> {
+  if (running >= MAX_PARALLEL) await new Promise<void>((resolve) => waiting.push(resolve));
+  else running++;
+  try {
+    return await fn();
+  } finally {
+    // Give the slot to the next caller, or free it.
+    const next = waiting.shift();
+    if (next) next();
+    else running--;
+  }
+}
+
+export const hashPassword = (pw: string) => gated(() => hash(pw, OPTIONS));
 
 /** False for a wrong password and for a stored value that is not a hash. */
 export async function verifyPassword(stored: string, pw: string): Promise<boolean> {
   try {
-    return await verify(stored, pw);
+    return await gated(() => verify(stored, pw));
   } catch {
     return false;
   }

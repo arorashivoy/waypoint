@@ -1,10 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
+
+// All test files share one database. A test that fills the real "login:all"
+// row would refuse the sign-in tests of other files, so this file sends that
+// key to its own row and records the max and the window the route asks for.
+const globalLimit = vi.hoisted(() => ({ key: `login:all:test-${Math.random().toString(36).slice(2)}`, calls: [] as [number, number][] }));
+vi.mock('@/lib/auth/rate-limit', async (orig) => {
+  const real = await orig<typeof import('@/lib/auth/rate-limit')>();
+  return {
+    ...real,
+    hitLimit: (key: string, max: number, windowMs: number, now?: Date) => {
+      if (key !== 'login:all') return real.hitLimit(key, max, windowMs, now);
+      globalLimit.calls.push([max, windowMs]);
+      return real.hitLimit(globalLimit.key, max, windowMs, now);
+    },
+  };
+});
 import { db } from '@/lib/db';
 import { POST as login } from '@/app/api/auth/login/route';
 import { POST as signout } from '@/app/api/auth/signout/route';
 import { GET as state } from '@/app/api/state/route';
 import { SESSION_COOKIE } from '@/lib/auth/cookie-name';
+import { FIFTEEN_MINUTES, hitLimit } from '@/lib/auth/rate-limit';
 import { cookieFrom, ctx, makeUser, request, TEST_PASSWORD } from './helpers/http';
 
 const ip = () => `198.51.100.${Math.floor(Math.random() * 250)}-${randomBytes(3).toString('hex')}`;
@@ -72,6 +89,21 @@ describe('POST /api/auth/login', () => {
     for (let i = 0; i < 10; i++) await tryLogin(`nobody-${i}@test.local`, 'wrong password 1234', from);
     const { user } = await makeUser();
     expect((await tryLogin(user.email, TEST_PASSWORD, from)).status).toBe(429);
+  });
+
+  it('allows 100 tries from all clients together in 15 minutes', async () => {
+    const { user } = await makeUser();
+    globalLimit.key = `login:all:test-${randomBytes(6).toString('hex')}`;
+    // 99 tries from other clients, then one real sign-in is the 100th and passes.
+    for (let i = 0; i < 99; i++) await hitLimit('login:all', 100, FIFTEEN_MINUTES);
+    globalLimit.calls.length = 0;
+    expect((await tryLogin(user.email, TEST_PASSWORD)).status).toBe(200);
+    // The 101st try is refused, although its IP address and its email are new.
+    const res = await tryLogin(`nobody-${randomBytes(4).toString('hex')}@test.local`, TEST_PASSWORD);
+    expect(res.status).toBe(429);
+    expect((await res.json()).error).toMatch(/Try again in \d+ minute/);
+    expect(globalLimit.calls).toEqual([[100, FIFTEEN_MINUTES], [100, FIFTEEN_MINUTES]]);
+    globalLimit.key = `login:all:test-${randomBytes(6).toString('hex')}`;
   });
 
   it('refuses a body that is not JSON', async () => {

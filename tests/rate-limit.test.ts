@@ -38,8 +38,15 @@ describe('hitLimit', () => {
 });
 
 describe('clientIp', () => {
-  it('takes the first X-Forwarded-For entry', () => {
-    expect(clientIp(new Headers({ 'x-forwarded-for': '203.0.113.9, 10.0.0.1' }))).toBe('203.0.113.9');
+  it('takes the last X-Forwarded-For entry, which the nearest proxy added', () => {
+    expect(clientIp(new Headers({ 'x-forwarded-for': '203.0.113.9, 10.0.0.1' }))).toBe('10.0.0.1');
+    expect(clientIp(new Headers({ 'x-forwarded-for': 'forged-by-client,  198.51.100.7 ' }))).toBe('198.51.100.7');
+    expect(clientIp(new Headers({ 'x-forwarded-for': '203.0.113.9' }))).toBe('203.0.113.9');
+  });
+
+  it('falls back to "local" when the header is missing or empty', () => {
     expect(clientIp(new Headers())).toBe('local');
+    expect(clientIp(new Headers({ 'x-forwarded-for': '' }))).toBe('local');
+    expect(clientIp(new Headers({ 'x-forwarded-for': ' , ' }))).toBe('local');
   });
 });
