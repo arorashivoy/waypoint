@@ -11,6 +11,17 @@ vi.mock('@/lib/cv', async (orig) => ({
   buildCv: vi.fn(async () => ({ path: fileURLToPath(import.meta.url), tailored: false })),
 }));
 
+// refineCv reads claims.yml and the LaTeX source before the Claude call. Stub both, so the test does not need data/profile/ or .env.
+vi.mock('@/lib/user', async (orig) => ({
+  ...(await orig<typeof import('@/lib/user')>()),
+  claimsFor: vi.fn(async () => ({}) as never),
+}));
+vi.mock('@/lib/resume', async (orig) => ({
+  ...(await orig<typeof import('@/lib/resume')>()),
+  resumeMenu: vi.fn(() => ({ projects: [], bullets: [], skills: [] }) as never),
+  buildResume: vi.fn(async () => ({ path: null, tailored: false, order: [], experience: [], skillsLead: [] }) as never),
+}));
+
 import { fileURLToPath } from 'node:url';
 import { db } from '@/lib/db';
 import { ctx, makeUser, request } from './helpers/http';
