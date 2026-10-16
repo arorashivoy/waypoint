@@ -12,6 +12,7 @@ export type SecretKind = 'anthropic' | 'github' | 'gdrive';
 export type Sealed = { iv: string; tag: string; data: string; keyVersion: number };
 
 const KEY_VERSION = 1;
+const TAG_BYTES = 16;
 
 const masterKey = () => Buffer.from(env().WAYPOINT_SECRET_KEY, 'base64');
 
@@ -30,9 +31,12 @@ export function seal(plain: string, aad: string, key: Buffer = masterKey()): Sea
 
 export function unseal(sealed: Sealed, aad: string, key: Buffer = masterKey()): string {
   if (sealed.keyVersion !== KEY_VERSION) throw new Error(`Unknown secret key version ${sealed.keyVersion}.`);
-  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(sealed.iv, 'base64'));
+  // GCM accepts a short tag, and a 4-byte tag is easy to guess. Only the full 16 bytes count.
+  const tag = Buffer.from(sealed.tag, 'base64');
+  if (tag.length !== TAG_BYTES) throw new Error(`The secret has a ${tag.length}-byte tag. It must have ${TAG_BYTES} bytes.`);
+  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(sealed.iv, 'base64'), { authTagLength: TAG_BYTES });
   decipher.setAAD(Buffer.from(aad));
-  decipher.setAuthTag(Buffer.from(sealed.tag, 'base64'));
+  decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(Buffer.from(sealed.data, 'base64')), decipher.final()]).toString('utf8');
 }
 

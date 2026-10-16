@@ -26,6 +26,12 @@ describe('seal and unseal', () => {
     expect(() => unseal({ ...s, tag: tag.toString('base64') }, 'u1:anthropic', key)).toThrow();
     expect(() => unseal(s, 'u1:anthropic', randomBytes(32))).toThrow();
   });
+
+  it('refuses a tag that is not 16 bytes', () => {
+    const s = seal('value', 'u1:anthropic', key);
+    const short = Buffer.from(s.tag, 'base64').subarray(0, 4).toString('base64');
+    expect(() => unseal({ ...s, tag: short }, 'u1:anthropic', key)).toThrow();
+  });
 });
 
 describe('user secrets', () => {
