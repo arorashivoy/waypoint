@@ -247,6 +247,24 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 .settings-body { flex-grow: 1; min-height: 0; overflow-y: auto; padding: 24px 36px 48px; }
 
+/* ---------- profile ---------- */
+
+.tabs { display: flex; gap: 4px; padding: 0 36px; border-bottom: 1px solid var(--line); overflow-x: auto; flex-shrink: 0; }
+.tab-btn {
+  height: 44px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent;
+  background: transparent; font-size: 15px; color: var(--muted-2); white-space: nowrap;
+  display: flex; align-items: center; gap: 6px;
+}
+.tab-btn[aria-selected='true'] { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+.profile-body { flex-grow: 1; min-height: 0; overflow-y: auto; padding: 24px 36px 48px; }
+.form-row { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hint { font-size: 13px; color: var(--muted); }
+.err { margin: 0; padding-left: 18px; font-size: 14px; color: #B91C1C; }
+.evidence-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 2fr) auto auto; gap: 8px; align-items: center; }
+.surface-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px 12px; }
+.merge { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+select:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+
 /* ---------- phone ---------- */
 
 .tabbar { display: none; }
@@ -309,6 +327,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .tab .tab-label { position: relative; }
   .tab .tab-label .badge { position: absolute; top: -9px; right: -6px; }
   .settings-body { overflow: visible; padding: 4px var(--gutter) 28px; }
+  .tabs { padding: 0 var(--gutter); }
+  .profile-body { overflow: visible; padding: 12px var(--gutter) 28px; }
+  .evidence-row { grid-template-columns: minmax(0, 1fr); }
+  .merge { grid-template-columns: minmax(0, 1fr); }
 
   .sheet {
     position: fixed; inset: 0; z-index: 30;

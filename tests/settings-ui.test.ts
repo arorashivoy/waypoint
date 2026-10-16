@@ -15,6 +15,17 @@ describe('globals.css: .settings-body', () => {
   });
 });
 
+describe('globals.css: .profile-body', () => {
+  it('puts the base rule before the phone rule, so the phone rule wins', () => {
+    const css = readFileSync('src/app/globals.css', 'utf8');
+    const base = css.search(/^\.profile-body\s*\{/m);
+    const phoneBlock = css.indexOf('@media (max-width: 1023px)');
+    expect(base).toBeGreaterThan(-1);
+    expect(base).toBeLessThan(phoneBlock);
+    expect(css.indexOf('.profile-body', phoneBlock)).toBeGreaterThan(phoneBlock);
+  });
+});
+
 describe('leaveSession (sign out from Settings)', () => {
   it('goes to /login when the request works, and shows no message', async () => {
     const go = vi.fn();
