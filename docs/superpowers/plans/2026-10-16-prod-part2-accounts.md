@@ -62,7 +62,7 @@
 | `src/lib/claude/usage.ts`, `credential.ts`, `failures.ts` | Credential for each user, cap, usage rows, banners (Task 6) |
 | `src/lib/auth/invites.ts`, `src/app/api/invites/`, `src/app/api/admin/` | Invites, reset links, user admin (Task 7) |
 | `src/app/api/account/` | Password, sessions, own Claude key (Task 8) |
-| `src/lib/claims.ts` (`claimsFor`), `analysis.ts`, `queue.ts`, `cv.ts` | Data isolation in the libraries (Task 9) |
+| `src/lib/user.ts` (`claimsFor`, `isAdmin`), `analysis.ts`, `queue.ts`, `cv.ts` | Data isolation in the libraries (Task 9) |
 | `tests/isolation.test.ts` | Two users for each API route (Task 10) |
 | `src/components/SettingsScreen.tsx`, `TokenForm.tsx`, invite and reset pages | Settings and link pages (Task 11) |
 | `src/app/api/health/route.ts`, `scripts/remote.sh`, docs | Health check, tunnel without basic auth, docs (Task 12) |
