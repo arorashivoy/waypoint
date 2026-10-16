@@ -31,6 +31,12 @@ export type Repo = {
 
 export const githubToken = (userId: string) => readSecret(userId, 'github');
 
+/** A repo path is safe only when the owner and the name pass the checks. */
+function repoPath(repo: Pick<Repo, 'owner' | 'name'>, tail: string): string {
+  if (!GITHUB_USER.test(repo.owner) || !REPO_NAME.test(repo.name) || repo.name === '.' || repo.name === '..') throw new HttpError(400, 'This is not a GitHub repo name.');
+  return `/repos/${repo.owner}/${repo.name}/${tail}`;
+}
+
 function fail(status: number): never {
   if (status === 401) throw new HttpError(400, 'GitHub refused the token. Check it in Settings → Integrations.');
   if (status === 403 || status === 429) throw new HttpError(429, 'GitHub limits the requests now. Try again later, or add a token in Settings → Integrations.');
@@ -112,14 +118,14 @@ export async function listRepos(userId: string, username: string): Promise<Repo[
 
 /** The first 4 KB of the README, or '' when there is none. */
 export async function readme(userId: string, repo: Pick<Repo, 'owner' | 'name'>, token: string | null): Promise<string> {
-  const r = await get(userId, `/repos/${repo.owner}/${repo.name}/readme`, token, 'application/vnd.github.raw');
+  const r = await get(userId, repoPath(repo, 'readme'), token, 'application/vnd.github.raw');
   if (r.status === 404) return '';
   if (r.status !== 200) fail(r.status);
   return Buffer.from(r.body, 'utf8').subarray(0, README_BYTES).toString('utf8').replace(/�+$/, '');
 }
 
 export async function languages(userId: string, repo: Pick<Repo, 'owner' | 'name'>, token: string | null): Promise<string[]> {
-  const r = await get(userId, `/repos/${repo.owner}/${repo.name}/languages`, token);
+  const r = await get(userId, repoPath(repo, 'languages'), token);
   if (r.status === 404) return [];
   if (r.status !== 200) fail(r.status);
   const v = json(r.body);

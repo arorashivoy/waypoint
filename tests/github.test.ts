@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { saveSecret } from '@/lib/secrets';
-import { listRepos, readme } from '@/lib/github';
+import { languages, listRepos, readme } from '@/lib/github';
 import { GET as getToken, PUT as putToken, DELETE as deleteToken } from '@/app/api/account/github/route';
 import { ctx, makeUser, request } from './helpers/http';
 
@@ -82,6 +82,19 @@ describe('github client', () => {
     const repo = { owner: 'octo', name: 'parser' } as never;
     expect((await readme(user.id, repo, null)).length).toBe(4096);
     expect(await readme(user.id, { owner: 'octo', name: 'none' } as never, null)).toBe('');
+  });
+});
+
+describe('github repo paths', () => {
+  it('refuses a bad repo name before any request', async () => {
+    const { user } = await makeUser();
+    const calls = stubGithub({});
+    for (const name of ['..', '.', 'a/b', '']) {
+      await expect(readme(user.id, { owner: 'octo', name }, null)).rejects.toMatchObject({ status: 400 });
+      await expect(languages(user.id, { owner: 'octo', name }, null)).rejects.toMatchObject({ status: 400 });
+    }
+    await expect(readme(user.id, { owner: '../x', name: 'ok' }, null)).rejects.toMatchObject({ status: 400 });
+    expect(calls).toEqual([]);
   });
 });
 
