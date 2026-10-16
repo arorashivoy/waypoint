@@ -22,6 +22,8 @@ vi.mock('@/lib/resume', async (orig) => ({
   buildResume: vi.fn(async () => ({ path: null, tailored: false, order: [], experience: [], skillsLead: [] }) as never),
 }));
 
+import { readdirSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db } from '@/lib/db';
 import { ctx, formRequest, makeUser, request } from './helpers/http';
@@ -87,6 +89,34 @@ describe('every route refuses a request without a session', () => {
     ['PATCH /api/admin/users/[id]', adminUser.PATCH as Handler, { id: 'x' }],
     ['POST /api/admin/users/[id]/reset', adminReset.POST as Handler, { id: 'x' }],
   ];
+
+  // These answer without a session on purpose.
+  const PUBLIC = ['/api/auth/login', '/api/auth/signout', '/api/invites/[token]', '/api/health'];
+  const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+
+  /** Every route.ts under src/app/api, as its URL path ("/api/jobs/[id]"). */
+  function routeFiles(dir = 'src/app/api'): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((d) => {
+      const full = join(dir, d.name);
+      if (d.isDirectory()) return routeFiles(full);
+      return d.name === 'route.ts' ? [full] : [];
+    });
+  }
+  const urlOf = (file: string) => '/' + relative('src/app', file).split(sep).slice(0, -1).join('/');
+
+  it('lists every method of every route, or names the route as public', async () => {
+    const files = routeFiles();
+    expect(files.length).toBeGreaterThan(20);
+    const listed = new Set(routes.map(([name]) => name));
+    const missing: string[] = [];
+    for (const file of files) {
+      const url = urlOf(file);
+      if (PUBLIC.includes(url)) continue;
+      const mod: Record<string, unknown> = await import(/* @vite-ignore */ fileURLToPath(new URL(`../${file}`, import.meta.url)));
+      for (const m of METHODS) if (typeof mod[m] === 'function' && !listed.has(`${m} ${url}`)) missing.push(`${m} ${url}`);
+    }
+    expect(missing).toEqual([]);
+  });
 
   for (const [name, handler, params] of routes) {
     it(name, async () => {
