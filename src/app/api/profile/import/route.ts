@@ -2,16 +2,16 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { handle, HttpError } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
-import { checkExportUpload, checkUploadLength, parseExport } from '@/lib/linkedin-import';
+import { createDrafts } from '@/lib/profile/drafts';
+import { checkExportUpload, checkUploadLength, linkedinDrafts, parseExport } from '@/lib/linkedin-import';
 
 export const maxDuration = 300;
 
 /**
- * An upload refreshes the contacts of the user. A re-upload shows a contact
- * who left a company, or a new 1st-degree connection. Until the drafts of
- * Task 9, the positions, educations and skills of an archive are not stored.
- * Contacts never need a new analysis, because routes are ranked from live
- * contacts on every view.
+ * An archive makes drafts of the positions, education, projects, skills and
+ * headline, and it refreshes the contacts. A bare Connections.csv refreshes
+ * the contacts only. The import never changes the profile and never deletes
+ * job analyses, because routes are ranked from live contacts on every view.
  */
 export const POST = handle(async (req) => {
   const user = await requireUser(req);
@@ -32,17 +32,26 @@ export const POST = handle(async (req) => {
 
   const userId = user.id;
 
-  // Until the drafts of Task 9, an archive refreshes the contacts only.
-  if (!parsed.contacts.length) {
-    // Zero rows means the wrong file or an export requested without
-    // connections; replacing with that would silently erase every route.
-    return NextResponse.json({ error: 'No connections found in that file. Upload Connections.csv or the full LinkedIn archive.' }, { status: 400 });
+  const drafts = parsed.archive ? linkedinDrafts(parsed, user.name) : [];
+  if (!parsed.contacts.length && !drafts.length) {
+    // Zero rows means the wrong file. An empty file must not erase the contacts.
+    return NextResponse.json({ error: 'No connections or profile data found in that file. Upload Connections.csv or the full LinkedIn archive.' }, { status: 400 });
   }
-  const counts = { contacts: parsed.contacts.length };
-  await db.$transaction([
-    db.contact.deleteMany({ where: { userId } }),
-    db.contact.createMany({ data: parsed.contacts.map((c) => ({ ...c, userId })) }),
-    db.profileImport.create({ data: { userId, filename: file.name, counts: JSON.stringify(counts) } }),
-  ]);
-  return NextResponse.json({ ok: true, scope: 'contacts', counts });
+
+  // Contacts are not profile claims, so they go in directly (spec 3.3). An
+  // archive without Connections.csv keeps the contacts that exist, and keeps
+  // the last count of them.
+  const prev = await db.profileImport.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } });
+  const profileCounts = Object.fromEntries(Object.entries(parsed.counts).filter(([k]) => k !== 'contacts'));
+  const counts: Record<string, number> = { ...(prev ? JSON.parse(prev.counts) : {}), ...(parsed.archive ? profileCounts : {}) };
+  if (parsed.contacts.length) counts.contacts = parsed.contacts.length;
+  const record = await db.$transaction(async (tx) => {
+    if (parsed.contacts.length) {
+      await tx.contact.deleteMany({ where: { userId } });
+      await tx.contact.createMany({ data: parsed.contacts.map((c) => ({ ...c, userId })) });
+    }
+    return tx.profileImport.create({ data: { userId, filename: file.name.slice(0, 200), counts: JSON.stringify(counts) } });
+  });
+  const made = drafts.length ? await createDrafts(userId, { batchId: record.id, source: 'linkedin', items: drafts }) : 0;
+  return NextResponse.json({ ok: true, scope: parsed.archive ? 'full' : 'contacts', counts, drafts: made });
 });

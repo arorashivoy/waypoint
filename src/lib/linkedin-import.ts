@@ -2,6 +2,8 @@ import AdmZip from 'adm-zip';
 import Papa from 'papaparse';
 import { HttpError } from './auth/http';
 import { checkUploadLength as checkLength } from './uploads';
+import { slugify } from './profile/doc';
+import type { NewDraft } from './profile/drafts';
 
 export const MAX_EXPORT_BYTES = 50 * 1024 * 1024;
 /** The largest total size of the CSV files in an archive, after unpacking. */
@@ -148,4 +150,46 @@ export function parseExport(buffer: Buffer): ImportedProfile {
     },
     archive,
   };
+}
+
+const clip = (s: string | null | undefined, max: number) => (s ? s.trim().slice(0, max) || null : null);
+const ym = (d: Date | null) => (d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : null);
+
+/**
+ * The profile part of an export as drafts in the claims.yml shape (spec 3.3).
+ * A position without a start date stays a draft: checkDoc refuses it until the
+ * user adds the date. A URL that is not http(s) is dropped.
+ */
+export function linkedinDrafts(p: ImportedProfile, name: string): NewDraft[] {
+  const taken = { position: new Set<string>(), education: new Set<string>(), project: new Set<string>(), claim: new Set<string>() };
+  const out: NewDraft[] = [];
+  if (p.headline.trim()) out.push({ type: 'meta', data: { name: name.slice(0, 400), headline: p.headline.trim().slice(0, 400) } });
+  for (const x of p.positions.slice(0, 100)) {
+    out.push({
+      type: 'position',
+      data: {
+        id: slugify(`${x.company} ${x.title}`, taken.position, 'position'),
+        title: x.title.slice(0, 400),
+        company: x.company.slice(0, 400),
+        location: clip(x.location, 4000),
+        start: ym(x.startedAt),
+        end: ym(x.endedAt),
+        summary: clip(x.summary, 4000),
+        bullets: [],
+      },
+    });
+  }
+  for (const x of p.educations.slice(0, 50)) {
+    out.push({ type: 'education', data: { id: slugify(x.school, taken.education, 'school'), school: x.school.slice(0, 400), degree: clip(x.degree, 4000), field: clip(x.field, 4000), years: clip(x.years, 4000), aliases: [] } });
+  }
+  for (const x of p.projects.slice(0, 200)) {
+    out.push({
+      type: 'project',
+      data: { id: slugify(x.title, taken.project, 'project'), title: x.title.slice(0, 400), org: null, description: clip(x.description, 4000), url: x.url && /^https?:\/\/\S+$/i.test(x.url) ? x.url.slice(0, 4000) : null, source: 'linkedin' },
+    });
+  }
+  for (const s of p.skills.slice(0, 300)) {
+    out.push({ type: 'claim', data: { slug: slugify(s, taken.claim, 'skill'), kind: 'skill', label: s.slice(0, 400), aliases: [], links: [], evidence: [], mentions: [{ surface: 'linkedin-skills', listed: true }] } });
+  }
+  return out;
 }
