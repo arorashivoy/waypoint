@@ -35,6 +35,12 @@ import * as refine from '@/app/api/jobs/[id]/resume/refine/route';
 import * as refresh from '@/app/api/jobs/refresh/route';
 import * as outreach from '@/app/api/outreach/route';
 import * as outreachEvent from '@/app/api/outreach/[id]/route';
+import * as profileRoute from '@/app/api/profile/route';
+import * as profileMeta from '@/app/api/profile/meta/route';
+import * as itemsAdd from '@/app/api/profile/items/[kind]/route';
+import * as itemOne from '@/app/api/profile/items/[kind]/[key]/route';
+import * as revisions from '@/app/api/profile/revisions/route';
+import * as revisionRestore from '@/app/api/profile/revisions/[id]/restore/route';
 import * as profileImport from '@/app/api/profile/import/route';
 import * as profileDrafts from '@/app/api/profile/drafts/route';
 import * as draftsAccept from '@/app/api/profile/drafts/accept/route';
@@ -79,6 +85,13 @@ describe('every route refuses a request without a session', () => {
     ['POST /api/jobs/refresh', refresh.POST as Handler],
     ['POST /api/outreach', outreach.POST as Handler],
     ['PATCH /api/outreach/[id]', outreachEvent.PATCH as Handler, { id: 'x' }],
+    ['GET /api/profile', profileRoute.GET as Handler],
+    ['PUT /api/profile/meta', profileMeta.PUT as Handler],
+    ['POST /api/profile/items/[kind]', itemsAdd.POST as Handler, { kind: 'project' }],
+    ['PUT /api/profile/items/[kind]/[key]', itemOne.PUT as Handler, { kind: 'project', key: 'x' }],
+    ['DELETE /api/profile/items/[kind]/[key]', itemOne.DELETE as Handler, { kind: 'project', key: 'x' }],
+    ['GET /api/profile/revisions', revisions.GET as Handler],
+    ['POST /api/profile/revisions/[id]/restore', revisionRestore.POST as Handler, { id: 'x' }],
     ['POST /api/profile/import', profileImport.POST as Handler],
     ['GET /api/profile/drafts', profileDrafts.GET as Handler],
     ['POST /api/profile/drafts/accept', draftsAccept.POST as Handler],
