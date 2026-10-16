@@ -164,6 +164,24 @@ describe('LaTeX template', () => {
 });
 
 describe('pdftotext paths', () => {
+  it.skipIf(!findOnPath('pdftotext'))('accepts -bbox-layout with paths inside a temp work folder (the check passes, the run fails)', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
+    try {
+      const r = await runProgram('pdftotext', ['-bbox-layout', `${d}/missing.pdf`, `${d}/o.html`], T(d));
+      expect(r.code).not.toBe(0);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+  it('refuses -bbox-layout with /etc/passwd in, and any other flag', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
+    try {
+      await expect(runProgram('pdftotext', ['-bbox-layout', '/etc/passwd', `${d}/o.html`], T(d))).rejects.toThrow(/pdftotext/);
+      await expect(runProgram('pdftotext', ['-htmlmeta', `${d}/a.pdf`, `${d}/o.html`], T(d))).rejects.toThrow(/pdftotext/);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
   it('refuses /etc/passwd in and a home path out', async () => {
     await expect(
       runProgram('pdftotext', ['-layout', '/etc/passwd', `${homedir()}/out.txt`], T(tmpdir())),

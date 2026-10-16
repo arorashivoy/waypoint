@@ -13,6 +13,8 @@ let dir = '';
 export async function setup(): Promise<void> {
   dir = mkdtempSync(join(tmpdir(), 'waypoint-vitest-'));
   process.env.DATABASE_URL = `file:${join(dir, 'test.db')}`;
+  // User files (résumé uploads) go to the temporary folder too, never data/users.
+  process.env.WAYPOINT_USERS_DIR = join(dir, 'users');
   const client = new PrismaClient({ datasourceUrl: `${process.env.DATABASE_URL}?connection_limit=1` });
   try {
     await applyMigrations(client);

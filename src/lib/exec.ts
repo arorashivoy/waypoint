@@ -116,11 +116,11 @@ function inside(child: string, parent: string): boolean {
 
 function checkPdftotext(args: readonly string[], opts: RunOptions): string | null {
   if (args.length === 1 && args[0] === '-v') return null;
-  if (args.length === 3 && args[0] === '-layout') {
+  if (args.length === 3 && (args[0] === '-layout' || args[0] === '-bbox-layout')) {
     const cwd = resolve(opts.cwd);
     if (inside(cwd, resolve(tmpdir())) && inside(resolve(args[1]), cwd) && inside(resolve(args[2]), cwd)) return null;
   }
-  return 'pdftotext takes only -v, or -layout <in> <out> with both files inside a work folder in the temp folder';
+  return 'pdftotext takes only -v, or -layout or -bbox-layout <in> <out> with both files inside a work folder in the temp folder';
 }
 
 const CHECKS: Record<Program, (args: readonly string[], opts: RunOptions) => string | null> = {

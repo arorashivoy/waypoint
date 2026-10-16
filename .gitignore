@@ -12,6 +12,7 @@ tmp/
 **/.DS_Store
 .claude/**
 data/resumes
+data/users/
 *.bak-*
 *.snapshot
 GITHUB_REMEDIATION.md
