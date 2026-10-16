@@ -142,9 +142,12 @@ describe('user B cannot reach the rows of user A', () => {
 
   it("POST /api/jobs/[id]/resume/refine does not touch A's chat", async () => {
     const { job, app } = await seedA();
-    const b = await makeUser();
+    // An admin passes the isAdmin gate in refineCv, so the call goes as far as it can without Claude.
+    const b = await makeUser('admin');
     const res = await refine.POST(request(`/api/jobs/${job.id}/resume/refine`, { method: 'POST', cookie: b.cookie, body: { message: 'change it' } }), ctx({ id: job.id }));
-    expect(res.status).toBeLessThan(500);
+    // B reaches the Claude call, which has no credential (stubbed), so it stops there before any write.
+    expect(await res.json()).toEqual({ error: 'Add an API key in Settings to use Claude.' });
+    expect(await db.application.count({ where: { userId: b.user.id, jobId: job.id } })).toBe(1);
     const after = await db.application.findUniqueOrThrow({ where: { id: app.id } });
     expect(after.cvChat).toContain('secret chat of A');
     expect(after.cvChat).not.toContain('change it');
