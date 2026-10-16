@@ -47,7 +47,7 @@ export default function ImportsTab({ doc, version, state, changed, setToast, onC
           <div><FileButton label="Upload a résumé" accept=".pdf,.tex,application/pdf" run={async (f) => {
             try {
               const r = await upload<{ drafts: number; dropped: number; hidden: number }>('/api/profile/resume-import', f);
-              setToast(`Made ${r.drafts} drafts.${r.dropped ? ` Dropped ${r.dropped} items whose quote is not in the file.` : ''}${r.hidden ? ' The file has hidden text: see the warnings.' : ''}`);
+              setToast(`Made ${r.drafts} ${r.drafts === 1 ? 'draft' : 'drafts'}.${r.dropped ? ` Dropped ${r.dropped} items whose quote is not in the file.` : ''}${r.hidden ? ' The file has hidden text: see the warnings.' : ''}`);
               await imported();
             } catch (e) { fail(e); }
           }} /></div>

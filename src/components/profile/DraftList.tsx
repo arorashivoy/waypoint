@@ -34,6 +34,7 @@ function Facts({ value }: { value: any }) {
 export default function DraftList({ doc, changed, setToast, onCount }: { doc: ClaimsDoc; changed: () => Promise<void>; setToast: (s: string) => void; onCount: (n: number) => void }) {
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
   const load = useCallback(async () => {
@@ -52,6 +53,8 @@ export default function DraftList({ doc, changed, setToast, onCount }: { doc: Cl
   }, [drafts]);
 
   const act = async (batchId: string, fn: () => Promise<unknown>, done: string) => {
+    if (busy) return;
+    setBusy(true);
     setErrors((e) => ({ ...e, [batchId]: [] }));
     try {
       await fn();
@@ -60,6 +63,8 @@ export default function DraftList({ doc, changed, setToast, onCount }: { doc: Cl
       await changed();
     } catch (e) {
       setErrors((x) => ({ ...x, [batchId]: e instanceof ApiError && Array.isArray(e.data.errors) ? e.data.errors : [(e as Error).message] }));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -77,11 +82,11 @@ export default function DraftList({ doc, changed, setToast, onCount }: { doc: Cl
                 {SOURCE[list[0].source] ?? list[0].source} · {new Date(list[0].createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {list.length} draft{list.length === 1 ? '' : 's'}
               </h3>
               {list[0].type !== 'profile' && (
-                <button className="btn btn-dark" disabled={!ready.length} onClick={() => act(batchId, () => post('/api/profile/drafts/accept', { ids: ready }), `Accepted ${ready.length} drafts.`)}>
+                <button className="btn btn-dark" disabled={busy || !ready.length} onClick={() => act(batchId, () => post('/api/profile/drafts/accept', { ids: ready }), `Accepted ${ready.length} ${ready.length === 1 ? 'draft' : 'drafts'}.`)}>
                   Accept {ready.length === list.length ? 'all' : `${ready.length} without warnings`}
                 </button>
               )}
-              <button className="btn" onClick={() => act(batchId, () => post('/api/profile/drafts/reject', { ids: list.map((d) => d.id) }), 'Rejected.')}>Reject all</button>
+              <button className="btn" disabled={busy} onClick={() => act(batchId, () => post('/api/profile/drafts/reject', { ids: list.map((d) => d.id) }), 'Rejected.')}>Reject all</button>
             </div>
             {errors[batchId]?.length ? <ul className="err" role="alert">{errors[batchId].map((e) => <li key={e}>{e}</li>)}</ul> : null}
 
@@ -104,7 +109,7 @@ export default function DraftList({ doc, changed, setToast, onCount }: { doc: Cl
                     <div className="stack" style={{ gap: 6, padding: 10, borderRadius: 8, background: '#FEF3C7', color: '#78350F' }} role="alert">
                       {d.warnings.map((w) => <span key={w} style={{ fontSize: 14 }}>{w}</span>)}
                       {!d.warningsApproved && (
-                        <div><button className="btn" onClick={() => act(batchId, () => post(`/api/profile/drafts/${d.id}/approve`), 'Warning approved.')}>I checked it</button></div>
+                        <div><button className="btn" disabled={busy} onClick={() => act(batchId, () => post(`/api/profile/drafts/${d.id}/approve`), 'Warning approved.')}>I checked it</button></div>
                       )}
                     </div>
                   )}
@@ -122,9 +127,9 @@ export default function DraftList({ doc, changed, setToast, onCount }: { doc: Cl
                     <Facts value={d.data} />
                   )}
                   <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                    <button className="btn btn-dark" disabled={blocked(d)} onClick={() => act(batchId, () => post('/api/profile/drafts/accept', { ids: [d.id] }), 'Accepted.')}>{d.type === 'profile' ? 'Replace my profile' : 'Accept'}</button>
+                    <button className="btn btn-dark" disabled={busy || blocked(d)} onClick={() => act(batchId, () => post('/api/profile/drafts/accept', { ids: [d.id] }), 'Accepted.')}>{d.type === 'profile' ? 'Replace my profile' : 'Accept'}</button>
                     {isItem(d.type) && <button className="btn" onClick={() => setEditing(d.id)}>Edit</button>}
-                    <button className="btn" onClick={() => act(batchId, () => post('/api/profile/drafts/reject', { ids: [d.id] }), 'Rejected.')}>Reject</button>
+                    <button className="btn" disabled={busy} onClick={() => act(batchId, () => post('/api/profile/drafts/reject', { ids: [d.id] }), 'Rejected.')}>Reject</button>
                   </div>
                 </div>
               );

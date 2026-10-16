@@ -327,7 +327,9 @@ select:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
   .tab .tab-label { position: relative; }
   .tab .tab-label .badge { position: absolute; top: -9px; right: -6px; }
   .settings-body { overflow: visible; padding: 4px var(--gutter) 28px; }
-  .tabs { padding: 0 var(--gutter); }
+  .tabs { padding: 0 var(--gutter); gap: 0; }
+  .tab-btn { flex: 1 1 auto; justify-content: center; min-width: 0; padding: 0 6px; gap: 4px; font-size: 14px; }
+  .tab-btn .badge { min-width: 18px; height: 18px; border-radius: 9px; font-size: 11px; padding: 0 4px; }
   .profile-body { overflow: visible; padding: 12px var(--gutter) 28px; }
   .evidence-row { grid-template-columns: minmax(0, 1fr); }
   .merge { grid-template-columns: minmax(0, 1fr); }

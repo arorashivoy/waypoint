@@ -30,7 +30,7 @@ export default function GithubSource({ done, setToast }: { done: () => Promise<v
     setBusy(true);
     try {
       const r = await post<{ drafts: number; dropped: number }>('/api/profile/github/import', { username: username.trim(), repos: picked });
-      setToast(`Made ${r.drafts} drafts.${r.dropped ? ` Dropped ${r.dropped} items that had no quote from the repository.` : ''}`);
+      setToast(`Made ${r.drafts} ${r.drafts === 1 ? 'draft' : 'drafts'}.${r.dropped ? ` Dropped ${r.dropped} items that had no quote from the repository.` : ''}`);
       setRepos(null);
       await done();
     } catch (e) {

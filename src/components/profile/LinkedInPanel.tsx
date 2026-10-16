@@ -19,7 +19,7 @@ export default function LinkedInPanel({ state, refresh, setToast }: { state: any
       setToast(
         data.scope === 'contacts'
           ? `Refreshed ${data.counts.contacts} connections. Profile and job analyses left as they were.`
-          : `Made ${data.drafts} drafts and refreshed ${data.counts.contacts ?? 0} connections. Review the drafts in this tab.`,
+          : `Made ${data.drafts} ${data.drafts === 1 ? 'draft' : 'drafts'} and refreshed ${data.counts.contacts ?? 0} connections. Review the drafts in this tab.`,
       );
     } catch (e) {
       setToast((e as Error).message);
