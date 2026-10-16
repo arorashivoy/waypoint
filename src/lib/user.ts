@@ -1,7 +1,5 @@
 import { db } from './db';
-import { inferLevels } from './match';
-import { loadClaims, profileFromClaims, schoolOf, type ClaimsDoc, type ResolvedProfile } from './claims';
-import type { ProfileSummary } from './prompts';
+import { loadClaims, profileFromClaims, type ClaimsDoc, type ResolvedProfile } from './claims';
 
 export async function isAdmin(userId: string): Promise<boolean> {
   const u = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
@@ -20,51 +18,18 @@ export async function claimsFor(userId: string): Promise<ClaimsDoc | null> {
 /**
  * The profile every prompt is built from.
  *
- * `data/profile/claims.yml` wins whenever it is present and valid. It is the
- * only account of him that he wrote and vouched for: it says what is actually
- * evidenced, with a proof sentence per claim, where a LinkedIn export says
- * whatever a 2022 undergraduate happened to list and whatever endorsements
- * accumulated since.
- *
- * The import remains the fallback, so the app works on a fresh checkout with
- * nothing but a LinkedIn archive — and so an invalid claims file degrades to a
- * consistent, known-provenance profile rather than a half-read one. `loadClaims`
- * logs loudly in that case; `npm run check:claims` is the gate that stops it
- * reaching runtime at all.
+ * It comes from the profile tables (Task 4) or, for the admin until then,
+ * from data/profile/claims.yml. There is no LinkedIn fallback, because the
+ * LinkedIn import now makes drafts that the user must accept first.
  */
 export async function profileSummary(userId: string): Promise<ResolvedProfile> {
   const claims = await claimsFor(userId);
   if (claims) return profileFromClaims(claims);
+  const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } });
+  return emptyProfile(user.name);
+}
 
-  const [user, positions, educations, projects, skills] = await Promise.all([
-    db.user.findUniqueOrThrow({ where: { id: userId } }),
-    db.position.findMany({ where: { userId }, orderBy: { startedAt: 'desc' } }),
-    db.education.findMany({ where: { userId } }),
-    db.projectItem.findMany({ where: { userId } }),
-    db.skill.findMany({ where: { userId } }),
-  ]);
-
-  const fmt = (d: Date | null) => (d ? d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'present');
-
-  return {
-    name: user.name,
-    headline: positions[0] ? `${positions[0].title} at ${positions[0].company}` : 'No experience imported yet',
-    positions: positions.map((p) => ({
-      title: p.title,
-      company: p.company,
-      location: p.location,
-      summary: p.summary,
-      years: `${fmt(p.startedAt)} – ${fmt(p.endedAt)}`,
-    })),
-    educations: educations.map((e) => ({ school: e.school, degree: e.degree, field: e.field, years: e.years })),
-    projects: projects.map((p) => ({ title: p.title, org: p.org, description: p.description, tags: p.tags })),
-    skills: skills.map((s) => s.name),
-    levels: inferLevels(positions),
-    currentEmployer: positions[0]?.company || '',
-    schools: educations.map((e) => e.school),
-    // Education.csv can carry a school-leaving certificate beside the degree,
-    // and its rows come in no particular order.
-    school: schoolOf(educations.find((e) => e.degree) || educations[0]),
-    interests: [...new Set(projects.flatMap((p) => (p.tags || '').split(',').map((t) => t.trim()).filter(Boolean)))],
-  };
+/** The profile of a user who has not accepted any profile item yet. */
+export function emptyProfile(name: string): ResolvedProfile {
+  return { name, headline: 'No profile yet', positions: [], educations: [], projects: [], skills: [], levels: [], currentEmployer: '', schools: [], interests: [], school: null };
 }

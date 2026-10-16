@@ -53,6 +53,18 @@ describe('POST /api/profile/import: size checks before the body is read', () => 
     expect(res.status).toBe(200);
   });
 
+  it('refreshes the contacts only when the upload is a full archive', async () => {
+    const { cookie } = await makeUser();
+    const zip = new AdmZip();
+    zip.addFile('Connections.csv', Buffer.from(CONNECTIONS));
+    zip.addFile('Positions.csv', Buffer.from('Company Name,Title\nAcme,Dev\n'));
+    const form = new FormData();
+    form.set('file', new File([new Uint8Array(zip.toBuffer())], 'export.zip'));
+    const res = await importExport(await formRequest('/api/profile/import', form, { cookie }), ctx());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, scope: 'contacts', counts: { contacts: 1 } });
+  });
+
   it('refuses a zip that unpacks to more than 200 MB with 413', async () => {
     const { cookie } = await makeUser();
     const form = new FormData();
