@@ -46,8 +46,7 @@ export const readChat = (app: Application) => parse<ChatTurn[]>(app.cvChat, []);
 
 const postingText = (job: Job) => `${job.role}\n${job.description}`;
 
-/** Until part 3 adds templates for each user, RESUME_PDF, RESUME_TEX and the
- *  Drive settings in .env are the admin's. A member gets no résumé. */
+/** Until part 5 adds templates for each user, RESUME_PDF, RESUME_TEX and the Drive settings in .env are the admin's. A member gets no résumé. */
 export const NO_RESUME = 'No résumé is set up for your account yet.';
 
 export async function buildCv(app: Application, job: Job) {
@@ -112,7 +111,7 @@ export async function refineCv(app: Application, job: Job, request: string) {
 
   if (!(await isAdmin(app.userId))) throw new CvError(NO_RESUME);
   const doc = await claimsFor(app.userId);
-  if (!doc) throw new CvError('Refining needs a valid data/profile/claims.yml — it only ever chooses between what that file lists. Run npm run check:claims.');
+  if (!doc) throw new CvError('Refining needs a profile. Add your positions and projects on the Profile screen.');
   const menu = resumeMenu(doc);
   if (!menu) throw new CvError('Refining needs RESUME_TEX: there is no LaTeX source to rearrange.');
   const { mode, detail } = await claudeStatus(app.userId);

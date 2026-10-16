@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import type { Application, Job } from '@prisma/client';
-import { isAdmin, profileSummary } from '@/lib/user';
+import { profileSummary } from '@/lib/user';
 import { handle, readJson } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
 import type { ResolvedProfile } from '@/lib/claims';
@@ -141,9 +141,7 @@ export const POST = handle(async (req) => {
     const profile = await profileSummary(user.id);
     const school = profile.school;
     if (!school) {
-      // Only the admin has claims.yml (until part 3), so a member gets no word of it.
-      const where = (await isAdmin(user.id)) ? 'to claims.yml or import your LinkedIn export' : 'in your profile';
-      return NextResponse.json({ error: `No school on your profile. Add an education ${where}.` }, { status: 400 });
+      return NextResponse.json({ error: 'No school on your profile. Add an education in your profile.' }, { status: 400 });
     }
     const cred = await credentialFor(user.id);
 

@@ -1,17 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
 
-const ADMIN_DOC = { sentinel: 'admin-only-claims' };
-vi.mock('@/lib/claims', async (orig) => ({
-  ...(await orig<typeof import('@/lib/claims')>()),
-  loadClaims: vi.fn(() => ADMIN_DOC),
-}));
 vi.mock('@/lib/claude/credential', async (orig) => ({
   ...(await orig<typeof import('@/lib/claude/credential')>()),
   credentialFor: vi.fn(async () => null),
 }));
 
+import { readFileSync } from 'node:fs';
 import { db } from '@/lib/db';
+import { checkYaml } from '@/lib/profile/doc';
+import { saveProfile } from '@/lib/profile/store';
 import { claimsFor } from '@/lib/user';
 import { analyseJob, jobView } from '@/lib/analysis';
 import { buildCv, publishCv } from '@/lib/cv';
@@ -24,11 +22,13 @@ const job = () =>
   });
 
 describe('claimsFor', () => {
-  it('gives claims.yml to the admin only', async () => {
-    const admin = await makeUser('admin');
-    const member = await makeUser('member');
-    expect(await claimsFor(admin.user.id)).toBe(ADMIN_DOC);
-    expect(await claimsFor(member.user.id)).toBeNull();
+  it('never gives the stored profile of user A to user B', async () => {
+    const a = await makeUser();
+    const b = await makeUser();
+    const doc = checkYaml(readFileSync('tests/fixtures/claims-sample.yml', 'utf8')).doc!;
+    await saveProfile(a.user.id, doc, 'A writes');
+    expect(await claimsFor(a.user.id)).not.toBeNull();
+    expect(await claimsFor(b.user.id)).toBeNull();
   });
 });
 

@@ -1,13 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
 
-// No claims.yml for any user (the admin too), so the profile comes from the
-// database only. lib/user calls loadClaims inside its own module, so the mock
-// must replace loadClaims in lib/claims.
-vi.mock('@/lib/claims', async (orig) => ({
-  ...(await orig<typeof import('@/lib/claims')>()),
-  loadClaims: vi.fn(() => null),
-}));
 // The test must never call Claude. No credential, and a call fails.
 vi.mock('@/lib/claude', async (orig) => ({
   ...(await orig<typeof import('@/lib/claude')>()),
@@ -39,9 +32,9 @@ describe('POST /api/outreach alumni without a school', () => {
     expect(res.error).toBe('No school on your profile. Add an education in your profile.');
   });
 
-  it('keeps the claims.yml text for the admin', async () => {
+  it('gives the admin the same text', async () => {
     const res = await alumniWithoutSchool('admin');
     expect(res.status).toBe(400);
-    expect(res.error).toBe('No school on your profile. Add an education to claims.yml or import your LinkedIn export.');
+    expect(res.error).toBe('No school on your profile. Add an education in your profile.');
   });
 });
