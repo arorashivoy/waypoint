@@ -24,7 +24,7 @@ vi.mock('@/lib/resume', async (orig) => ({
 
 import { fileURLToPath } from 'node:url';
 import { db } from '@/lib/db';
-import { ctx, makeUser, request } from './helpers/http';
+import { ctx, formRequest, makeUser, request } from './helpers/http';
 import * as claudeRoute from '@/app/api/claude/route';
 import * as countries from '@/app/api/countries/route';
 import * as jobDetail from '@/app/api/jobs/[id]/route';
@@ -186,7 +186,7 @@ describe('user B cannot reach the rows of user A', () => {
     const b = await makeUser();
     const form = new FormData();
     form.set('file', new File(['First Name,Last Name,URL,Email Address,Company,Position,Connected On\nNew,Person,,,Beta,Dev,01 Jan 2025\n'], 'Connections.csv'));
-    const res = await profileImport.POST(request('/api/profile/import', { method: 'POST', cookie: b.cookie, form }), ctx());
+    const res = await profileImport.POST(await formRequest('/api/profile/import', form, { cookie: b.cookie }), ctx());
     expect(res.status).toBe(200);
     expect(await db.contact.count({ where: { userId: a.user.id } })).toBe(1);
   });

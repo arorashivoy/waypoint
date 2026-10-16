@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { handle } from '@/lib/auth/http';
+import { handle, HttpError } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
-import { checkExportUpload, parseExport } from '@/lib/linkedin-import';
+import { checkExportUpload, checkUploadLength, parseExport } from '@/lib/linkedin-import';
 import { claimsFor } from '@/lib/user';
 
 export const maxDuration = 300;
@@ -21,6 +21,8 @@ export const maxDuration = 300;
  */
 export const POST = handle(async (req) => {
   const user = await requireUser(req);
+  // formData() reads the whole body, so the size check must come first.
+  checkUploadLength(req.headers);
   const form = await req.formData();
   const file = form.get('file');
   if (!(file instanceof File)) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
@@ -30,6 +32,7 @@ export const POST = handle(async (req) => {
   try {
     parsed = parseExport(buf);
   } catch (e) {
+    if (e instanceof HttpError) throw e;
     return NextResponse.json({ error: `Could not read that archive: ${(e as Error).message}` }, { status: 400 });
   }
 

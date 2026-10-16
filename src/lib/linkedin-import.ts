@@ -3,6 +3,20 @@ import Papa from 'papaparse';
 import { HttpError } from './auth/http';
 
 export const MAX_EXPORT_BYTES = 50 * 1024 * 1024;
+/** The largest total size of the CSV files in an archive, after unpacking. */
+export const MAX_UNPACKED_BYTES = 200 * 1024 * 1024;
+const TOO_LARGE = 'The file is larger than 50 MB.';
+
+/**
+ * Checks the Content-Length of an upload before the body is read. A missing
+ * or false length is refused too, so a client cannot send a body of any size.
+ * The 1 MB extra is room for the multipart framing around the file.
+ */
+export function checkUploadLength(headers: Headers): void {
+  const raw = headers.get('content-length');
+  const length = raw && /^\d+$/.test(raw.trim()) ? Number(raw) : NaN;
+  if (!Number.isFinite(length) || length > MAX_EXPORT_BYTES + 1024 * 1024) throw new HttpError(413, TOO_LARGE);
+}
 
 /**
  * Checks a LinkedIn upload before it is parsed: 50 MB or less, and the bytes
@@ -10,7 +24,7 @@ export const MAX_EXPORT_BYTES = 50 * 1024 * 1024;
  * proves nothing.
  */
 export async function checkExportUpload(file: File): Promise<Buffer> {
-  if (file.size > MAX_EXPORT_BYTES) throw new HttpError(413, 'The file is larger than 50 MB.');
+  if (file.size > MAX_EXPORT_BYTES) throw new HttpError(413, TOO_LARGE);
   const buf = Buffer.from(await file.arrayBuffer());
   const isZip = buf.length >= 4 && buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04;
   const head = buf.subarray(0, 4096);
@@ -74,12 +88,17 @@ export function parseExport(buffer: Buffer): ImportedProfile {
   // Every zip starts with the local-file-header magic "PK"; anything else is
   // taken to be Connections.csv on its own, uploaded to refresh contacts.
   const archive = buffer.subarray(0, 2).toString('latin1') === 'PK';
-  const entries = archive
-    ? new AdmZip(buffer)
-        .getEntries()
-        .filter((e) => !e.isDirectory && e.entryName.toLowerCase().endsWith('.csv'))
-        .map((e) => ({ name: e.entryName.split('/').pop() || e.entryName, text: e.getData().toString('utf8') }))
-    : [{ name: 'Connections.csv', text: buffer.toString('utf8') }];
+  let entries: { name: string; text: string }[];
+  if (archive) {
+    const csvs = new AdmZip(buffer).getEntries().filter((e) => !e.isDirectory && e.entryName.toLowerCase().endsWith('.csv'));
+    // The header sizes come from the central directory. Check them before
+    // any entry unpacks, so a small zip cannot fill the memory.
+    const unpacked = csvs.reduce((sum, e) => sum + e.header.size, 0);
+    if (unpacked > MAX_UNPACKED_BYTES) throw new HttpError(413, 'The CSV files in the archive are larger than 200 MB after unpacking.');
+    entries = csvs.map((e) => ({ name: e.entryName.split('/').pop() || e.entryName, text: e.getData().toString('utf8') }));
+  } else {
+    entries = [{ name: 'Connections.csv', text: buffer.toString('utf8') }];
+  }
 
   const profileRows = pick(entries, 'Profile.csv');
   const headline = profileRows[0]?.['Headline'] || '';
