@@ -41,6 +41,8 @@ import * as itemsAdd from '@/app/api/profile/items/[kind]/route';
 import * as itemOne from '@/app/api/profile/items/[kind]/[key]/route';
 import * as revisions from '@/app/api/profile/revisions/route';
 import * as revisionRestore from '@/app/api/profile/revisions/[id]/restore/route';
+import * as profileExport from '@/app/api/profile/export/route';
+import * as profileYaml from '@/app/api/profile/yaml/route';
 import * as profileImport from '@/app/api/profile/import/route';
 import * as profileDrafts from '@/app/api/profile/drafts/route';
 import * as draftsAccept from '@/app/api/profile/drafts/accept/route';
@@ -93,6 +95,8 @@ describe('every route refuses a request without a session', () => {
     ['GET /api/profile/revisions', revisions.GET as Handler],
     ['POST /api/profile/revisions/[id]/restore', revisionRestore.POST as Handler, { id: 'x' }],
     ['POST /api/profile/import', profileImport.POST as Handler],
+    ['GET /api/profile/export', profileExport.GET as Handler],
+    ['POST /api/profile/yaml', profileYaml.POST as Handler],
     ['GET /api/profile/drafts', profileDrafts.GET as Handler],
     ['POST /api/profile/drafts/accept', draftsAccept.POST as Handler],
     ['POST /api/profile/drafts/reject', draftsReject.POST as Handler],

@@ -26,17 +26,17 @@ function zipThatClaims(claimed: number): Buffer {
 }
 
 describe('POST /api/profile/import: size checks before the body is read', () => {
-  it('refuses an upload without Content-Length with 413', async () => {
+  it('refuses an upload without Content-Length with 411', async () => {
     const { cookie } = await makeUser();
     const res = await importExport(await formRequest('/api/profile/import', csvForm(), { cookie, headers: { 'content-length': null } }), ctx());
-    expect(res.status).toBe(413);
-    expect(await res.json()).toEqual({ error: 'The file is larger than 50 MB.' });
+    expect(res.status).toBe(411);
+    expect(await res.json()).toEqual({ error: 'Send the file with a Content-Length header.' });
   });
 
-  it('refuses a Content-Length that is not a number with 413', async () => {
+  it('refuses a Content-Length that is not a number with 400', async () => {
     const { cookie } = await makeUser();
     const res = await importExport(await formRequest('/api/profile/import', csvForm(), { cookie, headers: { 'content-length': 'lots' } }), ctx());
-    expect(res.status).toBe(413);
+    expect(res.status).toBe(400);
   });
 
   it('refuses a Content-Length above 50 MB plus 1 MB with 413', async () => {

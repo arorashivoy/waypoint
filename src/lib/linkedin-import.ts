@@ -1,21 +1,16 @@
 import AdmZip from 'adm-zip';
 import Papa from 'papaparse';
 import { HttpError } from './auth/http';
+import { checkUploadLength as checkLength } from './uploads';
 
 export const MAX_EXPORT_BYTES = 50 * 1024 * 1024;
 /** The largest total size of the CSV files in an archive, after unpacking. */
 export const MAX_UNPACKED_BYTES = 200 * 1024 * 1024;
 const TOO_LARGE = 'The file is larger than 50 MB.';
 
-/**
- * Checks the Content-Length of an upload before the body is read. A missing
- * or false length is refused too, so a client cannot send a body of any size.
- * The 1 MB extra is room for the multipart framing around the file.
- */
+/** The Content-Length check of a LinkedIn upload (50 MB, plus 1 MB of multipart framing). */
 export function checkUploadLength(headers: Headers): void {
-  const raw = headers.get('content-length');
-  const length = raw && /^\d+$/.test(raw.trim()) ? Number(raw) : NaN;
-  if (!Number.isFinite(length) || length > MAX_EXPORT_BYTES + 1024 * 1024) throw new HttpError(413, TOO_LARGE);
+  checkLength(headers, MAX_EXPORT_BYTES, TOO_LARGE);
 }
 
 /**
