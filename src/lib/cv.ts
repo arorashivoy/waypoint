@@ -2,10 +2,10 @@ import type { Application, Job } from '@prisma/client';
 import { db } from './db';
 import { askJson, claudeStatus } from './claude';
 import { RefineReply } from './schemas';
-import { loadClaims } from './claims';
 import { shareResume } from './gdrive';
 import { checkForInjection } from './injection';
 import { REFINE_SYSTEM, refinePrompt } from './prompts';
+import { claimsFor, isAdmin } from './user';
 import { buildResume, resumeMenu, type BuiltResume, type Steer } from './resume';
 
 /**
@@ -34,15 +34,22 @@ export const readChat = (app: Application) => parse<ChatTurn[]>(app.cvChat, []);
 
 const postingText = (job: Job) => `${job.role}\n${job.description}`;
 
-export function buildCv(app: Application, job: Job) {
-  return buildResume(loadClaims(), postingText(job), app.id, readSteer(app));
+/** Until part 3 adds templates for each user, RESUME_PDF, RESUME_TEX and the
+ *  Drive settings in .env are the admin's. A member gets no résumé. */
+export const NO_RESUME = 'No résumé is set up for your account yet.';
+
+export async function buildCv(app: Application, job: Job) {
+  if (!(await isAdmin(app.userId))) return null;
+  return buildResume(await claimsFor(app.userId), postingText(job), app.id, readSteer(app));
 }
 
 export type Published = { resume: BuiltResume | null; driveUrl: string | null; driveReason: string | null };
 
 export async function publishCv(app: Application, job: Job): Promise<Published> {
   const resume = await buildCv(app, job);
-  if (!resume || !resume.path) return { resume: null, driveUrl: null, driveReason: null };
+  if (!resume || !resume.path) {
+    return { resume: null, driveUrl: null, driveReason: (await isAdmin(app.userId)) ? null : NO_RESUME };
+  }
 
   const shared = await shareResume(resume.path, job.company, job.role, { id: app.cvDriveId, url: app.cvUrl, uploaded: app.cvPath });
   if (shared.url) resume.publicUrl = shared.url;
@@ -91,7 +98,8 @@ export async function refineCv(app: Application, job: Job, request: string) {
   const probe = checkForInjection(text);
   if (probe.suspicious) throw new CvError(`Not sent to Claude: ${probe.why}. Rephrase it as a plain request about the CV.`);
 
-  const doc = loadClaims();
+  if (!(await isAdmin(app.userId))) throw new CvError(NO_RESUME);
+  const doc = await claimsFor(app.userId);
   if (!doc) throw new CvError('Refining needs a valid data/profile/claims.yml — it only ever chooses between what that file lists. Run npm run check:claims.');
   const menu = resumeMenu(doc);
   if (!menu) throw new CvError('Refining needs RESUME_TEX: there is no LaTeX source to rearrange.');

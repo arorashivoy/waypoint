@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { handle } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
-import { parseExport } from '@/lib/linkedin-import';
-import { loadClaims } from '@/lib/claims';
+import { checkExportUpload, parseExport } from '@/lib/linkedin-import';
+import { claimsFor } from '@/lib/user';
 
 export const maxDuration = 300;
 
@@ -25,16 +25,17 @@ export const POST = handle(async (req) => {
   const file = form.get('file');
   if (!(file instanceof File)) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
 
+  const buf = await checkExportUpload(file);
   let parsed;
   try {
-    parsed = parseExport(Buffer.from(await file.arrayBuffer()));
+    parsed = parseExport(buf);
   } catch (e) {
     return NextResponse.json({ error: `Could not read that archive: ${(e as Error).message}` }, { status: 400 });
   }
 
   const userId = user.id;
 
-  if (!parsed.archive || loadClaims()) {
+  if (!parsed.archive || (await claimsFor(userId))) {
     // Zero rows means the wrong file or an export requested without
     // connections; replacing with that would silently erase every route.
     if (!parsed.contacts.length) {

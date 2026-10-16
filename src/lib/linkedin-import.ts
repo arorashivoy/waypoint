@@ -1,5 +1,23 @@
 import AdmZip from 'adm-zip';
 import Papa from 'papaparse';
+import { HttpError } from './auth/http';
+
+export const MAX_EXPORT_BYTES = 50 * 1024 * 1024;
+
+/**
+ * Checks a LinkedIn upload before it is parsed: 50 MB or less, and the bytes
+ * must be a zip archive (PK\x03\x04) or a text CSV file. The name alone
+ * proves nothing.
+ */
+export async function checkExportUpload(file: File): Promise<Buffer> {
+  if (file.size > MAX_EXPORT_BYTES) throw new HttpError(413, 'The file is larger than 50 MB.');
+  const buf = Buffer.from(await file.arrayBuffer());
+  const isZip = buf.length >= 4 && buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04;
+  const head = buf.subarray(0, 4096);
+  const isCsv = /\.csv$/i.test(file.name) && !head.includes(0) && !head.subarray(0, 5).equals(Buffer.from('%PDF-'));
+  if (!isZip && !isCsv) throw new HttpError(400, 'Upload the LinkedIn export as a .zip file, or Connections.csv.');
+  return buf;
+}
 
 /**
  * Parses a LinkedIn "Get a copy of your data" export.

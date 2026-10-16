@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { handle } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
-import { cvView, publishCv } from '@/lib/cv';
+import { NO_RESUME, cvView, publishCv } from '@/lib/cv';
+import { isAdmin } from '@/lib/user';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -34,7 +35,7 @@ export const POST = handle<{ params: { id: string } }>(async (req, { params }) =
 
   try {
     const view = await work;
-    if (!view.pdfUrl) return NextResponse.json({ error: 'No CV configured. Set RESUME_PDF, and RESUME_TEX to tailor it.' }, { status: 404 });
+    if (!view.pdfUrl) return NextResponse.json({ error: (await isAdmin(user.id)) ? 'No CV configured. Set RESUME_PDF, and RESUME_TEX to tailor it.' : NO_RESUME }, { status: 404 });
     return NextResponse.json(view);
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

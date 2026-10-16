@@ -4,7 +4,8 @@ import { basename } from 'path';
 import { db } from '@/lib/db';
 import { handle } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
-import { buildCv } from '@/lib/cv';
+import { NO_RESUME, buildCv } from '@/lib/cv';
+import { isAdmin } from '@/lib/user';
 
 export const maxDuration = 300;
 
@@ -24,7 +25,7 @@ export const GET = handle<{ params: { id: string } }>(async (req, { params }) =>
 
   const resume = await buildCv(app, app.job);
   if (!resume || !resume.path) {
-    return NextResponse.json({ error: 'No CV configured. Set RESUME_PDF, and RESUME_TEX to tailor it.' }, { status: 404 });
+    return NextResponse.json({ error: (await isAdmin(user.id)) ? 'No CV configured. Set RESUME_PDF, and RESUME_TEX to tailor it.' : NO_RESUME }, { status: 404 });
   }
 
   const name = `${user.name.replace(/[^\w]+/g, '_')}_${app.job.company.replace(/[^\w]+/g, '_')}.pdf`;

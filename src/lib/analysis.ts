@@ -4,10 +4,10 @@ import { credentialFor } from './claude';
 import { askJsonCached } from './cache';
 import { AnalysisReply, coerceText } from './schemas';
 import { ANALYSE_SYSTEM, analysePrompt } from './prompts';
-import { profileSummary } from './user';
+import { claimsFor, profileSummary } from './user';
 import { fieldFit, levelFit, matchScore, rankRoutes, routeLabel } from './match';
 import { CV_COUNTRY_RULES, FIELD_QUERIES } from './countries';
-import { loadClaims, type ClaimsDoc } from './claims';
+import { type ClaimsDoc } from './claims';
 import { claimsInPosting, projectPicks, rankEvidence, type ProjectPick } from './resume';
 import { fieldFromText, levelFromPosting, requiredYears } from './sources/geo';
 
@@ -56,8 +56,7 @@ function strongFields(doc: ClaimsDoc | null): string[] {
  *  in the list, not recomputed per job. */
 type Fit = { claims: ClaimsDoc | null; strong: string[]; picks: ProjectPick[] };
 
-function fitFromClaims(): Fit {
-  const claims = loadClaims();
+function fitFromClaims(claims: ClaimsDoc | null): Fit {
   return { claims, strong: strongFields(claims), picks: projectPicks(claims) };
 }
 
@@ -130,8 +129,9 @@ function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileS
 export const MAX_ANALYSIS_TRIES = 3;
 
 /**
- * `analysedAt` — not `analysis` — is the flag that means "Claude has read this".
- * They differ whenever a call failed: the heuristic is still written so the card
+ * `analysedAt` — not the stored analysis — is the flag that means "Claude has
+ * read this". Both live on the `JobAnalysis` row of the user. They differ
+ * whenever a call failed: the heuristic is still written so the card
  * has something to show, but the job stays eligible for a retry instead of being
  * silently frozen at a keyword guess.
  *
@@ -142,19 +142,19 @@ export async function analyseJob(job: Job, userId: string, force = false): Promi
   const row = await db.jobAnalysis.findUnique({ where: { userId_jobId: { userId, jobId: job.id } } });
   if (row?.analysedAt && !force) return parseAnalysis(row.analysis);
 
-  const profile = await profileSummary(userId);
+  const [profile, claims] = await Promise.all([profileSummary(userId), claimsFor(userId)]);
   let analysis: Analysis;
   let read = false;
 
   if (!(await credentialFor(userId))) {
-    analysis = heuristicAnalysis(job, profile, fitFromClaims());
+    analysis = heuristicAnalysis(job, profile, fitFromClaims(claims));
   } else {
     try {
       const out = await askJsonCached('analysis', 'v1', { system: ANALYSE_SYSTEM, prompt: analysePrompt(profile, job), schema: AnalysisReply, effort: 'medium' }, { userId, kind: 'analysis' });
       analysis = normalise(out, 'claude');
       read = true;
     } catch {
-      analysis = heuristicAnalysis(job, profile, fitFromClaims());
+      analysis = heuristicAnalysis(job, profile, fitFromClaims(claims));
     }
   }
 
@@ -208,13 +208,14 @@ function viewOf(job: Job, profile: Profile, contacts: { company: string | null; 
  * queries per page load.
  */
 export async function makeJobViewer(userId: string) {
-  const [profile, contacts, rows] = await Promise.all([
+  const [profile, claims, contacts, rows] = await Promise.all([
     profileSummary(userId),
+    claimsFor(userId),
     db.contact.findMany({ where: { userId } }),
     db.jobAnalysis.findMany({ where: { userId } }),
   ]);
   const stored = new Map(rows.map((r) => [r.jobId, r.analysis]));
-  const fit = fitFromClaims();
+  const fit = fitFromClaims(claims);
   return (job: Job) => {
     const raw = stored.get(job.id);
     return viewOf(job, profile, contacts, raw ? parseAnalysis(raw) : heuristicAnalysis(job, profile, fit), fit);
@@ -222,13 +223,14 @@ export async function makeJobViewer(userId: string) {
 }
 
 export async function jobView(job: Job, userId: string, opts: { analyse?: boolean } = {}) {
-  const [profile, contacts, row] = await Promise.all([
+  const [profile, claims, contacts, row] = await Promise.all([
     profileSummary(userId),
+    claimsFor(userId),
     db.contact.findMany({ where: { userId } }),
     db.jobAnalysis.findUnique({ where: { userId_jobId: { userId, jobId: job.id } } }),
   ]);
 
-  const fit = fitFromClaims();
+  const fit = fitFromClaims(claims);
   const analysis: Analysis = row
     ? parseAnalysis(row.analysis)
     : opts.analyse

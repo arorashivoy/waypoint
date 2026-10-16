@@ -4,7 +4,7 @@ import { handle } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
 import { fetchAll } from '@/lib/sources';
 import { queueAnalysis } from '@/lib/queue';
-import { loadClaims } from '@/lib/claims';
+import { claimsFor } from '@/lib/user';
 import { searchQueries } from '@/lib/resume';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,7 @@ export const POST = handle(async (req) => {
   const ccs = prefs.map((p) => p.cc);
   if (!ccs.length) return NextResponse.json({ added: 0, report: [], note: 'Every country is paused.' });
 
-  const { jobs, report } = await fetchAll(ccs, searchQueries(loadClaims()));
+  const { jobs, report } = await fetchAll(ccs, searchQueries(await claimsFor(user.id)));
 
   const known = new Set(
     (await db.job.findMany({ where: { externalId: { in: jobs.map((j) => j.externalId) } }, select: { externalId: true } }))

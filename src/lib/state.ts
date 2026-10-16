@@ -3,8 +3,8 @@ import { COUNTRIES, GLOBAL_SITES } from './countries';
 import { makeJobViewer } from './analysis';
 import { claudeStatus } from './claude';
 import { analysisProgress } from './queue';
-import { profileSummary } from './user';
-import { claimsFailure, loadClaims } from './claims';
+import { claimsFor, profileSummary } from './user';
+import { claimsFailure } from './claims';
 import { projectPicks } from './resume';
 import { isAlumniRequest } from './match';
 import { watchlist } from './sources';
@@ -203,7 +203,7 @@ export async function buildState(userId: string) {
       headline: profile.headline,
     },
     claude,
-    claims: claimsFailure(),
+    claims: user.role === 'admin' ? claimsFailure() : null,
     countries: COUNTRIES.map((c) => {
       const pref = prefs.find((p) => p.cc === c.cc);
       return { ...c, on: pref ? pref.on : true, count: String(counts.get(c.cc) || 0) };
@@ -228,7 +228,7 @@ export async function buildState(userId: string) {
     lastImport: lastImportRow
       ? { filename: lastImportRow.filename, createdAt: lastImportRow.createdAt.toISOString(), counts: importCounts }
       : null,
-    picks: projectPicks(loadClaims()),
+    picks: projectPicks(await claimsFor(userId)),
     levels: profile.levels,
   };
 }

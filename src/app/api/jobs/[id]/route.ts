@@ -19,7 +19,7 @@ const inFlight = new Map<string, Promise<any>>();
 
 async function detail(jobId: string, userId: string, force: boolean) {
   const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
-  // `analysedAt`, not `analysis`: a job carrying only a keyword heuristic from a
+  // `analysedAt` on the `JobAnalysis` row, not the row itself: a job carrying only a keyword heuristic from a
   // failed call should get a real read when you open it, not the stale estimate.
   const row = await db.jobAnalysis.findUnique({ where: { userId_jobId: { userId, jobId } } });
   if (force || !row?.analysedAt) await analyseJob(job, userId, force);

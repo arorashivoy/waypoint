@@ -26,8 +26,8 @@ export async function queueAnalysis(userId: string, limit = 25) {
   if (!(await credentialFor(userId))) return analysisProgress(userId);
 
   const onCcs = (await db.countryPref.findMany({ where: { userId, on: true } })).map((p) => p.cc);
-  // `analysedAt`, not `analysis`: a job whose call failed still has a heuristic
-  // written to `analysis`, and filtering on that would retire it permanently
+  // `analysedAt`, not the existence of a `JobAnalysis` row: a job whose call
+  // failed still has a heuristic stored in its row, and filtering on that would retire it permanently
   // after one bad minute. The try counter is what stops the retry being endless.
   const candidates = await db.job.findMany({
     where: {
