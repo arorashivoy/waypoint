@@ -261,9 +261,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .sidebar { display: none; }
   .desktop-only { display: none !important; }
 
-  /* viewport-fit=cover lets content run under the notch and rounded corners. */
+  /* viewport-fit=cover lets content run under the notch and rounded corners.
+     The bottom padding is the tab bar's full height: 72px plus the home
+     indicator inset, so the end of each screen stays above the bar. */
   .main {
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) 72px env(safe-area-inset-left);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) calc(72px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
     --gutter: 20px;
   }
 
@@ -287,7 +289,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     position: fixed; bottom: 0; left: 0; right: 0;
     height: 72px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
     border-top: 1px solid var(--line); background: var(--surface); z-index: 20;
-    padding-bottom: env(safe-area-inset-bottom);
+    /* content-box: the 72px is for the tabs, and the inset adds below them. */
+    box-sizing: content-box;
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
   .tab {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
@@ -361,4 +365,4 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   font-size: 15px; line-height: 1.4; max-width: min(520px, calc(100vw - 32px));
   box-shadow: 0 8px 24px rgba(27, 34, 48, 0.25);
 }
-@media (max-width: 1023px) { .toast { bottom: 88px; } }
+@media (max-width: 1023px) { .toast { bottom: calc(88px + env(safe-area-inset-bottom)); } }

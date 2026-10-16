@@ -83,11 +83,13 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
         {sessions.map((s) => (
           <div key={s.id} className="row" style={{ gap: 12, justifyContent: 'space-between', flexWrap: 'wrap' }}>
             <span>{device(s.userAgent)}{s.current ? ' (this device)' : ''} · last used {when(s.lastSeenAt)}</span>
-            {!s.current && <button className="btn" onClick={() => run(() => del(`/api/account/sessions/${s.id}`), 'Signed out that device.')}>Sign out</button>}
+            {/* Each Sign out button sits on the row of the device that it signs out. */}
+            {s.current
+              ? <button className="btn" onClick={() => leave('/api/auth/signout', 'post')}>Sign out</button>
+              : <button className="btn" onClick={() => run(() => del(`/api/account/sessions/${s.id}`), 'Signed out that device.')}>Sign out</button>}
           </div>
         ))}
         <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
-          <button className="btn" onClick={() => leave('/api/auth/signout', 'post')}>Sign out</button>
           <button className="btn" onClick={() => leave('/api/account/sessions', 'del')}>Sign out on all devices</button>
         </div>
       </Section>
@@ -95,7 +97,8 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
       <Section title="Claude">
         {claude && (
           <>
-            <div>{claude.detail}</div>
+            {/* The status text says "in Settings" for the other screens. This screen is Settings. */}
+            <div>{claude.mode === 'none' ? claude.detail.replace(' in Settings', ' below') : claude.detail}</div>
             {claude.sharedAvailable && (
               <div className="mono" style={{ fontSize: 14 }}>
                 Shared key this month: ${claude.sharedSpentUsd.toFixed(2)} of ${claude.capUsd.toFixed(2)} · resets {new Date(claude.resetsAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })}
