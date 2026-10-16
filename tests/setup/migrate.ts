@@ -26,7 +26,12 @@ export function statements(sql: string): string[] {
     .filter(Boolean);
 }
 
-/** Applies the named migrations (default: all), one statement at a time. */
+/**
+ * Applies the named migrations (default: all), one statement at a time.
+ * The client must use `?connection_limit=1`. PRAGMA settings (such as
+ * `foreign_keys=OFF` in a table rebuild) belong to one connection, and a pool
+ * can run the next statement on another connection.
+ */
 export async function applyMigrations(client: PrismaClient, names = migrationNames()): Promise<void> {
   for (const name of names) {
     for (const stmt of statements(readFileSync(join(DIR, name, 'migration.sql'), 'utf8'))) {

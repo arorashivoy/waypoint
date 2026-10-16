@@ -13,7 +13,7 @@ let dir = '';
 export async function setup(): Promise<void> {
   dir = mkdtempSync(join(tmpdir(), 'waypoint-vitest-'));
   process.env.DATABASE_URL = `file:${join(dir, 'test.db')}`;
-  const client = new PrismaClient({ datasourceUrl: process.env.DATABASE_URL });
+  const client = new PrismaClient({ datasourceUrl: `${process.env.DATABASE_URL}?connection_limit=1` });
   try {
     await applyMigrations(client);
   } finally {

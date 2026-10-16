@@ -7,7 +7,7 @@ import { applyMigrations, migrationNames } from './setup/migrate';
 
 async function withDb(fn: (c: PrismaClient) => Promise<void>) {
   const dir = mkdtempSync(join(tmpdir(), 'wp-mig-'));
-  const c = new PrismaClient({ datasourceUrl: `file:${join(dir, 'm.db')}` });
+  const c = new PrismaClient({ datasourceUrl: `file:${join(dir, 'm.db')}?connection_limit=1` });
   try {
     await fn(c);
   } finally {
