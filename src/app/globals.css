@@ -242,6 +242,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .quote { margin: 0; font-size: 14px; line-height: 1.5; padding: 10px; border-radius: 8px; background: var(--quote); }
 .sent-body { margin: 0; font-size: 14px; line-height: 1.5; padding: 10px; border-radius: 8px; border: 1px solid var(--positive-line); background: var(--positive-wash); }
 
+/* ---------- settings ---------- */
+/* The phone rule in the media block below must come after this base rule. */
+
+.settings-body { flex-grow: 1; min-height: 0; overflow-y: auto; padding: 24px 36px 48px; }
+
 /* ---------- phone ---------- */
 
 .tabbar { display: none; }
@@ -321,10 +326,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .note-area { font-size: 16px; min-height: 150px; } /* 16px stops iOS zooming on focus */
   .field { font-size: 16px; }
 }
-
-/* ---------- settings ---------- */
-
-.settings-body { flex-grow: 1; min-height: 0; overflow-y: auto; padding: 24px 36px 48px; }
 
 /* ---------- sign in ---------- */
 

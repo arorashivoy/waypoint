@@ -39,6 +39,26 @@ export const put = <T = Json>(url: string, body: unknown) => api<T>(url, { metho
 
 export const del = <T = Json>(url: string) => api<T>(url, { method: 'DELETE' });
 
+/**
+ * Sign-out from Settings. On success the page goes to /login at once. It
+ * does not reload the screen data first: the session is gone, so that
+ * request gets a 401 and shows a stray message. On a failure it shows the
+ * error and stays on the page.
+ */
+export async function leaveSession(
+  request: () => Promise<unknown>,
+  toast: (message: string) => void,
+  go: (url: string) => void = (url) => window.location.assign(url),
+): Promise<void> {
+  try {
+    await request();
+  } catch (e) {
+    toast((e as Error).message);
+    return;
+  }
+  go('/login');
+}
+
 /** False when the clipboard is unavailable — it needs a secure context, which
  *  plain http over the LAN is not. The text is on screen either way. */
 export async function copyText(text: string) {

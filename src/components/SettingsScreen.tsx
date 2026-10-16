@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { api, copyText, del, patch, post, put } from './api';
+import { api, copyText, del, leaveSession, patch, post, put } from './api';
 
 type Status = { mode: 'own' | 'shared' | 'cli' | 'none'; detail: string; keyHint: string | null; sharedAvailable: boolean; capUsd: number; sharedSpentUsd: number; capReached: boolean; resetsAt: string };
 type SessionRow = { id: string; current: boolean; userAgent: string | null; createdAt: string; lastSeenAt: string };
@@ -63,9 +63,7 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
     }
   };
 
-  const leave = async (url: string, method: 'post' | 'del') => {
-    if (await run(() => (method === 'post' ? post(url) : del(url)))) window.location.assign('/login');
-  };
+  const leave = (url: string, method: 'post' | 'del') => leaveSession(() => (method === 'post' ? post(url) : del(url)), setToast);
 
   return (
     <>
