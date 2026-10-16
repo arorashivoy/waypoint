@@ -56,6 +56,9 @@ import * as password from '@/app/api/account/password/route';
 import * as sessions from '@/app/api/account/sessions/route';
 import * as sessionOne from '@/app/api/account/sessions/[id]/route';
 import * as accountClaude from '@/app/api/account/claude/route';
+import * as accountGithub from '@/app/api/account/github/route';
+import * as githubRepos from '@/app/api/profile/github/repos/route';
+import * as githubImport from '@/app/api/profile/github/import/route';
 import * as adminInvites from '@/app/api/admin/invites/route';
 import * as adminUsers from '@/app/api/admin/users/route';
 import * as adminUser from '@/app/api/admin/users/[id]/route';
@@ -99,6 +102,11 @@ describe('every route refuses a request without a session', () => {
     ['GET /api/profile/export', profileExport.GET as Handler],
     ['POST /api/profile/yaml', profileYaml.POST as Handler],
     ['POST /api/profile/resume-import', resumeImport.POST as Handler],
+    ['POST /api/profile/github/repos', githubRepos.POST as Handler],
+    ['POST /api/profile/github/import', githubImport.POST as Handler],
+    ['GET /api/account/github', accountGithub.GET as Handler],
+    ['PUT /api/account/github', accountGithub.PUT as Handler],
+    ['DELETE /api/account/github', accountGithub.DELETE as Handler],
     ['GET /api/profile/drafts', profileDrafts.GET as Handler],
     ['POST /api/profile/drafts/accept', draftsAccept.POST as Handler],
     ['POST /api/profile/drafts/reject', draftsReject.POST as Handler],
