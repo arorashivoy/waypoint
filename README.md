@@ -208,19 +208,24 @@ with a breakdown of which companies you know people at, and your inferred level.
 ## Accounts
 
 Waypoint is for a small group of invited people. Run `npm run user:create-admin` one time to make
-the admin. The admin makes invite links and password reset links in Settings → Admin. Waypoint
-sends no email, so the admin sends each link. A link works one time, for 7 days. A password has
-12 characters or more.
+the admin.
+
+The admin makes invite links and password reset links in Settings → Admin. Waypoint sends no
+email, so the admin sends each link. A link works one time, for 7 days. A password has 12
+characters or more.
 
 ## Remote access
 
 `./scripts/remote.sh` starts the server and a public tunnel in the background and hands the
 terminal back; `./scripts/remote.sh stop` stops both (`restart`, `status` and `logs` also work, and
 `./scripts/start.sh` takes the same commands in production mode). By default the tunnel is a
-Cloudflare quick tunnel. Past the sign-in page sit the names, employers and job titles of **every
-LinkedIn connection you have** — other people's personal data, not only yours — plus your CV and a
-button that spends your Claude credit. Accounts protect all of it (see [Accounts](#accounts)).
-Sign-in attempts are rate-limited, and the server refuses a write from another origin.
+Cloudflare quick tunnel.
+
+The tunnel makes the app public, so protect the data behind the sign-in page. That data holds the
+names, employers and job titles of every LinkedIn connection you have. This is personal data of
+other people. It also holds your CV and a button that spends your Claude credit. Accounts protect
+all of it (see [Accounts](#accounts)). The server limits the rate of sign-in attempts. It refuses a
+write from another origin.
 
 Set `WAYPOINT_PUBLIC_URL` in `.env` to the public URL of the copy. Invite links and reset links use
 it. `GET /api/health` answers without a session. `remote.sh` uses it to check the tunnel.
@@ -229,8 +234,8 @@ Alternatives, in rough order of safety:
 
 - **Tailscale** (`brew install --cask tailscale`) — a private network between your devices. Nothing
   is public, so there is no URL for anyone to find. Safest option; needs the app running on each device.
-- **Cloudflare Tunnel + Cloudflare Access** — a stable URL with real email login instead of a shared
-  code. Needs a free Cloudflare account and a domain.
+- **Cloudflare Tunnel + Cloudflare Access** — a stable URL with real email login, in front of the
+  Waypoint sign-in. Needs a free Cloudflare account and a domain.
 - **Quick tunnel** (what `remote.sh` uses) — instant, no account, but the URL is public and changes
   every run. Sign-in with an account is the lock.
 - **zrok** (`WAYPOINT_TUNNEL=zrok` in `.env`) — a fixed `https://<name>.shares.zrok.io` URL, on a
