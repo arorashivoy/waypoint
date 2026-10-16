@@ -44,6 +44,7 @@ import * as revisionRestore from '@/app/api/profile/revisions/[id]/restore/route
 import * as profileExport from '@/app/api/profile/export/route';
 import * as profileYaml from '@/app/api/profile/yaml/route';
 import * as profileImport from '@/app/api/profile/import/route';
+import * as resumeImport from '@/app/api/profile/resume-import/route';
 import * as profileDrafts from '@/app/api/profile/drafts/route';
 import * as draftsAccept from '@/app/api/profile/drafts/accept/route';
 import * as draftsReject from '@/app/api/profile/drafts/reject/route';
@@ -97,6 +98,7 @@ describe('every route refuses a request without a session', () => {
     ['POST /api/profile/import', profileImport.POST as Handler],
     ['GET /api/profile/export', profileExport.GET as Handler],
     ['POST /api/profile/yaml', profileYaml.POST as Handler],
+    ['POST /api/profile/resume-import', resumeImport.POST as Handler],
     ['GET /api/profile/drafts', profileDrafts.GET as Handler],
     ['POST /api/profile/drafts/accept', draftsAccept.POST as Handler],
     ['POST /api/profile/drafts/reject', draftsReject.POST as Handler],
