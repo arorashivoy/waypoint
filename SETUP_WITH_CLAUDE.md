@@ -11,7 +11,7 @@ order. Before you start, read `README.md`.
 - **The user is not the original author.** Never reuse names, schools, emails, Drive
   ids, tokens or URLs from the repo history, the README examples or this file. All of
   them come from the user.
-- **Never echo a secret back** (tokens, client secrets, passcodes). Write it into `.env`
+- **Never echo a secret back** (tokens, client secrets, passwords). Write it into `.env`
   and confirm that it is set.
 - Steps marked **[USER]** need the user's browser or their accounts. Explain exactly what to
   click, and wait for them. Never claim one of these steps is done without checking it
@@ -51,8 +51,7 @@ run `npm run setup` or re-create `.env`. Instead:
       skip the check, this command hides a missing column and no error shows.
 4. Run `npx prisma migrate deploy`. It applies the migrations that come after `0_init`,
    if there are any. Then run `npx prisma generate`, from this checkout's root.
-5. Restart the server, and have the user hard-reload every open tab.
-6. Bring the setup that lives outside git up to date. **Check each item; don't assume
+5. Bring the setup that lives outside git up to date. **Check each item; don't assume
    it's done.**
    - **Drive token:** run the token check in section 5, step 8. If it returns
      `invalid_grant`, the Google app is probably still in Testing. Do section 5, steps 2–4
@@ -64,7 +63,15 @@ run `npm run setup` or re-create `.env`. Instead:
    - **Obsolete settings:** remove `WAYPOINT_SCHOOL_LINKEDIN_SLUG` from `.env` and any
      `linkedin:` key under an education in `claims.yml`. Neither is used any more.
    - **Check:** `npm run check:claims` exits 0.
-5. Run the checklist in section 7.
+6. Add the public URL to `.env` (append one line; do not overwrite the file):
+   `WAYPOINT_PUBLIC_URL=https://<name>.shares.zrok.io`
+7. Set the admin password: `npm run user:create-admin`. The migration made your
+   existing account the admin. The script asks for the email, the name and the password.
+8. Remove `WAYPOINT_ACCESS_CODE`, `WAYPOINT_ZROK_AUTH_FILE` and the `LINKEDIN_*` lines
+   from `.env`. They do nothing now.
+9. Restart with `./scripts/start.sh restart`. The zrok share now has no basic auth.
+   Sign in with the admin email and password. Tell the user to hard-reload every open tab.
+10. Run the checklist in section 7.
 
 ## 1. Machine prerequisites
 
@@ -95,13 +102,15 @@ Fill these in from `.env.example`. Ask the user for each value; do not invent an
 | Variable | Value |
 |---|---|
 | `DATABASE_URL` | keep `file:../data/waypoint.db` (the path is relative to `prisma/`) |
-| `WAYPOINT_NAME`, `WAYPOINT_EMAIL` | the user's name and email |
-| `WAYPOINT_ACCESS_CODE` | **required before any remote access.** Generate one with `openssl rand -base64 18`, write it, and tell the user it is in `.env` (don't print it) |
+| `WAYPOINT_NAME` | the user's name. The Drive file names use it |
+| `WAYPOINT_SECRET_KEY` | required. Make one with `npm run secret:new` |
+| `WAYPOINT_PUBLIC_URL` | only for remote access. The public URL of this copy. Invite links use it |
+| `WAYPOINT_SHARED_MONTHLY_USD` | optional. The monthly limit for each user on the shared `ANTHROPIC_API_KEY`. The default is 5 |
 | `CLAUDE_CODE_OAUTH_TOKEN` | see section 1 |
 | `RESUME_TEX`, `RESUME_PDF` | absolute paths to the user's LaTeX CV and its compiled PDF. Tailoring needs the `.tex`; keep any custom `.cls` next to it |
 | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` | optional. Free at developer.adzuna.com. Without them the Adzuna source returns nothing, silently |
 | `GDRIVE_*` | section 5 |
-| `PORT` | only for a second copy on the same machine (section 8), e.g. `PORT=3118`. Read by `npm run dev`, `npm start` and `remote.sh`; a `PORT` in the shell or systemd unit wins over `.env`. If LinkedIn sign-in is configured, change the port in `LINKEDIN_REDIRECT_URI` to match |
+| `PORT` | only for a second copy on the same machine (section 8), e.g. `PORT=3118`. Read by `npm run dev`, `npm start` and `remote.sh`; a `PORT` in the shell or systemd unit wins over `.env`. |
 
 Check: `grep -c '^[A-Z]' .env` goes up, and `npm run dev` starts without errors.
 
@@ -228,7 +237,7 @@ LinkedIn's User Agreement and puts the user's account at risk.
 ```bash
 npm run dev                      # development, http://localhost:3117
 npm run build && npm start       # production. Stop the dev server first: build overwrites .next
-./scripts/remote.sh              # dev server plus a public tunnel. Refuses to start without WAYPOINT_ACCESS_CODE
+./scripts/remote.sh              # dev server plus a public tunnel. Accounts protect the app
 ./scripts/start.sh               # same, but builds and runs the production server
 ```
 
@@ -260,7 +269,7 @@ Per person:
   personal-use exemption allows fewer than 100 users. Each person runs `gdrive:auth` with
   *their* Google account (one at a time, because it uses port 3119), gets their own refresh
   token, and gets their own app-created folder.
-- **`WAYPOINT_ACCESS_CODE`:** a different one for each.
+- **`WAYPOINT_PUBLIC_URL`:** a different URL for each. Each copy has its own admin and its own database.
 
 Run each copy in production mode under systemd. Do not use `npm run dev` on a Pi: it
 compiles pages on demand and uses about 1 GB more memory.

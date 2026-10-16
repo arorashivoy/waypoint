@@ -30,8 +30,9 @@ Then create your `.env`:
 cp .env.example .env
 ```
 
-Nothing in it is required to start. Set `WAYPOINT_ACCESS_CODE` before exposing the app beyond
-localhost (see [Remote access](#remote-access)).
+Set `WAYPOINT_SECRET_KEY` in it (make one with `npm run secret:new`). Then make the admin account
+(see [Accounts](#accounts)). Set `WAYPOINT_PUBLIC_URL` before you open the app to other people
+(see [Remote access](#remote-access)).
 
 ```bash
 npm run dev
@@ -68,8 +69,8 @@ Reachable from anywhere — starts the server *and* a public HTTPS tunnel:
 cd ~/Programs/job-apply && ./scripts/remote.sh
 ```
 
-It prints a fresh `https://….trycloudflare.com` URL each run and refuses to start if no passcode is
-set. Ctrl-C stops both. On your phone, on the same wifi, you can skip the tunnel and use
+It prints a fresh `https://….trycloudflare.com` URL each run. Accounts protect the app, so
+sign-in is always required. Ctrl-C stops both. On your phone, on the same wifi, you can skip the tunnel and use
 `http://<your-mac-lan-ip>:3117` — find it with `ipconfig getifaddr en0`.
 
 For sustained use, production mode is faster. Stop the dev server first, since the build overwrites
@@ -85,9 +86,7 @@ npm run build && npm start
 
 The app is empty until you do these three things, in order.
 
-**1. Sign in.** "Continue with LinkedIn" opens your local account. If `LINKEDIN_CLIENT_ID` is set it
-runs real OpenID Connect instead — but understand what that buys: **name, email and photo. Nothing
-else.** No experience, no education, no connections. That is the entire OIDC scope.
+**1. Sign in.** Use the email and password of your Waypoint account. See [Accounts](#accounts).
 
 **2. Import your LinkedIn data export.** This is the step that matters. In LinkedIn go to
 **Settings → Data privacy → Get a copy of your data**, pick the full archive, and request it.
@@ -206,24 +205,25 @@ with a breakdown of which companies you know people at, and your inferred level.
 
 ---
 
+## Accounts
+
+Waypoint is for a small group of invited people. Run `npm run user:create-admin` one time to make
+the admin. The admin makes invite links and password reset links in Settings → Admin. Waypoint
+sends no email, so the admin sends each link. A link works one time, for 7 days. A password has
+12 characters or more.
+
 ## Remote access
 
 `./scripts/remote.sh` starts the server and a public tunnel in the background and hands the
 terminal back; `./scripts/remote.sh stop` stops both (`restart`, `status` and `logs` also work, and
 `./scripts/start.sh` takes the same commands in production mode). By default the tunnel is a
-Cloudflare quick tunnel, and before it will open one you must set `WAYPOINT_ACCESS_CODE` in `.env`,
-and that is not bureaucracy: past the sign-in page sit the names,
-employers and job titles of **every LinkedIn connection you have** — other people's personal data,
-not only yours — plus your CV and a button that spends your Claude subscription.
+Cloudflare quick tunnel. Past the sign-in page sit the names, employers and job titles of **every
+LinkedIn connection you have** — other people's personal data, not only yours — plus your CV and a
+button that spends your Claude credit. Accounts protect all of it (see [Accounts](#accounts)).
+Sign-in attempts are rate-limited, and the server refuses a write from another origin.
 
-The passcode is compared in constant time and rate-limited to 10 attempts per 15 minutes, after
-which that client is locked out for the full window even with the correct code.
-
-Generate one with:
-
-```bash
-node -e "console.log(require('crypto').randomBytes(9).toString('base64url'))"
-```
+Set `WAYPOINT_PUBLIC_URL` in `.env` to the public URL of the copy. Invite links and reset links use
+it. `GET /api/health` answers without a session. `remote.sh` uses it to check the tunnel.
 
 Alternatives, in rough order of safety:
 
@@ -232,14 +232,10 @@ Alternatives, in rough order of safety:
 - **Cloudflare Tunnel + Cloudflare Access** — a stable URL with real email login instead of a shared
   code. Needs a free Cloudflare account and a domain.
 - **Quick tunnel** (what `remote.sh` uses) — instant, no account, but the URL is public and changes
-  every run. The passcode is what makes it acceptable.
-- **zrok** (`WAYPOINT_TUNNEL=zrok` in `.env`) — a fixed `https://<name>.shares.zrok.io` URL behind
-  HTTP basic auth, on a free zrok.io account. Install `zrok2`, run `zrok2 enable <token>` and
-  `zrok2 create name waypoint`, and put one `user:password` line in
-  `~/.config/waypoint/zrok-basic-auth` (or point `WAYPOINT_ZROK_AUTH_FILE` elsewhere). The basic
-  auth is the lock, so the passcode is optional. zrok's Google sign-in loops on the hosted service
-  ([openziti/zrok#1276](https://github.com/openziti/zrok/issues/1276)), which is why this uses a
-  password.
+  every run. Sign-in with an account is the lock.
+- **zrok** (`WAYPOINT_TUNNEL=zrok` in `.env`) — a fixed `https://<name>.shares.zrok.io` URL, on a
+  free zrok.io account. Install `zrok2`, run `zrok2 enable <token>` and `zrok2 create name waypoint`.
+  The share has no basic auth. The Waypoint sign-in is the lock. Set `WAYPOINT_PUBLIC_URL` to the URL.
 
 `nginx` alone will not do this: your machine sits behind NAT, so you would also need port forwarding,
 dynamic DNS and your own TLS — and none of that works at all if your ISP uses CGNAT.
@@ -503,10 +499,8 @@ received.
 
 These constraints shape half the app, so they are worth stating plainly.
 
-- **Sign in with LinkedIn returns name, email and photo. That is all.** OpenID Connect gives no
-  experience, education, projects, connections or messages. The sign-in route is real
-  (`src/app/api/auth/linkedin/*`) and used when `LINKEDIN_CLIENT_ID` is set; without it the button
-  opens the single local account, which is the same person either way.
+- **Waypoint does not use LinkedIn sign-in.** LinkedIn sign-in gives no experience, education,
+  projects, connections or messages, so accounts use an email and a password.
 - **Everything else comes from your data export.** LinkedIn → Settings → Data privacy → Get a copy
   of your data → full archive. Upload the `.zip` on the Resume screen. `Connections.csv` — name,
   company, position, connection date — is what makes referral routing possible at all. Re-upload any
@@ -597,14 +591,14 @@ Copy `.env.example` to `.env`. Everything has a working default except the optio
 | Variable | Default | Purpose |
 |---|---|---|
 | `DATABASE_URL` | `file:../data/waypoint.db` | SQLite file. Point at Postgres and change the provider in `prisma/schema.prisma` to move. |
-| `WAYPOINT_NAME` | `Shivoy Arora` | Name on the local account. |
-| `WAYPOINT_EMAIL` | `you@local` | Identifier for the local account. |
-| `WAYPOINT_ACCESS_CODE` | *(unset)* | Passcode required at sign-in. **Set before exposing beyond localhost.** Unset means no passcode field appears. |
+| `WAYPOINT_NAME` | `Shivoy Arora` | Name in the Drive file names. |
+| `WAYPOINT_SECRET_KEY` | *(unset)* | Required. Encrypts the secrets that each user saves. Make one with `npm run secret:new`. |
+| `WAYPOINT_PUBLIC_URL` | *(unset)* | The public URL of this copy. Invite and reset links use it, and the origin check accepts it. |
+| `WAYPOINT_SHARED_MONTHLY_USD` | `5` | The monthly limit in USD for each user on the shared `ANTHROPIC_API_KEY`. |
 | `WAYPOINT_CLAUDE_BIN` | `claude` | Full path to the CLI if it is not on `PATH`. |
 | `WAYPOINT_CLAUDE_TIMEOUT_MS` | `120000` | Per-call timeout. Raise it on a slow connection, up to 600000. |
-| `ANTHROPIC_API_KEY` | *(unset)* | If this is set in `.env`, Waypoint uses it (API credit). If it is not set, Waypoint uses the `claude` CLI and your subscription. A failed API call does not fall back to the CLI. |
+| `ANTHROPIC_API_KEY` | *(unset)* | The shared key. Waypoint uses credentials in this order: the user's own key (Settings), then `ANTHROPIC_API_KEY` up to `WAYPOINT_SHARED_MONTHLY_USD` each month for each user, then the `claude` CLI for the admin only. A failed API call does not fall back to the CLI. |
 | `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | *(unset)* | Free key from [developer.adzuna.com](https://developer.adzuna.com). Best lever for broader NL/PL/IN coverage. |
-| `LINKEDIN_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` | *(unset)* | Real OIDC sign-in. Returns name, email and photo only. |
 | `GDRIVE_CLIENT_ID` / `_SECRET` / `_REFRESH_TOKEN` | *(unset)* | Upload each tailored CV to your Drive and put its link in the referral message. See [First run, step 4](#first-run-getting-your-real-data-in). |
 | `GDRIVE_FOLDER_ID` | *(unset)* | Drive folder to upload into. Unset uploads to the Drive root. |
 | `RESUME_PDF` | *(unset)* | Base CV sent when tailoring is unavailable. With neither this nor `RESUME_TEX`, CV features are off. `~` is expanded. |

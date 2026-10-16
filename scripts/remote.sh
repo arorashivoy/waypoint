@@ -15,12 +15,10 @@
 #
 # The tunnel is chosen by WAYPOINT_TUNNEL in .env:
 #   cloudflared  (default) a quick tunnel; a new random URL on every start
-#   zrok         a fixed https://<name>.shares.zrok.io URL behind HTTP basic
-#                auth. Needs `zrok2 enable` once, a reserved name
-#                (`zrok2 create name <name>`), and a `user:password` file.
+#   zrok         a fixed https://<name>.shares.zrok.io URL. Needs `zrok2 enable`
+#                once and a reserved name (`zrok2 create name <name>`).
 #                WAYPOINT_ZROK_NAME (default waypoint), WAYPOINT_ZROK_NAMESPACE
-#                (default public), WAYPOINT_ZROK_AUTH_FILE (default
-#                ~/.config/waypoint/zrok-basic-auth).
+#                (default public).
 #   none         the server only, for use on your own network
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -46,8 +44,6 @@ SELF=remote.sh; [ "$MODE" = prod ] && SELF=start.sh
 TUNNEL="$(envv WAYPOINT_TUNNEL)"; TUNNEL="${TUNNEL:-cloudflared}"
 ZROK_NAME="$(envv WAYPOINT_ZROK_NAME)"; ZROK_NAME="${ZROK_NAME:-waypoint}"
 ZROK_NS="$(envv WAYPOINT_ZROK_NAMESPACE)"; ZROK_NS="${ZROK_NS:-public}"
-ZROK_AUTH="$(envv WAYPOINT_ZROK_AUTH_FILE)"; ZROK_AUTH="${ZROK_AUTH:-$HOME/.config/waypoint/zrok-basic-auth}"
-ZROK_AUTH="${ZROK_AUTH/#\~/$HOME}"
 
 # Keyed by port so two copies on one machine never share pid files or logs.
 RUN="/tmp/waypoint-$PORT"
@@ -91,11 +87,11 @@ zrok_url() {
   [ -n "$host" ] && printf 'https://%s' "${host#https://}"
 }
 
-# Fetches a path through the tunnel the way a signed-in browser would.
+# Fetches a path through the tunnel the way a browser would.
 tunnel_get() {
   local url=$1 args=(-sf -m 25)
   if [ "$TUNNEL" = zrok ]; then
-    args+=(-H "skip_zrok_interstitial: 1" -u "$(cat "$ZROK_AUTH")")
+    args+=(-H "skip_zrok_interstitial: 1")
   fi
   curl "${args[@]}" "$url"
 }
@@ -169,9 +165,8 @@ start_tunnel() {
       local stale
       stale=$(zrok_holder)
       [ -n "$stale" ] && zrok2 delete share "$stale" >/dev/null 2>&1 || true
-      # Read at start, so editing the file and restarting changes the password.
       nohup zrok2 share public "localhost:$PORT" -n "$ZROK_NS:$ZROK_NAME" --headless \
-        --basic-auth "$(cat "$ZROK_AUTH")" >"$TUNNEL_LOG" 2>&1 </dev/null &
+        >"$TUNNEL_LOG" 2>&1 </dev/null &
       echo $! >"$RUN/tunnel.pid"
       for _ in $(seq 1 30); do
         alive tunnel || { echo "zrok exited:" >&2; tail -3 "$TUNNEL_LOG" >&2; exit 1; }
@@ -215,19 +210,10 @@ preflight() {
       command -v cloudflared >/dev/null || { echo "cloudflared not found: brew install cloudflared (macOS) or the arm64 .deb from github.com/cloudflare/cloudflared/releases (Pi)" >&2; exit 1; } ;;
     zrok)
       command -v zrok2 >/dev/null || { echo "zrok2 not found: curl -sSf https://get.openziti.io/install.bash | sudo bash -s zrok2" >&2; exit 1; }
-      [ -s "$ZROK_AUTH" ] || { echo "No zrok password file at $ZROK_AUTH (one line: user:password)." >&2; exit 1; }
       [ -n "$(zrok_url)" ] || { echo "No zrok name '$ZROK_NAME' in namespace '$ZROK_NS': zrok2 create name -n $ZROK_NS $ZROK_NAME" >&2; exit 1; } ;;
     none) ;;
     *) echo "WAYPOINT_TUNNEL must be cloudflared, zrok or none, got '$TUNNEL'" >&2; exit 1 ;;
   esac
-  # A zrok share with basic auth has its own lock, and `none` stays off the
-  # internet; a quick tunnel is a public URL with nothing in front of the app.
-  if [ "$TUNNEL" = cloudflared ] && [ -z "$(envv WAYPOINT_ACCESS_CODE)" ]; then
-    echo "Refusing to expose Waypoint with no passcode." >&2
-    echo "Set WAYPOINT_ACCESS_CODE in .env first — past the sign-in page sit your" >&2
-    echo "LinkedIn connections, your CV, and your Claude subscription." >&2
-    exit 1
-  fi
 }
 
 start() {
@@ -236,17 +222,16 @@ start() {
   start_tunnel
   if [ -s "$RUN/url" ]; then
     # Prove the tunnel reaches this app rather than something else on the port.
-    if ! tunnel_get "$(cat "$RUN/url")/api/state" | grep -q '"signedIn"'; then
+    if ! tunnel_get "$(cat "$RUN/url")/api/health" | grep -q '"app":"waypoint"'; then
       echo "Warning: $(cat "$RUN/url") did not return a Waypoint response. Check what owns :$PORT." >&2
     fi
   fi
   echo
   status
   case "$TUNNEL" in
-    cloudflared) echo "  passcode: the WAYPOINT_ACCESS_CODE value in .env"
-                 echo; echo "This URL is new every start." ;;
-    zrok)        echo "  login:  the user:password in $ZROK_AUTH" ;;
+    cloudflared) echo; echo "This URL is new every start." ;;
   esac
+  echo "  Sign in with your Waypoint account. Make the admin with: npm run user:create-admin"
   echo; echo "Running in the background. Stop with: ./scripts/$SELF stop"
 }
 
