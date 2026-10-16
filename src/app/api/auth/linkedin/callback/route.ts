@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
-import { ensureUser, SESSION_COOKIE } from '@/lib/user';
+import { ensureUser } from '@/lib/user';
+import { SESSION_COOKIE } from '@/lib/auth/cookie-name';
 
 /**
  * OpenID Connect returns name, email and picture, and nothing more — no

@@ -33,4 +33,14 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ ...ok, WAYPOINT_CLAUDE_TIMEOUT_MS: '600001' })).toThrow(/WAYPOINT_CLAUDE_TIMEOUT_MS must be 600000 \(10 minutes\) or less/);
     expect(parseEnv({ ...ok, WAYPOINT_CLAUDE_TIMEOUT_MS: '600000' }).WAYPOINT_CLAUDE_TIMEOUT_MS).toBe(600_000);
   });
+
+  it('reads the shared monthly budget, with a default of 5', () => {
+    expect(parseEnv(ok).WAYPOINT_SHARED_MONTHLY_USD).toBe(5);
+    expect(parseEnv({ ...ok, WAYPOINT_SHARED_MONTHLY_USD: '2.5' }).WAYPOINT_SHARED_MONTHLY_USD).toBe(2.5);
+  });
+
+  it('refuses a public URL that is not a URL and names the key', () => {
+    expect(() => parseEnv({ ...ok, WAYPOINT_PUBLIC_URL: 'not a url' })).toThrow(EnvError);
+    expect(() => parseEnv({ ...ok, WAYPOINT_PUBLIC_URL: 'not a url' })).toThrow(/WAYPOINT_PUBLIC_URL/);
+  });
 });
