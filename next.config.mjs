@@ -2,6 +2,6 @@
 export default {
   experimental: {
     instrumentationHook: true,
-    serverComponentsExternalPackages: ['@prisma/client', 'adm-zip'],
+    serverComponentsExternalPackages: ['@prisma/client', 'adm-zip', '@node-rs/argon2'],
   },
 };
