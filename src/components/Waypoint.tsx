@@ -218,7 +218,7 @@ export default function Waypoint() {
             onClick={() => go(n.key)}
           >
             <span className="tab-bar-mark" />
-            <span className="row" style={{ gap: 4 }}>
+            <span className="row tab-label" style={{ gap: 4 }}>
               {n.short}
               {n.key === 'pending' && needsCount > 0 && <span className="badge flash mono">{needsCount}</span>}
             </span>

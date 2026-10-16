@@ -50,32 +50,35 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
     load().catch((e) => setToast((e as Error).message));
   }, [load, setToast]);
 
+  /** True when the request worked. On an error it shows the message and returns false. */
   const run = async (fn: () => Promise<unknown>, done?: string) => {
     try {
       await fn();
       if (done) setToast(done);
       await load();
+      return true;
     } catch (e) {
       setToast((e as Error).message);
+      return false;
     }
   };
 
-  const signOut = async () => {
-    await post('/api/auth/signout');
-    window.location.assign('/login');
+  const leave = async (url: string, method: 'post' | 'del') => {
+    if (await run(() => (method === 'post' ? post(url) : del(url)))) window.location.assign('/login');
   };
 
   return (
-    <div className="stack" style={{ maxWidth: 760, gap: 0 }}>
-      <div className="screen-head"><h1 className="display">Settings</h1></div>
-      <div style={{ padding: '0 var(--gutter, 32px)', minWidth: 0 }}>
+    <>
+      <header className="screen-head"><h1 className="display">Settings</h1></header>
+      <div className="settings-body">
+      <div style={{ maxWidth: 760, minWidth: 0 }}>
 
       <Section title="Account">
         <div style={{ overflowWrap: 'anywhere' }}>{state?.user?.name} · {state?.user?.email}</div>
-        <form className="stack" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); run(() => post('/api/account/password', { current, next }), 'Password changed. Your other devices are signed out.').then(() => { setCurrent(''); setNext(''); }); }}>
+        <form className="stack" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); run(() => post('/api/account/password', { current, next }), 'Password changed. Your other devices are signed out.').then((ok) => { if (ok) { setCurrent(''); setNext(''); } }); }}>
           <div className="label">Change password</div>
           <input className="field" type="password" autoComplete="current-password" placeholder="Current password" required value={current} onChange={(e) => setCurrent(e.target.value)} />
-          <input className="field" type="password" autoComplete="new-password" placeholder="New password (12 characters or more)" minLength={12} required value={next} onChange={(e) => setNext(e.target.value)} />
+          <input className="field" type="password" autoComplete="new-password" placeholder="New password, 12+ characters" minLength={12} required value={next} onChange={(e) => setNext(e.target.value)} />
           <button className="btn btn-dark" type="submit">Change password</button>
         </form>
         <div className="label">Signed-in devices</div>
@@ -86,8 +89,8 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
           </div>
         ))}
         <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
-          <button className="btn" onClick={signOut}>Sign out</button>
-          <button className="btn" onClick={async () => { await del('/api/account/sessions'); window.location.assign('/login'); }}>Sign out on all devices</button>
+          <button className="btn" onClick={() => leave('/api/auth/signout', 'post')}>Sign out</button>
+          <button className="btn" onClick={() => leave('/api/account/sessions', 'del')}>Sign out on all devices</button>
         </div>
       </Section>
 
@@ -106,7 +109,7 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
                 <button className="btn" onClick={() => run(() => del('/api/account/claude'), 'Removed your API key.')}>Remove key</button>
               </div>
             ) : (
-              <form className="stack" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); run(() => put('/api/account/claude', { key }), 'Saved your API key.').then(() => setKey('')); }}>
+              <form className="stack" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); run(() => put('/api/account/claude', { key }), 'Saved your API key.').then((ok) => { if (ok) setKey(''); }); }}>
                 <div className="label">Your own Anthropic API key</div>
                 <input className="field" type="password" autoComplete="off" placeholder="sk-ant-…" required value={key} onChange={(e) => setKey(e.target.value)} />
                 <button className="btn btn-dark" type="submit">Save key</button>
@@ -152,6 +155,7 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
         </Section>
       )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }

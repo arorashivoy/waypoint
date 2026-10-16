@@ -295,7 +295,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .tab[data-on='true'] { font-weight: 600; color: var(--ink); }
   .tab-bar-mark { width: 22px; height: 3px; border-radius: 2px; background: transparent; }
   .tab[data-on='true'] .tab-bar-mark { background: var(--ink); }
-  .tab .badge { min-width: 18px; height: 18px; border-radius: 9px; font-size: 11px; }
+  .tab .badge { min-width: 18px; height: 18px; border-radius: 9px; font-size: 11px; padding: 0 4px; }
+  /* The badge sits on the top-right of the label so it adds no width to the column. */
+  .tab .tab-label { position: relative; }
+  .tab .tab-label .badge { position: absolute; top: -9px; right: -6px; }
+  .settings-body { overflow: visible; padding: 4px var(--gutter) 28px; }
 
   .sheet {
     position: fixed; inset: 0; z-index: 30;
@@ -317,6 +321,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .note-area { font-size: 16px; min-height: 150px; } /* 16px stops iOS zooming on focus */
   .field { font-size: 16px; }
 }
+
+/* ---------- settings ---------- */
+
+.settings-body { flex-grow: 1; min-height: 0; overflow-y: auto; padding: 24px 36px 48px; }
 
 /* ---------- sign in ---------- */
 
