@@ -51,7 +51,13 @@ run `npm run setup` or re-create `.env`. Instead:
       skip the check, this command hides a missing column and no error shows.
 4. Run `npx prisma migrate deploy`. It applies the migrations that come after `0_init`,
    if there are any. Then run `npx prisma generate`, from this checkout's root.
-5. Bring the setup that lives outside git up to date. **Check each item; don't assume
+5. **Move claims.yml into the database.** Part 3 keeps each profile in the database. Run this one
+   time for the admin, with the server stopped:
+   `npm run migrate:claims -- --user <admin email> --file data/profile/claims.yml`.
+   If the script prints errors, nothing changed: fix the file with `npm run check:claims` and run it
+   again. After this, edit the profile on the Profile screen, or import a claims.yml in
+   Settings → Data. Section 9 (keep claims.yml in sync) does not apply to the `prod` branch.
+6. Bring the setup that lives outside git up to date. **Check each item; don't assume
    it's done.**
    - **Drive token:** run the token check in section 5, step 8. If it returns
      `invalid_grant`, the Google app is probably still in Testing. Do section 5, steps 2–4
@@ -63,19 +69,19 @@ run `npm run setup` or re-create `.env`. Instead:
    - **Obsolete settings:** remove `WAYPOINT_SCHOOL_LINKEDIN_SLUG` from `.env` and any
      `linkedin:` key under an education in `claims.yml`. Neither is used any more.
    - **Check:** `npm run check:claims` exits 0.
-6. Check `.env` for `WAYPOINT_SECRET_KEY`. If the line is missing, run `npm run secret:new`.
+7. Check `.env` for `WAYPOINT_SECRET_KEY`. If the line is missing, run `npm run secret:new`.
    Append the line that it prints to `.env`. Do not overwrite the file.
    Optional: append `WAYPOINT_SHARED_MONTHLY_USD=5` (the default is 5).
-7. Add the public URL to `.env` (append one line; do not overwrite the file):
+8. Add the public URL to `.env` (append one line; do not overwrite the file):
    `WAYPOINT_PUBLIC_URL=https://<name>.shares.zrok.io`
-8. Set the admin password: `npm run user:create-admin`. The migration made your
+9. Set the admin password: `npm run user:create-admin`. The migration made your
    existing account the admin. The script asks for the email, the name and the password.
-9. Remove `WAYPOINT_ACCESS_CODE`, `WAYPOINT_ZROK_AUTH_FILE` and the `LINKEDIN_*` lines
+10. Remove `WAYPOINT_ACCESS_CODE`, `WAYPOINT_ZROK_AUTH_FILE` and the `LINKEDIN_*` lines
    from `.env`. They do nothing now.
-10. Restart with `./scripts/start.sh restart`. The zrok share now has no basic auth.
+11. Restart with `./scripts/start.sh restart`. The zrok share now has no basic auth.
     Sign in with the admin email and password.
     Tell the user to hard-reload every open tab.
-11. Run the checklist in section 7.
+12. Run the checklist in section 7.
 
 ## 1. Machine prerequisites
 
@@ -157,6 +163,10 @@ import { profileSummary } from './src/lib/user';
 EOF
 npx tsx --env-file=.env .probe.ts; rm .probe.ts
 ```
+
+On the `prod` branch the profile of each user is in the database. `claims.yml` is the import and
+export form: Settings → Data downloads it and imports it again, and `npm run migrate:claims` moves
+an existing file into the database. `npm run check:claims` still checks a file before you import it.
 
 ## 5. Google Drive (CV links in referral messages)
 

@@ -460,6 +460,10 @@ The checker and the app call the same `validate()` in `src/lib/claims.ts`, so th
 The ledger is personal data, so `data/profile/` is gitignored and the file is never committed —
 back it up yourself. `CLAIMS_FILE` points the app at a different path.
 
+On the `prod` branch the profile of each user is in the database. `claims.yml` is the import and
+export form: Settings → Data downloads it and imports it again, and `npm run migrate:claims` moves
+an existing file into the database. `npm run check:claims` still checks a file before you import it.
+
 ## Tailored CVs
 
 With `RESUME_TEX` set, each referral gets a CV whose content is chosen for that posting

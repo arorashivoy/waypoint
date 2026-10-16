@@ -13,6 +13,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "setup": "prisma generate && prisma migrate deploy && tsx prisma/seed.ts",
     "check:claims": "tsx scripts/check-claims.ts",
+    "migrate:claims": "tsx --env-file=.env scripts/migrate-claims.ts",
     "gdrive:auth": "tsx --env-file=.env scripts/gdrive-auth.ts",
     "secret:new": "node scripts/new-secret.mjs",
     "user:create-admin": "tsx --env-file=.env scripts/create-admin.ts",
