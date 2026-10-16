@@ -106,6 +106,19 @@ describe('POST /api/auth/login', () => {
     globalLimit.key = `login:all:test-${randomBytes(6).toString('hex')}`;
   });
 
+  it('does not count a try that the IP or email limit refuses toward the global limit', async () => {
+    const { user } = await makeUser();
+    globalLimit.key = `login:all:test-${randomBytes(6).toString('hex')}`;
+    const from = ip();
+    // 10 tries fill this client's IP limit. 100 more tries from it all get 429.
+    for (let i = 0; i < 10; i++) await tryLogin(`x${i}-${randomBytes(3).toString('hex')}@test.local`, 'wrong', from);
+    for (let i = 0; i < 100; i++) expect((await tryLogin(`y${i}-${randomBytes(3).toString('hex')}@test.local`, 'wrong', from)).status).toBe(429);
+    // Only the first 10 reached the global limit, so another client still signs in.
+    expect(globalLimit.calls.length).toBeGreaterThanOrEqual(10);
+    expect((await tryLogin(user.email, TEST_PASSWORD)).status).toBe(200);
+    globalLimit.key = `login:all:test-${randomBytes(6).toString('hex')}`;
+  }, 30_000);
+
   it('refuses a body that is not JSON', async () => {
     const res = await login(request('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' } }), ctx());
     expect(res.status).toBe(400);
