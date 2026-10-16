@@ -6,6 +6,12 @@ vi.mock('@/lib/claude/credential', async (orig) => ({
   credentialFor: vi.fn(async () => null),
 }));
 
+vi.mock('@/lib/cv', async (orig) => ({
+  ...(await orig<typeof import('@/lib/cv')>()),
+  buildCv: vi.fn(async () => ({ path: fileURLToPath(import.meta.url), tailored: false })),
+}));
+
+import { fileURLToPath } from 'node:url';
 import { db } from '@/lib/db';
 import { ctx, makeUser, request } from './helpers/http';
 import * as claudeRoute from '@/app/api/claude/route';
@@ -103,6 +109,7 @@ describe('user B cannot reach the rows of user A', () => {
     const b = await makeUser();
     await jobDetail.PATCH(request(`/api/jobs/${job.id}`, { method: 'PATCH', cookie: b.cookie, body: { applied: true } }), ctx({ id: job.id }));
     expect((await db.application.findUniqueOrThrow({ where: { id: app.id } })).status).toBe('sent');
+    expect((await db.application.findUniqueOrThrow({ where: { userId_jobId: { userId: b.user.id, jobId: job.id } } })).status).toBe('applied');
   });
 
   it("PATCH /api/outreach/[id] on A's event is 404 and changes nothing", async () => {
@@ -113,16 +120,42 @@ describe('user B cannot reach the rows of user A', () => {
     expect((await db.outreachEvent.findUniqueOrThrow({ where: { id: event.id } })).body).toBe('message of A');
   });
 
-  it("GET /api/resume/[id] with A's application is 404", async () => {
-    const { app } = await seedA();
+  it("GET /api/resume/[id] gives the file to A and 'not found' to B", async () => {
+    const { a, app } = await seedA();
     const b = await makeUser();
-    expect((await resumeFile.GET(request(`/api/resume/${app.id}`, { cookie: b.cookie }), ctx({ id: app.id }))).status).toBe(404);
+    expect((await resumeFile.GET(request(`/api/resume/${app.id}`, { cookie: a.cookie }), ctx({ id: app.id }))).status).toBe(200);
+    const res = await resumeFile.GET(request(`/api/resume/${app.id}`, { cookie: b.cookie }), ctx({ id: app.id }));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'not found' });
+  });
+
+  it("POST /api/jobs/[id]/resume does not touch A's application", async () => {
+    const { job, app } = await seedA();
+    const b = await makeUser();
+    const res = await jobResume.POST(request(`/api/jobs/${job.id}/resume`, { method: 'POST', cookie: b.cookie }), ctx({ id: job.id }));
+    expect(res.status).toBeLessThan(500);
+    const after = await db.application.findUniqueOrThrow({ where: { id: app.id } });
+    expect(after.cvChat).toContain('secret chat of A');
+    expect(after.cvPath).toBeNull();
+    expect(await db.application.count({ where: { userId: b.user.id, jobId: job.id } })).toBe(1);
+  });
+
+  it("POST /api/jobs/[id]/resume/refine does not touch A's chat", async () => {
+    const { job, app } = await seedA();
+    const b = await makeUser();
+    const res = await refine.POST(request(`/api/jobs/${job.id}/resume/refine`, { method: 'POST', cookie: b.cookie, body: { message: 'change it' } }), ctx({ id: job.id }));
+    expect(res.status).toBeLessThan(500);
+    const after = await db.application.findUniqueOrThrow({ where: { id: app.id } });
+    expect(after.cvChat).toContain('secret chat of A');
+    expect(after.cvChat).not.toContain('change it');
   });
 
   it("DELETE /api/jobs/[id]/resume/refine does not reset A's chat", async () => {
     const { job, app } = await seedA();
     const b = await makeUser();
-    await refine.DELETE(request(`/api/jobs/${job.id}/resume/refine`, { method: 'DELETE', cookie: b.cookie }), ctx({ id: job.id }));
+    const res = await refine.DELETE(request(`/api/jobs/${job.id}/resume/refine`, { method: 'DELETE', cookie: b.cookie }), ctx({ id: job.id }));
+    expect(res.status).toBeLessThan(300);
+    expect(await db.application.count({ where: { userId: b.user.id, jobId: job.id } })).toBe(1);
     expect((await db.application.findUniqueOrThrow({ where: { id: app.id } })).cvChat).toContain('secret chat of A');
   });
 
@@ -165,5 +198,7 @@ describe('user B cannot reach the rows of user A', () => {
     expect((await adminUser.PATCH(request(`/api/admin/users/${a.user.id}`, { method: 'PATCH', cookie: b.cookie, body: { disabled: true } }), ctx({ id: a.user.id }))).status).toBe(403);
     expect((await adminReset.POST(request(`/api/admin/users/${a.user.id}/reset`, { method: 'POST', cookie: b.cookie }), ctx({ id: a.user.id }))).status).toBe(403);
     expect((await db.user.findUniqueOrThrow({ where: { id: a.user.id } })).disabledAt).toBeNull();
+    expect((await adminInvites.POST(request('/api/admin/invites', { method: 'POST', cookie: b.cookie, body: {} }), ctx())).status).toBe(403);
+    expect((await adminUsers.GET(request('/api/admin/users', { cookie: b.cookie }), ctx())).status).toBe(403);
   });
 });
