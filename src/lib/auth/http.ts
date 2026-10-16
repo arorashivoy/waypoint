@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-/** An error with an HTTP status. `handle` sends it to the client as { error }. */
+/** An error with an HTTP status. `handle` sends it to the client as { error, ...details }. */
 export class HttpError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public details?: Record<string, unknown>) {
     super(message);
   }
 }
@@ -21,7 +21,7 @@ export function handle<C = RouteContext>(fn: (req: NextRequest, ctx: C) => Promi
     try {
       return await fn(req, ctx);
     } catch (e) {
-      if (e instanceof HttpError) return NextResponse.json({ error: e.message }, { status: e.status });
+      if (e instanceof HttpError) return NextResponse.json({ error: e.message, ...e.details }, { status: e.status });
       const code = (e as { code?: string } | null)?.code;
       if (code === 'P2025' || code === 'P2003') return NextResponse.json({ error: 'Not found.' }, { status: 404 });
       console.error('[api]', req.method, req.nextUrl.pathname, e);

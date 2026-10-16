@@ -14,6 +14,15 @@ describe('handle', () => {
     expect(await res.json()).toEqual({ error: 'Not found.' });
   });
 
+  it('sends the details of an HttpError with the message', async () => {
+    const h = handle(async () => {
+      throw new HttpError(422, 'Bad profile.', { errors: ['a: b'] });
+    });
+    const res = await h(req({}), { params: {} });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ error: 'Bad profile.', errors: ['a: b'] });
+  });
+
   it('turns a Prisma "record not found" into 404', async () => {
     const h = handle(async () => { throw Object.assign(new Error('No Job found'), { code: 'P2025' }); });
     expect((await h(req({}), { params: {} })).status).toBe(404);

@@ -1,7 +1,7 @@
 export type Json = Record<string, any>;
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) {
+  constructor(message: string, public status: number, public data: Json = {}) {
     super(message);
   }
 }
@@ -25,7 +25,7 @@ export async function api<T = Json>(url: string, init?: RequestInit): Promise<T>
     redirecting = true;
     window.location.assign('/login?next=' + encodeURIComponent(window.location.pathname + window.location.search));
   }
-  if (!res.ok) throw new ApiError(data.error || `${res.status} ${res.statusText}`, res.status);
+  if (!res.ok) throw new ApiError(data.error || `${res.status} ${res.statusText}`, res.status, data);
   return data as T;
 }
 
