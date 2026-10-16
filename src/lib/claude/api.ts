@@ -57,14 +57,23 @@ export async function askApi<T>(key: string, req: AskRequest<T>, opts: { failure
       output_config: { effort: req.effort, format: jsonFormat(req.schema) },
     });
   } catch (e) {
+    const own = opts.failureKey.startsWith('own:');
     if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
-      setAuthFailure(opts.failureKey, 'The Anthropic API refused the key (401/403). Update ANTHROPIC_API_KEY in .env.');
+      setAuthFailure(
+        opts.failureKey,
+        own ? 'The Anthropic API refused your key (401/403). Update your API key in Settings.' : 'The Anthropic API refused the key (401/403). Update ANTHROPIC_API_KEY in .env.',
+      );
     } else if (e instanceof Anthropic.RateLimitError) {
       setQuotaFailure(opts.failureKey, 'The Anthropic API is limiting requests (429). Wait, or add credit in the Anthropic Console.');
     } else if (e instanceof Anthropic.BadRequestError) {
       const message = String((e as Error).message);
       if (/credit balance|billing|purchase credits/i.test(message)) {
-        setQuotaFailure(opts.failureKey, 'The Anthropic account has no credit left. Add credit in the Anthropic Console, or remove ANTHROPIC_API_KEY to use the CLI subscription.');
+        setQuotaFailure(
+          opts.failureKey,
+          own
+            ? 'Your Anthropic account has no credit. Add credit, or remove your key in Settings to use the shared key.'
+            : 'The shared Anthropic key has no credit. Add credit, or add your own API key in Settings.',
+        );
       } else {
         console.error('[claude] API request refused (400):', message.slice(0, 300));
       }

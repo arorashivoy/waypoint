@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 
-vi.mock('@/lib/claude/cli', async (orig) => ({ ...(await orig<typeof import('@/lib/claude/cli')>()), cliBinary: vi.fn(() => '/usr/bin/claude') }));
+vi.mock('@/lib/claude/cli', async (orig) => ({ ...(await orig<typeof import('@/lib/claude/cli')>()), cliBinary: vi.fn(() => '/usr/bin/claude'), askCli: vi.fn() }));
 vi.mock('@/lib/claude/api', () => ({ askApi: vi.fn() }));
 
 import { db } from '@/lib/db';
@@ -10,6 +10,8 @@ import { resetEnvForTests } from '@/lib/env';
 import { saveSecret } from '@/lib/secrets';
 import { askApi } from '@/lib/claude/api';
 import { askJson, ClaudeCallError, claudeStatus, credentialFor, NoCredentialError } from '@/lib/claude';
+import { setAuthFailure, clearFailures } from '@/lib/claude/failures';
+import { askCli } from '@/lib/claude/cli';
 import { monthSpend, monthStart, nextReset, recordUsage } from '@/lib/claude/usage';
 
 const user = (role: 'admin' | 'member' = 'member') =>
@@ -111,5 +113,35 @@ describe('askJson', () => {
     resetEnvForTests();
     const u = await user('member');
     await expect(askJson(req, { userId: u.id, kind: 'analysis' })).rejects.toBeInstanceOf(NoCredentialError);
+  });
+
+  it('writes a usage row with credential own for an own key', async () => {
+    const u = await user();
+    await saveSecret(u.id, 'anthropic', 'sk-ant-own-key-1234');
+    vi.mocked(askApi).mockResolvedValue({ data: { ok: true }, raw: '{"ok":true}', usage: usage(0.01) });
+    await askJson(req, { userId: u.id, kind: 'analysis' });
+    expect((await db.llmUsage.findMany({ where: { userId: u.id } }))[0]).toMatchObject({ credential: 'own' });
+    expect(vi.mocked(askApi).mock.calls[0][2]).toMatchObject({ failureKey: `own:${u.id}` });
+  });
+
+  it('writes a usage row with credential cli for the admin CLI', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    resetEnvForTests();
+    const u = await user('admin');
+    vi.mocked(askCli).mockResolvedValue({ text: '{"ok":true}', usage: usage(0), denials: 0 });
+    await askJson(req, { userId: u.id, kind: 'analysis' });
+    expect(await db.llmUsage.findMany({ where: { userId: u.id } })).toMatchObject([{ credential: 'cli' }]);
+  });
+});
+
+describe('claudeStatus banners', () => {
+  it('does not show the banner of an own key to another user', async () => {
+    const a = await user();
+    const b = await user();
+    await saveSecret(a.id, 'anthropic', 'sk-ant-own-key-1234');
+    setAuthFailure(`own:${a.id}`, 'bad key');
+    expect((await claudeStatus(a.id)).authFailure?.message).toBe('bad key');
+    expect((await claudeStatus(b.id)).authFailure).toBeNull();
+    clearFailures(`own:${a.id}`);
   });
 });

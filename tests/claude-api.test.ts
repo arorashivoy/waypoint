@@ -85,6 +85,17 @@ describe('askApi', () => {
     expect(claudeAuthFailure('shared')?.message).toMatch(/ANTHROPIC_API_KEY/);
   });
 
+  it('tells the user to update the key in Settings for an own key', async () => {
+    clearFailures('own:u1');
+    clearFailures('shared');
+    const client = fake(() => {
+      throw new Anthropic.AuthenticationError(401, { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }, 'invalid x-api-key', new Headers());
+    });
+    await expect(askApi('bad', req, { failureKey: 'own:u1', client })).rejects.toThrow();
+    expect(claudeAuthFailure('own:u1')?.message).toBe('The Anthropic API refused your key (401/403). Update your API key in Settings.');
+    expect(claudeAuthFailure('shared')).toBeNull();
+  });
+
   const badRequest = (message: string) =>
     new Anthropic.BadRequestError(400, { type: 'error', error: { type: 'invalid_request_error', message } }, message, new Headers());
 
@@ -92,7 +103,7 @@ describe('askApi', () => {
     clearFailures('shared');
     const client = fake(() => { throw badRequest('Your credit balance is too low to access the Anthropic API.'); });
     await expect(askApi('k', req, { failureKey: 'shared', client })).rejects.toBeInstanceOf(Anthropic.BadRequestError);
-    expect(claudeQuotaFailure('shared')?.message).toMatch(/no credit left/);
+    expect(claudeQuotaFailure('shared')?.message).toMatch(/shared Anthropic key has no credit/);
   });
 
   it('logs any other 400, sets no banner and rethrows', async () => {

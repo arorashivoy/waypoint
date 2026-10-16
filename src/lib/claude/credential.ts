@@ -49,10 +49,26 @@ const day = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 
 export async function claudeStatus(userId: string): Promise<ClaudeStatus> {
   const capUsd = env().WAYPOINT_SHARED_MONTHLY_USD;
   const sharedAvailable = !!env().ANTHROPIC_API_KEY;
-  const [sharedSpentUsd, keyHint, cred] = await Promise.all([monthSpend(userId, 'shared'), secretHint(userId, 'anthropic'), credentialFor(userId)]);
+  // This runs on every state poll. It reads the secret row for the hint only and does not decrypt the key.
+  const [sharedSpentUsd, keyHint, user] = await Promise.all([
+    monthSpend(userId, 'shared'),
+    secretHint(userId, 'anthropic'),
+    db.user.findUnique({ where: { id: userId }, select: { role: true, disabledAt: true } }),
+  ]);
   const reset = nextReset();
   const capReached = sharedAvailable && sharedSpentUsd >= capUsd;
   const base = { keyHint, sharedAvailable, capUsd, sharedSpentUsd, capReached, resetsAt: reset.toISOString() };
+
+  const cred: Credential | null =
+    !user || user.disabledAt
+      ? null
+      : keyHint
+        ? { kind: 'api', key: '', source: 'own' }
+        : sharedAvailable && !capReached
+          ? { kind: 'api', key: '', source: 'shared' }
+          : user.role === 'admin' && cliBinary()
+            ? { kind: 'cli' }
+            : null;
 
   if (!cred) {
     const detail = capReached
