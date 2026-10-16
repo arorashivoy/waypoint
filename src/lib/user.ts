@@ -1,37 +1,7 @@
-import { cookies } from 'next/headers';
 import { db } from './db';
-import { COUNTRIES } from './countries';
 import { inferLevels } from './match';
 import { loadClaims, profileFromClaims, schoolOf, type ResolvedProfile } from './claims';
 import type { ProfileSummary } from './prompts';
-import { SESSION_COOKIE } from './auth/cookie-name';
-
-export async function ensureUser(email: string, name: string, picture?: string, linkedin?: string) {
-  const user = await db.user.upsert({
-    where: { email },
-    update: { name, picture, linkedin },
-    create: { email, name, picture, linkedin },
-  });
-  const existing = await db.countryPref.count({ where: { userId: user.id } });
-  if (!existing) {
-    await db.countryPref.createMany({
-      data: COUNTRIES.map((c, i) => ({ userId: user.id, cc: c.cc, rank: i, on: true })),
-    });
-  }
-  return user;
-}
-
-export async function currentUser() {
-  const id = cookies().get(SESSION_COOKIE)?.value;
-  if (!id) return null;
-  return db.user.findUnique({ where: { id } });
-}
-
-export async function requireUser() {
-  const user = await currentUser();
-  if (!user) throw new Error('unauthenticated');
-  return user;
-}
 
 /**
  * The profile every prompt is built from.

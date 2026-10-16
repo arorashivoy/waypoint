@@ -1,6 +1,7 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser } from '@/lib/user';
+import { handle } from '@/lib/auth/http';
+import { requireUser } from '@/lib/auth/guard';
 import { parseExport } from '@/lib/linkedin-import';
 import { loadClaims } from '@/lib/claims';
 
@@ -18,8 +19,8 @@ export const maxDuration = 300;
  * not move. Contacts never need that: routes are ranked from live contacts on
  * every view, not stored in the analysis.
  */
-export async function POST(req: NextRequest) {
-  const user = await requireUser();
+export const POST = handle(async (req) => {
+  const user = await requireUser(req);
   const form = await req.formData();
   const file = form.get('file');
   if (!(file instanceof File)) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
@@ -68,4 +69,4 @@ export async function POST(req: NextRequest) {
   ]);
 
   return NextResponse.json({ ok: true, scope: 'full', counts: parsed.counts });
-}
+});

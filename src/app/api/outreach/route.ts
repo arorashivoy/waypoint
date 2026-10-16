@@ -1,7 +1,9 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import type { Application, Job } from '@prisma/client';
-import { requireUser, profileSummary } from '@/lib/user';
+import { profileSummary } from '@/lib/user';
+import { handle, readJson } from '@/lib/auth/http';
+import { requireUser } from '@/lib/auth/guard';
 import type { ResolvedProfile } from '@/lib/claims';
 import { jobView } from '@/lib/analysis';
 import { alumniSearch, ALUMNI_REASON, isAlumniRequest } from '@/lib/match';
@@ -95,10 +97,10 @@ const resumeView = (resume: Published['resume'], driveReason: string | null) =>
  * step here is: draft the text, hand it to the clipboard, open the profile, and
  * record what the user says happened. Nothing is sent by Waypoint.
  */
-export async function POST(req: NextRequest) {
-  const user = await requireUser();
-  const body = await req.json();
-  const job = await db.job.findUniqueOrThrow({ where: { id: body.jobId } });
+export const POST = handle(async (req) => {
+  const user = await requireUser(req);
+  const body = await readJson(req);
+  const job = await db.job.findUniqueOrThrow({ where: { id: String(body.jobId ?? '') } });
   const app = await db.application.upsert({
     where: { userId_jobId: { userId: user.id, jobId: job.id } },
     update: {},
@@ -249,4 +251,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ error: 'unknown action' }, { status: 400 });
-}
+});

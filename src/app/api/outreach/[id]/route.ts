@@ -1,10 +1,11 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser } from '@/lib/user';
+import { handle, readJson } from '@/lib/auth/http';
+import { requireUser } from '@/lib/auth/guard';
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const user = await requireUser();
-  const body = await req.json();
+export const PATCH = handle<{ params: { id: string } }>(async (req, { params }) => {
+  const user = await requireUser(req);
+  const body = await readJson(req);
   const data: { handled?: boolean; body?: string } = {};
   if (body.handled !== undefined) data.handled = !!body.handled;
   if (typeof body.body === 'string') data.body = body.body.slice(0, 4000);
@@ -17,4 +18,4 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const event = await db.outreachEvent.update({ where: { id: existing.id }, data });
   return NextResponse.json({ ok: true, copy: event.body, open: event.contactUrl });
-}
+});

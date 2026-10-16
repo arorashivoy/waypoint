@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, post } from './api';
+import { ApiError, api, post } from './api';
 import { useIsPhone, useToast } from './hooks';
-import SignIn from './SignIn';
 import JobsScreen from './JobsScreen';
 import PendingScreen from './PendingScreen';
 import ResumeScreen from './ResumeScreen';
@@ -34,7 +33,10 @@ export default function Waypoint() {
   }, []);
 
   useEffect(() => {
-    refresh().catch((e) => setToast(String(e.message)));
+    refresh().catch((e) => {
+      if (e instanceof ApiError && e.status === 401) window.location.assign('/login');
+      else setToast(String(e.message));
+    });
   }, [refresh, setToast]);
 
   // While Claude is working through the queue, poll so estimates turn into real
@@ -64,8 +66,6 @@ export default function Waypoint() {
     await post('/api/countries', { cc, on });
   };
 
-  const signedIn = state?.signedIn;
-
   const screens = useMemo(
     () => ({ state, refresh, setToast, openJob, selected, setSelected, toggleCountry, go, phone }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -74,10 +74,6 @@ export default function Waypoint() {
 
   if (state === null) {
     return <main style={{ padding: 40, fontSize: 15, color: 'var(--muted)' }}>Loading Waypoint…</main>;
-  }
-
-  if (!signedIn) {
-    return <SignIn onSignedIn={refresh} setToast={setToast} toast={toast} requiresCode={state.requiresCode} />;
   }
 
   return (

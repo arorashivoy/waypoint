@@ -1,6 +1,8 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { profileSummary, requireUser } from '@/lib/user';
+import { profileSummary } from '@/lib/user';
+import { handle, readJson } from '@/lib/auth/http';
+import { requireUser } from '@/lib/auth/guard';
 import { analyseJob, jobView } from '@/lib/analysis';
 import { alumniSearch, isAlumniRequest } from '@/lib/match';
 import { readChat } from '@/lib/cv';
@@ -64,8 +66,8 @@ async function detail(jobId: string, userId: string, force: boolean) {
   };
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const user = await requireUser();
+export const GET = handle<{ params: { id: string } }>(async (req, { params }) => {
+  const user = await requireUser(req);
   const force = req.nextUrl.searchParams.get('reanalyse') === '1';
   const key = `${user.id}:${params.id}:${force}`;
 
@@ -80,11 +82,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
-}
+});
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const user = await requireUser();
-  const body = await req.json();
+export const PATCH = handle<{ params: { id: string } }>(async (req, { params }) => {
+  const user = await requireUser(req);
+  const body = await readJson(req);
   const app = await db.application.upsert({
     where: { userId_jobId: { userId: user.id, jobId: params.id } },
     update: {},
@@ -96,4 +98,4 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (Object.keys(data).length) await db.application.update({ where: { id: app.id }, data });
 
   return NextResponse.json({ ok: true });
-}
+});

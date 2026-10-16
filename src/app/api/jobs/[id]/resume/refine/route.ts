@@ -1,6 +1,7 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser } from '@/lib/user';
+import { handle } from '@/lib/auth/http';
+import { requireUser } from '@/lib/auth/guard';
 import { CvError, refineCv, resetCv } from '@/lib/cv';
 
 export const dynamic = 'force-dynamic';
@@ -20,8 +21,8 @@ const failed = (e: unknown) =>
   NextResponse.json({ error: (e as Error).message }, { status: e instanceof CvError ? 400 : 500 });
 
 /** One "Refine with Claude" turn: Claude picks, the CV rebuilds, Drive updates in place. */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const user = await requireUser();
+export const POST = handle<{ params: { id: string } }>(async (req, { params }) => {
+  const user = await requireUser(req);
   const body = await req.json().catch(() => ({}));
   try {
     const { job, app } = await application(user.id, params.id);
@@ -29,15 +30,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   } catch (e) {
     return failed(e);
   }
-}
+});
 
 /** Forgets the conversation and its choices; the CV goes back to the posting's own selection. */
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  const user = await requireUser();
+export const DELETE = handle<{ params: { id: string } }>(async (req, { params }) => {
+  const user = await requireUser(req);
   try {
     const { job, app } = await application(user.id, params.id);
     return NextResponse.json(await resetCv(app, job));
   } catch (e) {
     return failed(e);
   }
-}
+});

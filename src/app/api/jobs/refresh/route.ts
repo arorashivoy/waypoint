@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser } from '@/lib/user';
+import { handle } from '@/lib/auth/http';
+import { requireUser } from '@/lib/auth/guard';
 import { fetchAll } from '@/lib/sources';
 import { queueAnalysis } from '@/lib/queue';
 import { loadClaims } from '@/lib/claims';
@@ -9,8 +10,8 @@ import { searchQueries } from '@/lib/resume';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-export async function POST() {
-  const user = await requireUser();
+export const POST = handle(async (req) => {
+  const user = await requireUser(req);
   const prefs = await db.countryPref.findMany({ where: { userId: user.id, on: true } });
   const ccs = prefs.map((p) => p.cc);
   if (!ccs.length) return NextResponse.json({ added: 0, report: [], note: 'Every country is paused.' });
@@ -36,4 +37,4 @@ export async function POST() {
   const analysing = await queueAnalysis(user.id);
 
   return NextResponse.json({ added, total: jobs.length, report, analysing });
-}
+});

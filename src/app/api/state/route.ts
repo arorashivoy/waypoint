@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { currentUser } from '@/lib/user';
+import { handle } from '@/lib/auth/http';
+import { requireUser } from '@/lib/auth/guard';
 import { buildState } from '@/lib/state';
-import { accessCodeRequired } from '@/lib/access';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ signedIn: false, requiresCode: accessCodeRequired() });
+export const GET = handle(async (req) => {
+  const user = await requireUser(req);
   return NextResponse.json({ signedIn: true, ...(await buildState(user.id)) });
-}
+});

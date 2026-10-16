@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { SESSION_COOKIE } from '@/lib/auth/cookie-name';
+import { handle } from '@/lib/auth/http';
+import { clearSessionCookie, endSession, readSession } from '@/lib/auth/session';
 
-export async function POST() {
-  cookies().delete(SESSION_COOKIE);
-  return NextResponse.json({ ok: true });
-}
+export const POST = handle(async (req) => {
+  const s = await readSession(req);
+  if (s) await endSession(s.session.id);
+  const res = NextResponse.json({ ok: true });
+  clearSessionCookie(res, req);
+  return res;
+});

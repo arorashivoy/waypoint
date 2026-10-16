@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { readFileSync } from 'fs';
 import { basename } from 'path';
 import { db } from '@/lib/db';
-import { requireUser } from '@/lib/user';
+import { handle } from '@/lib/auth/http';
+import { requireUser } from '@/lib/auth/guard';
 import { buildCv } from '@/lib/cv';
 
 export const maxDuration = 300;
@@ -16,8 +17,8 @@ export const maxDuration = 300;
  * cache hit and a CV edited in the meantime is picked up without a stale copy
  * being served. The application id scopes it to this user, who must own it.
  */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const user = await requireUser();
+export const GET = handle<{ params: { id: string } }>(async (req, { params }) => {
+  const user = await requireUser(req);
   const app = await db.application.findFirst({ where: { id: params.id, userId: user.id }, include: { job: true } });
   if (!app) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
@@ -41,4 +42,4 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   } catch {
     return NextResponse.json({ error: `Could not read ${basename(resume.path)}` }, { status: 500 });
   }
-}
+});

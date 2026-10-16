@@ -1,10 +1,21 @@
 export type Json = Record<string, any>;
 
+export class ApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
+
 export async function api<T = Json>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { cache: 'no-store', ...init });
   const text = await res.text();
-  const data = text ? JSON.parse(text) : {};
-  if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
+  let data: Json = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = {};
+  }
+  if (!res.ok) throw new ApiError(data.error || `${res.status} ${res.statusText}`, res.status);
   return data as T;
 }
 
@@ -13,6 +24,8 @@ export const post = <T = Json>(url: string, body?: unknown) =>
 
 export const patch = <T = Json>(url: string, body: unknown) =>
   api<T>(url, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+export const put = <T = Json>(url: string, body: unknown) => api<T>(url, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
 export const del = <T = Json>(url: string) => api<T>(url, { method: 'DELETE' });
 
