@@ -85,12 +85,12 @@ const unite = <T>(a: T[] | undefined, b: T[] | undefined, key: (x: T) => string)
 };
 const lower = (s: string) => s.trim().toLowerCase();
 
-/** The existing item, with the empty fields filled from `incoming` and the lists united. It keeps the key of `existing`. */
+/** The existing item, with the empty fields filled from `incoming` and the lists united. It keeps the key of `existing`. The `end` of a position stays: null means a current job. */
 export function mergeItem(kind: ItemKind, existing: Item, incoming: Item): Item {
   const out: Record<string, unknown> = { ...(incoming as Record<string, unknown>), ...(existing as Record<string, unknown>) };
   for (const [k, v] of Object.entries(existing as Record<string, unknown>)) {
     const fill = (incoming as Record<string, unknown>)[k];
-    if ((v === null || v === undefined || v === '') && fill !== undefined) out[k] = fill;
+    if ((v === null || v === undefined || v === '') && fill !== undefined && !(kind === 'position' && k === 'end')) out[k] = fill;
   }
   if (kind === 'claim') {
     const a = existing as Claim;

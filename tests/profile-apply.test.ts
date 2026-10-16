@@ -65,6 +65,14 @@ describe('mergeItem', () => {
   });
 });
 
+describe('mergeItem end date', () => {
+  it('does not end a current position from a matched draft', () => {
+    const p = sample().targets.positions[0];
+    const merged = mergeItem('position', { ...p, end: null }, { ...p, end: '2024-05' }) as { end?: string | null };
+    expect(merged.end).toBeNull();
+  });
+});
+
 describe('applyDrafts', () => {
   it('applies a project draft before the claim draft that points at it', () => {
     const d = sample();

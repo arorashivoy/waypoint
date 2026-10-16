@@ -14,6 +14,7 @@ import { loadProfileDoc, ProfileError, saveProfile } from './store';
  */
 
 export const MAX_PENDING = 500;
+const MAX_SCAN = 5000;
 const KEEP_DONE_DAYS = 30;
 
 export type NewDraft = { type: DraftType; data: unknown; warnings?: string[] };
@@ -43,8 +44,12 @@ const parseJson = <T>(s: string, fallback: T): T => {
 export function scanWarnings(data: unknown): string[] {
   const out = new Set<string>();
   let n = 0;
+  let capped = false;
   const walk = (v: unknown) => {
-    if (n > 5000) return;
+    if (n > MAX_SCAN) {
+      capped = true;
+      return;
+    }
     if (typeof v === 'string') {
       n++;
       const c = checkForInjection(v);
@@ -53,6 +58,7 @@ export function scanWarnings(data: unknown): string[] {
     else if (v && typeof v === 'object') Object.values(v).forEach(walk);
   };
   walk(data);
+  if (capped) out.add('This draft is too large to check fully. Check all of its text before you accept it.');
   return [...out];
 }
 
