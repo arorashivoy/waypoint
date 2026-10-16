@@ -52,6 +52,7 @@ import * as draftOne from '@/app/api/profile/drafts/[id]/route';
 import * as draftApprove from '@/app/api/profile/drafts/[id]/approve/route';
 import * as resumeFile from '@/app/api/resume/[id]/route';
 import * as stateRoute from '@/app/api/state/route';
+import * as account from '@/app/api/account/route';
 import * as password from '@/app/api/account/password/route';
 import * as sessions from '@/app/api/account/sessions/route';
 import * as sessionOne from '@/app/api/account/sessions/[id]/route';
@@ -104,6 +105,7 @@ describe('every route refuses a request without a session', () => {
     ['POST /api/profile/resume-import', resumeImport.POST as Handler],
     ['POST /api/profile/github/repos', githubRepos.POST as Handler],
     ['POST /api/profile/github/import', githubImport.POST as Handler],
+    ['DELETE /api/account', account.DELETE as Handler],
     ['GET /api/account/github', accountGithub.GET as Handler],
     ['PUT /api/account/github', accountGithub.PUT as Handler],
     ['DELETE /api/account/github', accountGithub.DELETE as Handler],

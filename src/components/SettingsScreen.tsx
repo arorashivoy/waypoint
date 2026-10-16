@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { api, copyText, del, leaveSession, patch, post, put } from './api';
+import { api, ApiError, copyText, del, leaveSession, patch, post, put, upload } from './api';
 
 type Status = { mode: 'own' | 'shared' | 'cli' | 'none'; detail: string; keyHint: string | null; sharedAvailable: boolean; capUsd: number; sharedSpentUsd: number; capReached: boolean; resetsAt: string };
 type SessionRow = { id: string; current: boolean; userAgent: string | null; createdAt: string; lastSeenAt: string };
@@ -37,12 +37,18 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
   const [key, setKey] = useState('');
   const [users, setUsers] = useState<UserRow[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [githubHint, setGithubHint] = useState<string | null>(null);
+  const [githubToken, setGithubToken] = useState('');
+  const [yamlErrors, setYamlErrors] = useState<string[]>([]);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const [link, setLink] = useState<{ url: string; expiresAt: string; label: string } | null>(null);
 
   const load = useCallback(async () => {
-    const [s, c] = await Promise.all([api<{ sessions: SessionRow[] }>('/api/account/sessions'), api<Status>('/api/account/claude')]);
+    const [s, c, g] = await Promise.all([api<{ sessions: SessionRow[] }>('/api/account/sessions'), api<Status>('/api/account/claude'), api<{ hint: string | null }>('/api/account/github')]);
     setSessions(s.sessions);
     setClaude(c);
+    setGithubHint(g.hint);
     if (isAdmin) setUsers((await api<{ users: UserRow[] }>('/api/admin/users')).users);
   }, [isAdmin]);
 
@@ -118,6 +124,65 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
               </form>
             )}
           </>
+        )}
+      </Section>
+
+      <Section title="Integrations">
+        <div className="label">GitHub</div>
+        {githubHint ? (
+          <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
+            <span>Your GitHub token ends in {githubHint}. The GitHub import can read your private repositories.</span>
+            <button className="btn" onClick={() => run(async () => { await del('/api/account/github'); setGithubHint(null); }, 'Removed your GitHub token.')}>Remove token</button>
+          </div>
+        ) : (
+          <form className="stack" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); run(async () => { const r = await put<{ hint: string }>('/api/account/github', { token: githubToken }); setGithubHint(r.hint); setGithubToken(''); }, 'Saved your GitHub token.'); }}>
+            <label className="label" htmlFor="gh-token">Personal access token (optional)</label>
+            <input id="gh-token" className="field" type="password" autoComplete="off" placeholder="github_pat_…" value={githubToken} onChange={(e) => setGithubToken(e.target.value)} />
+            <span className="hint">Only for private repositories. Give the token read access to repository contents only. Waypoint stores it encrypted and shows only its last 4 characters.</span>
+            <div><button className="btn btn-dark" type="submit" disabled={!githubToken.trim()}>Save token</button></div>
+          </form>
+        )}
+        <span className="hint">Google Drive links stay in the admin's .env until a later part.</span>
+      </Section>
+
+      <Section title="Data">
+        <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+          <a className="btn" href="/api/profile/export" download="claims.yml">Download claims.yml</a>
+          <label className="btn" style={{ cursor: 'pointer' }}>
+            Import claims.yml
+            <input type="file" accept=".yml,.yaml,text/yaml,application/yaml" hidden onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (!f) return;
+              setYamlErrors([]);
+              try {
+                const r = await upload<{ diff: unknown[] }>('/api/profile/yaml', f);
+                setToast(`The file is ready (${r.diff.length} changes). Review it in Profile → Imports, then accept it.`);
+              } catch (err) {
+                if (err instanceof ApiError && Array.isArray(err.data.errors)) setYamlErrors(err.data.errors);
+                else setToast((err as Error).message);
+              }
+            }} />
+          </label>
+        </div>
+        {yamlErrors.length > 0 && <ul className="err" role="alert" style={{ overflowWrap: 'anywhere' }}>{yamlErrors.map((x) => <li key={x}>{x}</li>)}</ul>}
+
+        {!isAdmin && (
+          <div className="stack" style={{ gap: 10, borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+            <div className="label">Delete my account</div>
+            <span className="hint">This deletes your profile, drafts, applications, contacts, keys and files. It cannot be undone. Download claims.yml first if you want to keep your profile.</span>
+            <label className="sr-only" htmlFor="delete-password">Password</label>
+            <input id="delete-password" className="field" type="password" autoComplete="current-password" placeholder="Your password" value={deletePassword} onChange={(e) => { setDeletePassword(e.target.value); setDeleting(false); }} />
+            {deleting ? (
+              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                <span>Delete the account now?</span>
+                <button className="btn" onClick={() => leaveSession(() => api('/api/account', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: deletePassword }) }), (m) => { setDeleting(false); setToast(m); })}>Yes, delete it</button>
+                <button className="btn" onClick={() => setDeleting(false)}>No</button>
+              </div>
+            ) : (
+              <div><button className="btn" disabled={!deletePassword} onClick={() => setDeleting(true)}>Delete my account</button></div>
+            )}
+          </div>
         )}
       </Section>
 
