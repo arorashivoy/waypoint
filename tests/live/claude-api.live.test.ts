@@ -10,7 +10,7 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY)('Claude API (live)', () => {
       prompt: 'Write a hook for an engineer who builds Kafka pipelines.',
       schema: HookReply,
       effort: 'low',
-    });
+    }, { failureKey: 'shared' });
     expect(typeof r.data.hook).toBe('string');
     expect(r.usage.model).toMatch(/^claude-sonnet-/);
   }, 120_000);

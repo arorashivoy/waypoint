@@ -1,7 +1,7 @@
 import { db } from './db';
 import { COUNTRIES, GLOBAL_SITES } from './countries';
 import { makeJobViewer } from './analysis';
-import { detectMode, claudeAuthFailure, claudeQuotaFailure } from './claude';
+import { claudeStatus } from './claude';
 import { analysisProgress } from './queue';
 import { profileSummary } from './user';
 import { claimsFailure, loadClaims } from './claims';
@@ -41,7 +41,7 @@ export async function buildState(userId: string) {
     // is spent on listings the user can actually see.
     db.job.findMany({ where: { cc: { in: onCcs } }, orderBy: { postedAt: 'desc' }, take: 400 }),
     db.application.findMany({ where: { userId }, include: { job: true, outreach: { orderBy: { createdAt: 'desc' } } } }),
-    detectMode(),
+    claudeStatus(userId),
     profileSummary(userId),
     db.contact.findMany({ where: { userId }, orderBy: [{ connectedAt: 'desc' }, { lastName: 'asc' }], take: CONTACT_LIMIT }),
     db.contact.count({ where: { userId } }),
@@ -202,7 +202,7 @@ export async function buildState(userId: string) {
       linkedin: user.linkedin,
       headline: profile.headline,
     },
-    claude: { ...claude, authFailure: claudeAuthFailure(), quotaFailure: claudeQuotaFailure() },
+    claude,
     claims: claimsFailure(),
     countries: COUNTRIES.map((c) => {
       const pref = prefs.find((p) => p.cc === c.cc);

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { db } from './db';
-import { askJson, extractJson, MODEL, type AskRequest } from './claude';
+import { askJson, extractJson, MODEL, type AskRequest, type CallContext } from './claude';
 
 /**
  * A content-addressed cache in front of `ask`.
@@ -38,7 +38,7 @@ const inFlight = new Map<string, Promise<unknown>>();
  * reads every stored reply again for free. A stored reply that no longer
  * matches the schema is a miss, not an error.
  */
-export async function askJsonCached<T>(kind: CacheKind, version: string, req: AskRequest<T>): Promise<T> {
+export async function askJsonCached<T>(kind: CacheKind, version: string, req: AskRequest<T>, ctx: CallContext): Promise<T> {
   const key = cacheKey(version, req.system, req.prompt);
 
   const hit = await db.llmCache.findUnique({ where: { key } });
@@ -55,7 +55,7 @@ export async function askJsonCached<T>(kind: CacheKind, version: string, req: As
   let work = inFlight.get(key) as Promise<T> | undefined;
   if (!work) {
     work = (async () => {
-      const { data, raw } = await askJson(req);
+      const { data, raw } = await askJson(req, ctx);
       // Only a successful call is written. Caching a throw would remember one
       // rate limit forever.
       await db.llmCache.upsert({

@@ -110,7 +110,7 @@ export default function Waypoint() {
           <div className="stack">
             <span style={{ fontSize: 15, fontWeight: 600 }}>{state.user.name}</span>
             <span style={{ fontSize: 13, color: 'var(--muted-2)' }}>
-              {state.claude.mode === 'cli' ? 'Claude: your subscription' : state.claude.mode === 'api' ? 'Claude: API key' : 'Claude not connected'}
+              {state.claude.mode === 'cli' ? 'Claude: your subscription' : state.claude.mode === 'own' || state.claude.mode === 'shared' ? 'Claude: API key' : state.claude.detail}
             </span>
           </div>
         </div>

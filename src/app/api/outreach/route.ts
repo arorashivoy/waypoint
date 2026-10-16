@@ -7,7 +7,7 @@ import { requireUser } from '@/lib/auth/guard';
 import type { ResolvedProfile } from '@/lib/claims';
 import { jobView } from '@/lib/analysis';
 import { alumniSearch, ALUMNI_REASON, isAlumniRequest } from '@/lib/match';
-import { askJson, detectMode } from '@/lib/claude';
+import { askJson, credentialFor } from '@/lib/claude';
 import { askJsonCached } from '@/lib/cache';
 import { DraftReply, HookReply, SlotsReply } from '@/lib/schemas';
 import { alumniHookBudget, MIN_HOOK, renderAlumniNote, renderReferral, resolveHighlight, type Slots } from '@/lib/templates';
@@ -39,12 +39,12 @@ const profileLink = (c: { name: string; profileUrl: string | null }, company: st
  * quarter of the output tokens of writing the message from scratch.
  */
 async function draftReferral(app: Application, job: Job, profile: ResolvedProfile, contactName: string) {
-  const { mode } = await detectMode();
+  const cred = await credentialFor(app.userId);
   const candidates = [...profile.projects.map((p) => p.title), ...profile.positions.map((p) => p.title)].filter(Boolean);
   const slots: Slots =
-    mode === 'none'
+    !cred
       ? { highlight: candidates[0] || '', hook: 'it lines up closely with what I build today', proof: `I ${profile.headline.toLowerCase()}` }
-      : await askJsonCached('referral', 'v1', { system: REFERRAL_SYSTEM, prompt: referralPrompt(profile, job, contactName), schema: SlotsReply, effort: 'low' });
+      : await askJsonCached('referral', 'v1', { system: REFERRAL_SYSTEM, prompt: referralPrompt(profile, job, contactName), schema: SlotsReply, effort: 'low' }, { userId: app.userId, kind: 'referral' });
 
   // Which projects lead is decided from the claim graph against this
   // posting's own words, plus whatever was chosen in "Refine with Claude" —
@@ -141,16 +141,16 @@ export const POST = handle(async (req) => {
     const profile = await profileSummary(user.id);
     const school = profile.school;
     if (!school) return NextResponse.json({ error: 'No school on your profile. Add an education to claims.yml or import your LinkedIn export.' }, { status: 400 });
-    const { mode } = await detectMode();
+    const cred = await credentialFor(user.id);
 
     const frame = { school: school.short, role: job.role, company: job.company };
     const budget = alumniHookBudget(frame);
     // Too little room left for a sentence worth reading: the note goes out
     // with the frame alone, and the call is not worth making.
     const hook =
-      mode === 'none' || budget < MIN_HOOK
+      !cred || budget < MIN_HOOK
         ? ''
-        : (await askJsonCached('note', 'v1', { system: ALUMNI_SYSTEM, prompt: alumniPrompt(profile, job, school.short, budget), schema: HookReply, effort: 'low' })).hook;
+        : (await askJsonCached('note', 'v1', { system: ALUMNI_SYSTEM, prompt: alumniPrompt(profile, job, school.short, budget), schema: HookReply, effort: 'low' }, { userId: user.id, kind: 'note' })).hook;
     const note = renderAlumniNote({ ...frame, hook });
     const open = alumniSearch(school, job.company);
     const name = `${school.short} alumni at ${job.company}`;
@@ -210,14 +210,14 @@ export const POST = handle(async (req) => {
     const request = await db.outreachEvent.findFirst({ where: { applicationId: app.id, kind: 'request' }, orderBy: { createdAt: 'desc' } });
     const name = request?.contactName || 'there';
     const incoming = String(body.incoming || '').slice(0, 8000);
-    const { mode } = await detectMode();
+    const cred = await credentialFor(user.id);
 
     // Without Claude we cannot judge certainty, so nothing auto-sends: it all
     // goes to Needs you, which is the safe direction to fail in.
     const drafted =
-      mode === 'none'
+      !cred
         ? { draft: `Thank you, ${name.split(' ')[0]}!`, certain: false, reason: 'Claude is not connected, so this reply was not checked. Read it before sending.' }
-        : (await askJson({ system: REPLY_SYSTEM, prompt: replyPrompt(profile, job, name, incoming, ON_FILE), schema: DraftReply, effort: 'medium' })).data;
+        : (await askJson({ system: REPLY_SYSTEM, prompt: replyPrompt(profile, job, name, incoming, ON_FILE), schema: DraftReply, effort: 'medium' }, { userId: user.id, kind: 'reply' })).data;
 
     // The model is instructed to refuse manipulation and does. This does not
     // depend on that: a message shaped like an instruction to a model is

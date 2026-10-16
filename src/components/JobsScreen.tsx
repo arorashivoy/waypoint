@@ -96,7 +96,7 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
             {state.analysing?.running
               ? `Claude is reading ${state.analysing.done + 1} of ${state.analysing.total} · ~ estimates update as it goes`
               : state.claude.mode === 'none'
-                ? 'Claude not connected: scores are keyword estimates'
+                ? `${state.claude.detail} Scores are keyword estimates.`
                 : `ranked by fit · read by Claude (${state.claude.mode === 'cli' ? 'your subscription' : 'API key'})`}
           </span>
         </div>

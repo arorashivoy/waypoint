@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { assertSonnet, costUsd, MODEL } from './model';
@@ -24,10 +25,11 @@ export type MessagesClient = { messages: { create: (params: any) => Promise<any>
 
 const clients = new Map<string, Anthropic>();
 function clientFor(key: string): Anthropic {
-  let c = clients.get(key);
+  const id = createHash('sha256').update(key).digest('hex');
+  let c = clients.get(id);
   if (!c) {
     c = new Anthropic({ apiKey: key, maxRetries: 2 });
-    clients.set(key, c);
+    clients.set(id, c);
   }
   return c;
 }
@@ -39,7 +41,8 @@ function jsonFormat(schema: unknown) {
   return { type, schema: jsonSchema };
 }
 
-export async function askApi<T>(key: string, req: AskRequest<T>, client: MessagesClient = clientFor(key)): Promise<{ data: T; raw: string; usage: Usage }> {
+export async function askApi<T>(key: string, req: AskRequest<T>, opts: { failureKey: string; client?: MessagesClient }): Promise<{ data: T; raw: string; usage: Usage }> {
+  const client: MessagesClient = opts.client ?? clientFor(key);
   assertSonnet(MODEL);
   let res: any;
   try {
@@ -55,13 +58,13 @@ export async function askApi<T>(key: string, req: AskRequest<T>, client: Message
     });
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
-      setAuthFailure('The Anthropic API refused the key (401/403). Update ANTHROPIC_API_KEY in .env.');
+      setAuthFailure(opts.failureKey, 'The Anthropic API refused the key (401/403). Update ANTHROPIC_API_KEY in .env.');
     } else if (e instanceof Anthropic.RateLimitError) {
-      setQuotaFailure('The Anthropic API is limiting requests (429). Wait, or add credit in the Anthropic Console.');
+      setQuotaFailure(opts.failureKey, 'The Anthropic API is limiting requests (429). Wait, or add credit in the Anthropic Console.');
     } else if (e instanceof Anthropic.BadRequestError) {
       const message = String((e as Error).message);
       if (/credit balance|billing|purchase credits/i.test(message)) {
-        setQuotaFailure('The Anthropic account has no credit left. Add credit in the Anthropic Console, or remove ANTHROPIC_API_KEY to use the CLI subscription.');
+        setQuotaFailure(opts.failureKey, 'The Anthropic account has no credit left. Add credit in the Anthropic Console, or remove ANTHROPIC_API_KEY to use the CLI subscription.');
       } else {
         console.error('[claude] API request refused (400):', message.slice(0, 300));
       }
@@ -103,6 +106,6 @@ export async function askApi<T>(key: string, req: AskRequest<T>, client: Message
     const where = issue ? `${issue.path.join('.') || '(root)'} ${issue.message}` : 'unknown issue';
     throw new ClaudeCallError(`The API reply did not match the schema: ${where}`, usage);
   }
-  clearFailures();
+  clearFailures(opts.failureKey);
   return { data: parsed.data, raw, usage };
 }

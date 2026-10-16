@@ -1,6 +1,6 @@
 import type { Application, Job } from '@prisma/client';
 import { db } from './db';
-import { askJson, detectMode } from './claude';
+import { askJson, claudeStatus } from './claude';
 import { RefineReply } from './schemas';
 import { loadClaims } from './claims';
 import { shareResume } from './gdrive';
@@ -95,7 +95,7 @@ export async function refineCv(app: Application, job: Job, request: string) {
   if (!doc) throw new CvError('Refining needs a valid data/profile/claims.yml — it only ever chooses between what that file lists. Run npm run check:claims.');
   const menu = resumeMenu(doc);
   if (!menu) throw new CvError('Refining needs RESUME_TEX: there is no LaTeX source to rearrange.');
-  const { mode, detail } = await detectMode();
+  const { mode, detail } = await claudeStatus(app.userId);
   if (mode === 'none') throw new CvError(detail);
 
   const current = await buildCv(app, job);
@@ -112,7 +112,7 @@ export async function refineCv(app: Application, job: Job, request: string) {
       ),
       schema: RefineReply,
       effort: 'medium',
-    })
+    }, { userId: app.userId, kind: 'refine' })
   ).data;
 
   const rejected: string[] = [];

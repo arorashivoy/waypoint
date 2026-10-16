@@ -1,6 +1,6 @@
 import { db } from './db';
 import { analyseJob, makeJobViewer, MAX_ANALYSIS_TRIES } from './analysis';
-import { detectMode } from './claude';
+import { credentialFor } from './claude';
 
 /**
  * A refresh brings in several hundred listings. Reading every one with Claude
@@ -23,7 +23,7 @@ export function analysisProgress(userId: string): Progress {
 
 export async function queueAnalysis(userId: string, limit = 25) {
   if (progress.get(userId)?.running) return analysisProgress(userId);
-  if ((await detectMode()).mode === 'none') return analysisProgress(userId);
+  if (!(await credentialFor(userId))) return analysisProgress(userId);
 
   const onCcs = (await db.countryPref.findMany({ where: { userId, on: true } })).map((p) => p.cc);
   // `analysedAt`, not `analysis`: a job whose call failed still has a heuristic

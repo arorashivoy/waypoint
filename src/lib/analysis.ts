@@ -1,6 +1,6 @@
 import type { Job } from '@prisma/client';
 import { db } from './db';
-import { detectMode } from './claude';
+import { credentialFor } from './claude';
 import { askJsonCached } from './cache';
 import { AnalysisReply, coerceText } from './schemas';
 import { ANALYSE_SYSTEM, analysePrompt } from './prompts';
@@ -146,12 +146,11 @@ export async function analyseJob(job: Job, userId: string, force = false): Promi
   let analysis: Analysis;
   let read = false;
 
-  const { mode } = await detectMode();
-  if (mode === 'none') {
+  if (!(await credentialFor(userId))) {
     analysis = heuristicAnalysis(job, profile, fitFromClaims());
   } else {
     try {
-      const out = await askJsonCached('analysis', 'v1', { system: ANALYSE_SYSTEM, prompt: analysePrompt(profile, job), schema: AnalysisReply, effort: 'medium' });
+      const out = await askJsonCached('analysis', 'v1', { system: ANALYSE_SYSTEM, prompt: analysePrompt(profile, job), schema: AnalysisReply, effort: 'medium' }, { userId, kind: 'analysis' });
       analysis = normalise(out, 'claude');
       read = true;
     } catch {

@@ -1,44 +1,27 @@
-import { env } from '../env';
 import { askApi } from './api';
-import { askCli, cliBinary } from './cli';
+import { askCli } from './cli';
+import { credentialFor, failureKey } from './credential';
 import { extractJson } from './json';
-import { ClaudeCallError, type AskRequest, type AskResult, type Credential, type Usage } from './types';
+import { ClaudeCallError, NoCredentialError, type AskRequest, type AskResult, type CallContext, type Credential, type Usage } from './types';
+import { recordUsage } from './usage';
 
 /**
  * The one way to call Claude.
  *
- * Which account pays: an API key in .env wins; without one, the admin's
- * subscription through the CLI. A failed API call never falls back to the
- * CLI, so a wrong key shows as an auth banner and does not spend the
- * subscription in secret. Part 2 adds the key that each user saves.
+ * The credential is per user (see `credential.ts`): the user's own API key,
+ * then the shared key under the monthly cap, then the CLI for the admin only.
+ * A failed API call never falls back to the CLI, so a wrong key shows as an
+ * auth banner and does not spend the subscription in secret. Each call writes
+ * one `LlmUsage` row.
  */
 
 export { MODEL } from './model';
 export { extractJson } from './json';
-export { RefusalError, ClaudeCallError } from './types';
-export type { AskRequest, AskResult, Credential, Effort, Usage } from './types';
-export { claudeAuthFailure, claudeQuotaFailure, clearClaudeAuthFailure, clearClaudeQuotaFailure } from './failures';
-
-export type ClaudeMode = 'cli' | 'api' | 'none';
-
-let cachedMode: { mode: ClaudeMode; detail: string } | null = null;
-
-export async function serverCredential(): Promise<Credential | null> {
-  const key = env().ANTHROPIC_API_KEY;
-  if (key) return { kind: 'api', key, source: 'shared' };
-  return cliBinary() ? { kind: 'cli' } : null;
-}
-
-export async function detectMode(force = false): Promise<{ mode: ClaudeMode; detail: string }> {
-  if (cachedMode && !force) return cachedMode;
-  const cred = await serverCredential();
-  cachedMode = !cred
-    ? { mode: 'none', detail: 'No Claude is available. Set ANTHROPIC_API_KEY in .env, or run `claude login` on the server.' }
-    : cred.kind === 'api'
-      ? { mode: 'api', detail: 'ANTHROPIC_API_KEY · billed as API credit' }
-      : { mode: 'cli', detail: `Claude Code CLI · your subscription${env().CLAUDE_CODE_OAUTH_TOKEN ? ' (CLAUDE_CODE_OAUTH_TOKEN)' : ''}` };
-  return cachedMode;
-}
+export { RefusalError, ClaudeCallError, NoCredentialError } from './types';
+export type { AskRequest, AskResult, CallContext, Credential, Effort, Usage } from './types';
+export { claudeAuthFailure, claudeQuotaFailure, clearFailures } from './failures';
+export { credentialFor, claudeStatus, failureKey } from './credential';
+export type { ClaudeMode, ClaudeStatus } from './credential';
 
 /** Both CLI calls use the same model, so the token fields and the cost add up. */
 function addUsage(a: Usage, b: Usage): Usage {
@@ -52,11 +35,25 @@ function addUsage(a: Usage, b: Usage): Usage {
   };
 }
 
-export async function askJson<T>(req: AskRequest<T>, credential?: Credential | null): Promise<AskResult<T>> {
-  const cred = credential === undefined ? await serverCredential() : credential;
-  if (!cred) throw new Error('No Claude is available. Set ANTHROPIC_API_KEY in .env, or run `claude login` on the server.');
-  if (cred.kind === 'api') return askApi(cred.key, req);
+export async function askJson<T>(req: AskRequest<T>, ctx: CallContext, credential?: Credential | null): Promise<AskResult<T>> {
+  const cred = credential === undefined ? await credentialFor(ctx.userId) : credential;
+  if (!cred) throw new NoCredentialError();
+  const source = cred.kind === 'cli' ? 'cli' : cred.source;
+  let usage: Usage | undefined;
+  try {
+    const result = cred.kind === 'api' ? await askApi(cred.key, req, { failureKey: failureKey(cred, ctx.userId) }) : await askCliJson(req);
+    usage = result.usage;
+    return result;
+  } catch (e) {
+    usage = (e as { usage?: Usage }).usage;
+    throw e;
+  } finally {
+    // A failed write of the usage row must not hide the reply or the error.
+    if (usage) await recordUsage(ctx.userId, source, ctx.kind, usage).catch((err) => console.error('[claude] could not record usage:', (err as Error).message));
+  }
+}
 
+async function askCliJson<T>(req: AskRequest<T>): Promise<AskResult<T>> {
   // The CLI has no structured output. Check the reply, and ask one time for a
   // repair with the exact problems listed. If askCli throws, the error goes up
   // as it is: a repair is only for a reply that does not match the schema.

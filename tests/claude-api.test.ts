@@ -16,7 +16,7 @@ const req = { system: 'SYS', prompt: 'PROMPT', schema: HookReply, effort: 'low' 
 describe('askApi', () => {
   it('sends Sonnet, a structured output, the effort and a cached system block', async () => {
     const client = fake(() => ok);
-    const r = await askApi('k', req, client);
+    const r = await askApi('k', req, { failureKey: 'shared', client });
     const p = client.messages.create.mock.calls[0][0];
     expect(p.model).toMatch(/^claude-sonnet-/);
     expect(p.output_config.effort).toBe('low');
@@ -30,7 +30,7 @@ describe('askApi', () => {
 
   it('never sends fallbacks, tools, tool_choice or thinking', async () => {
     const client = fake(() => ok);
-    await askApi('k', req, client);
+    await askApi('k', req, { failureKey: 'shared', client });
     const p = client.messages.create.mock.calls[0][0];
     expect(p).not.toHaveProperty('fallbacks');
     expect(p).not.toHaveProperty('tools');
@@ -40,12 +40,12 @@ describe('askApi', () => {
 
   it('throws a RefusalError on stop_reason refusal', async () => {
     const client = fake(() => ({ ...ok, stop_reason: 'refusal', stop_details: { category: 'cyber' }, content: [] }));
-    await expect(askApi('k', req, client)).rejects.toThrow(/declined.*cyber/);
+    await expect(askApi('k', req, { failureKey: 'shared', client })).rejects.toThrow(/declined.*cyber/);
   });
 
   it('throws a RefusalError with the category and usage when the refusal has a text block', async () => {
     const client = fake(() => ({ ...ok, stop_reason: 'refusal', stop_details: { category: 'cyber' }, content: [{ type: 'text', text: '{"hoo' }] }));
-    const e: any = await askApi('k', req, client).catch((x) => x);
+    const e: any = await askApi('k', req, { failureKey: 'shared', client }).catch((x) => x);
     expect(e).toBeInstanceOf(RefusalError);
     expect(e.category).toBe('cyber');
     expect(e.usage.inputTokens).toBe(100);
@@ -53,7 +53,7 @@ describe('askApi', () => {
 
   it('throws a ClaudeCallError with usage on max_tokens', async () => {
     const client = fake(() => ({ ...ok, stop_reason: 'max_tokens', content: [{ type: 'text', text: '{"hook":"Kaf' }] }));
-    const e: any = await askApi('k', req, client).catch((x) => x);
+    const e: any = await askApi('k', req, { failureKey: 'shared', client }).catch((x) => x);
     expect(e).toBeInstanceOf(ClaudeCallError);
     expect(e.message).toMatch(/cut off at max_tokens/);
     expect(e.usage.outputTokens).toBe(10);
@@ -61,7 +61,7 @@ describe('askApi', () => {
 
   it('throws a ClaudeCallError with usage when valid JSON fails the schema', async () => {
     const client = fake(() => ({ ...ok, content: [{ type: 'text', text: '{"hook":5}' }] }));
-    const e: any = await askApi('k', req, client).catch((x) => x);
+    const e: any = await askApi('k', req, { failureKey: 'shared', client }).catch((x) => x);
     expect(e).toBeInstanceOf(ClaudeCallError);
     expect(e.message).toMatch(/did not match the schema: hook/);
     expect(e.usage.costUsd).toBeGreaterThan(0);
@@ -69,7 +69,7 @@ describe('askApi', () => {
 
   it('sends no parse function in the format and defaults max_tokens to 16000', async () => {
     const client = fake(() => ok);
-    await askApi('k', req, client);
+    await askApi('k', req, { failureKey: 'shared', client });
     const p = client.messages.create.mock.calls[0][0];
     expect(p.output_config.format.type).toBe('json_schema');
     expect(p.output_config.format).not.toHaveProperty('parse');
@@ -77,37 +77,37 @@ describe('askApi', () => {
   });
 
   it('sets the auth banner on a 401 and does not try the CLI', async () => {
-    clearFailures();
+    clearFailures('shared');
     const client = fake(() => {
       throw new Anthropic.AuthenticationError(401, { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }, 'invalid x-api-key', new Headers());
     });
-    await expect(askApi('bad', req, client)).rejects.toThrow();
-    expect(claudeAuthFailure()?.message).toMatch(/ANTHROPIC_API_KEY/);
+    await expect(askApi('bad', req, { failureKey: 'shared', client })).rejects.toThrow();
+    expect(claudeAuthFailure('shared')?.message).toMatch(/ANTHROPIC_API_KEY/);
   });
 
   const badRequest = (message: string) =>
     new Anthropic.BadRequestError(400, { type: 'error', error: { type: 'invalid_request_error', message } }, message, new Headers());
 
   it('sets the quota banner on a 400 about credit and rethrows', async () => {
-    clearFailures();
+    clearFailures('shared');
     const client = fake(() => { throw badRequest('Your credit balance is too low to access the Anthropic API.'); });
-    await expect(askApi('k', req, client)).rejects.toBeInstanceOf(Anthropic.BadRequestError);
-    expect(claudeQuotaFailure()?.message).toMatch(/no credit left/);
+    await expect(askApi('k', req, { failureKey: 'shared', client })).rejects.toBeInstanceOf(Anthropic.BadRequestError);
+    expect(claudeQuotaFailure('shared')?.message).toMatch(/no credit left/);
   });
 
   it('logs any other 400, sets no banner and rethrows', async () => {
-    clearFailures();
+    clearFailures('shared');
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const client = fake(() => { throw badRequest('output_config.format is not valid'); });
-    await expect(askApi('k', req, client)).rejects.toBeInstanceOf(Anthropic.BadRequestError);
-    expect(claudeQuotaFailure()).toBeNull();
+    await expect(askApi('k', req, { failureKey: 'shared', client })).rejects.toBeInstanceOf(Anthropic.BadRequestError);
+    expect(claudeQuotaFailure('shared')).toBeNull();
     expect(spy).toHaveBeenCalledWith('[claude] API request refused (400):', expect.stringContaining('output_config.format'));
     spy.mockRestore();
   });
 
   it('refuses a reply from a model that is not Sonnet and keeps the usage', async () => {
     const client = fake(() => ({ ...ok, model: 'claude-opus-4-1' }));
-    const e: any = await askApi('k', req, client).catch((x) => x);
+    const e: any = await askApi('k', req, { failureKey: 'shared', client }).catch((x) => x);
     expect(e).toBeInstanceOf(ClaudeCallError);
     expect(e.message).toMatch(/not a Sonnet model/);
     expect(e.usage.inputTokens).toBe(100);
@@ -115,6 +115,6 @@ describe('askApi', () => {
 
   it('reports the model that the API says it used', async () => {
     const client = fake(() => ({ ...ok, model: 'claude-sonnet-5-5' }));
-    expect((await askApi('k', req, client)).usage.model).toBe('claude-sonnet-5-5');
+    expect((await askApi('k', req, { failureKey: 'shared', client })).usage.model).toBe('claude-sonnet-5-5');
   });
 });

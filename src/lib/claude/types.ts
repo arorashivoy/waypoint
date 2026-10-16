@@ -38,3 +38,12 @@ export class ClaudeCallError extends Error {
     super(message);
   }
 }
+
+/** Who the call is for and what it is. `kind` goes to LlmUsage (analysis, referral, note, reply, refine, ...). */
+export type CallContext = { userId: string; kind: string };
+
+export class NoCredentialError extends Error {
+  constructor() {
+    super('Add an API key in Settings to use Claude.');
+  }
+}

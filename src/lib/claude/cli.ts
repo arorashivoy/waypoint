@@ -64,9 +64,10 @@ export function cliBinary(): string | null {
 
 function record(detail: string) {
   if (QUOTA_HINT.test(detail)) {
-    setQuotaFailure('The Claude subscription is out of usage for now. Wait for the quota to reset, or set ANTHROPIC_API_KEY in .env.');
+    setQuotaFailure('cli', 'The Claude subscription is out of usage for now. Wait for the quota to reset, or set ANTHROPIC_API_KEY in .env.');
   } else if (AUTH_HINT.test(detail)) {
     setAuthFailure(
+      'cli',
       env().CLAUDE_CODE_OAUTH_TOKEN
         ? 'The Claude Code OAuth token was rejected. Run `claude setup-token` and update CLAUDE_CODE_OAUTH_TOKEN.'
         : 'The Claude CLI is signed out. Run `claude login` on the server.',
@@ -148,7 +149,7 @@ export async function askCli(system: string, prompt: string): Promise<CliReply> 
       bin,
     });
     const out = interpretCliRun(res, MODEL);
-    clearFailures();
+    clearFailures('cli');
     return out;
   } finally {
     rmSync(work, { recursive: true, force: true });
