@@ -6,7 +6,13 @@ vi.mock('@/lib/cv', async (orig) => {
   return { ...real, publishCv: vi.fn(real.publishCv), refineCv: vi.fn(real.refineCv) };
 });
 
+vi.mock('@/lib/analysis', async (orig) => {
+  const real = await orig<typeof import('@/lib/analysis')>();
+  return { ...real, analyseJob: vi.fn(async () => ({}) as never) };
+});
+
 import { db } from '@/lib/db';
+import { analyseJob } from '@/lib/analysis';
 import { CvError, publishCv, refineCv } from '@/lib/cv';
 import { NoCredentialError } from '@/lib/claude';
 import * as jobDetail from '@/app/api/jobs/[id]/route';
@@ -90,5 +96,40 @@ describe('job routes send user errors and hide faults', () => {
     const res = await jobResume.POST(request(`/api/jobs/${job.id}/resume`, { method: 'POST', cookie }), ctx({ id: job.id }));
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual(GENERIC);
+  });
+});
+
+describe('a new analysis needs a POST', () => {
+  /** A job that user `userId` already has an analysis for. */
+  async function analysedJob(userId: string) {
+    const job = await newJob();
+    await db.jobAnalysis.create({ data: { userId, jobId: job.id, analysis: '{}', analysedAt: new Date() } });
+    return job;
+  }
+
+  it('GET ignores ?reanalyse=1, so a link from another site cannot spend Claude credit', async () => {
+    const { user, cookie } = await makeUser();
+    const job = await analysedJob(user.id);
+    vi.mocked(analyseJob).mockClear();
+    const res = await jobDetail.GET(request(`/api/jobs/${job.id}?reanalyse=1`, { cookie }), ctx({ id: job.id }));
+    expect(res.status).toBe(200);
+    expect(analyseJob).not.toHaveBeenCalled();
+  });
+
+  it('POST { reanalyse: true } runs a new analysis and sends the job', async () => {
+    const { user, cookie } = await makeUser();
+    const job = await analysedJob(user.id);
+    vi.mocked(analyseJob).mockClear();
+    const res = await jobDetail.POST(request(`/api/jobs/${job.id}`, { method: 'POST', cookie, body: { reanalyse: true } }), ctx({ id: job.id }));
+    expect(res.status).toBe(200);
+    expect((await res.json()).id).toBe(job.id);
+    expect(analyseJob).toHaveBeenCalledWith(expect.objectContaining({ id: job.id }), user.id, true);
+  });
+
+  it('POST without { reanalyse: true } is 400', async () => {
+    const { user, cookie } = await makeUser();
+    const job = await analysedJob(user.id);
+    const res = await jobDetail.POST(request(`/api/jobs/${job.id}`, { method: 'POST', cookie, body: {} }), ctx({ id: job.id }));
+    expect(res.status).toBe(400);
   });
 });

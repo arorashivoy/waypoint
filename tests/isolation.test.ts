@@ -64,6 +64,7 @@ describe('every route refuses a request without a session', () => {
     ['GET /api/claude', claudeRoute.GET as Handler],
     ['POST /api/countries', countries.POST as Handler],
     ['GET /api/jobs/[id]', jobDetail.GET as Handler, { id: 'x' }],
+    ['POST /api/jobs/[id]', jobDetail.POST as Handler, { id: 'x' }],
     ['PATCH /api/jobs/[id]', jobDetail.PATCH as Handler, { id: 'x' }],
     ['POST /api/jobs/[id]/resume', jobResume.POST as Handler, { id: 'x' }],
     ['POST /api/jobs/[id]/resume/refine', refine.POST as Handler, { id: 'x' }],

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { profileSummary } from '@/lib/user';
-import { handle, readJson } from '@/lib/auth/http';
+import { handle, HttpError, readJson } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
 import { analyseJob, jobView } from '@/lib/analysis';
 import { alumniSearch, isAlumniRequest } from '@/lib/match';
@@ -66,18 +66,32 @@ async function detail(jobId: string, userId: string, force: boolean) {
   };
 }
 
-export const GET = handle<{ params: { id: string } }>(async (req, { params }) => {
-  const user = await requireUser(req);
-  const force = req.nextUrl.searchParams.get('reanalyse') === '1';
-  const key = `${user.id}:${params.id}:${force}`;
-
+function shared(jobId: string, userId: string, force: boolean) {
+  const key = `${userId}:${jobId}:${force}`;
   let work = inFlight.get(key);
   if (!work) {
-    work = detail(params.id, user.id, force).finally(() => inFlight.delete(key));
+    work = detail(jobId, userId, force).finally(() => inFlight.delete(key));
     inFlight.set(key, work);
   }
+  return work.catch(rethrowForUser);
+}
 
-  return NextResponse.json(await work.catch(rethrowForUser));
+/** Opens a job. It analyses the job only if it has no analysis yet. */
+export const GET = handle<{ params: { id: string } }>(async (req, { params }) => {
+  const user = await requireUser(req);
+  return NextResponse.json(await shared(params.id, user.id, false));
+});
+
+/**
+ * `{ reanalyse: true }` runs a new Claude analysis. This is a POST and not a
+ * GET query, because a new analysis spends Claude credit, and the origin
+ * check covers only writes: a link on another site can start a GET.
+ */
+export const POST = handle<{ params: { id: string } }>(async (req, { params }) => {
+  const user = await requireUser(req);
+  const body = await readJson(req);
+  if (body.reanalyse !== true) throw new HttpError(400, 'Send { "reanalyse": true } to analyse the job again.');
+  return NextResponse.json(await shared(params.id, user.id, true));
 });
 
 export const PATCH = handle<{ params: { id: string } }>(async (req, { params }) => {
