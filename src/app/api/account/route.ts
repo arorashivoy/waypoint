@@ -20,8 +20,14 @@ export const DELETE = handle(async (req) => {
   const body = await readJson(req);
   const password = typeof body.password === 'string' ? body.password : '';
   if (!user.passwordHash || !(await verifyPassword(user.passwordHash, password))) throw new HttpError(400, 'The password is not correct.');
-  await db.user.delete({ where: { id: user.id } });
-  removeUserDir(user.id);
+  // deleteMany: a second request in a double submit finds no row and does not fail.
+  await db.user.deleteMany({ where: { id: user.id } });
+  try {
+    removeUserDir(user.id);
+  } catch (e) {
+    // The account is gone already. A file error must not give a 500 or keep the cookie.
+    console.error('Could not remove the user folder of a deleted account.', (e as Error).message);
+  }
   const res = NextResponse.json({ ok: true });
   clearSessionCookie(res, req);
   return res;
