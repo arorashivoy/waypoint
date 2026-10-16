@@ -8,8 +8,9 @@ import PendingScreen from './PendingScreen';
 import ResumeScreen from './ResumeScreen';
 import CountriesScreen from './CountriesScreen';
 import ProfileScreen from './ProfileScreen';
+import SettingsScreen from './SettingsScreen';
 
-export type Screen = 'jobs' | 'detail' | 'pending' | 'resume' | 'countries' | 'profile';
+export type Screen = 'jobs' | 'detail' | 'pending' | 'resume' | 'countries' | 'profile' | 'settings';
 
 const NAV: { key: Screen; label: string; short: string }[] = [
   { key: 'jobs', label: 'Jobs', short: 'Jobs' },
@@ -17,6 +18,7 @@ const NAV: { key: Screen; label: string; short: string }[] = [
   { key: 'resume', label: 'Resume', short: 'Resume' },
   { key: 'countries', label: 'Countries and boards', short: 'Places' },
   { key: 'profile', label: 'Profile', short: 'Profile' },
+  { key: 'settings', label: 'Settings', short: 'Settings' },
 ];
 
 export default function Waypoint() {
@@ -110,7 +112,7 @@ export default function Waypoint() {
           <div className="stack">
             <span style={{ fontSize: 15, fontWeight: 600 }}>{state.user.name}</span>
             <span style={{ fontSize: 13, color: 'var(--muted-2)' }}>
-              {state.claude.mode === 'cli' ? 'Claude: your subscription' : state.claude.mode === 'own' || state.claude.mode === 'shared' ? 'Claude: API key' : state.claude.detail}
+              {state.claude.mode === 'none' ? 'Claude not connected' : `Claude: ${state.claude.mode === 'cli' ? 'your subscription' : state.claude.mode === 'own' ? 'your API key' : 'shared key'}`}
             </span>
           </div>
         </div>
@@ -204,6 +206,7 @@ export default function Waypoint() {
         {screen === 'resume' && <ResumeScreen {...screens} />}
         {screen === 'countries' && <CountriesScreen {...screens} />}
         {screen === 'profile' && <ProfileScreen {...screens} />}
+        {screen === 'settings' && <SettingsScreen state={state} setToast={setToast} />}
       </main>
 
       <nav className="tabbar">

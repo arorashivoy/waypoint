@@ -280,7 +280,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
   .tabbar {
     position: fixed; bottom: 0; left: 0; right: 0;
-    height: 72px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    height: 72px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
     border-top: 1px solid var(--line); background: var(--surface); z-index: 20;
     padding-bottom: env(safe-area-inset-bottom);
   }
@@ -289,7 +289,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     border: 0; background: transparent; font-size: 12px; color: var(--muted-3);
     padding: 0 2px; min-width: 0;
   }
-  /* Five tabs at 375px leaves ~75px a column; the longest label must not wrap
+  /* Six tabs at 375px leave ~62px a column; the longest label must not wrap
      the row taller than the bar. */
   .tab > .row { max-width: 100%; }
   .tab[data-on='true'] { font-weight: 600; color: var(--ink); }

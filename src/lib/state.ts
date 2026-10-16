@@ -197,6 +197,7 @@ export async function buildState(userId: string) {
     user: {
       name: user.name,
       email: user.email,
+      role: user.role,
       initials: user.name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase(),
       picture: user.picture,
       linkedin: user.linkedin,
