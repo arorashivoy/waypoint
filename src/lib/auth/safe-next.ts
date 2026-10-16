@@ -7,7 +7,10 @@ export function safeNext(v: unknown): string {
   if (/[\u0000-\u001f\u007f]/.test(v)) return '/';
   try {
     const u = new URL(v, BASE);
-    return u.origin === BASE ? u.pathname + u.search + u.hash : '/';
+    if (u.origin !== BASE) return '/';
+    // Dot segments can leave a path that starts with two slashes, which is a different host.
+    const out = u.pathname.replace(/^\/+/, '/') + u.search + u.hash;
+    return out.startsWith('//') || out.startsWith('/\\') ? '/' : out;
   } catch {
     return '/';
   }

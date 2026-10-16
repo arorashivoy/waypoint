@@ -6,6 +6,9 @@ export class ApiError extends Error {
   }
 }
 
+/** Pages that work without a session: a 401 there must not send the user away. */
+const SIGNED_OUT_PAGES = /^\/(login$|invite\/|reset\/)/;
+
 /** Set after the first 401, so the page goes to /login one time only. */
 let redirecting = false;
 
@@ -18,7 +21,7 @@ export async function api<T = Json>(url: string, init?: RequestInit): Promise<T>
   } catch {
     data = {};
   }
-  if (res.status === 401 && typeof window !== 'undefined' && !redirecting && window.location.pathname !== '/login') {
+  if (res.status === 401 && typeof window !== 'undefined' && !redirecting && !SIGNED_OUT_PAGES.test(window.location.pathname)) {
     redirecting = true;
     window.location.assign('/login?next=' + encodeURIComponent(window.location.pathname + window.location.search));
   }

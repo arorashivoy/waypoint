@@ -9,6 +9,11 @@ describe('safeNext', () => {
     },
   );
 
+  it.each(['/..//evil.com', '/.//evil.com', '/a/..//evil.com', '/..\\/evil.com'])('keeps %j on the site', (v) => {
+    const out = safeNext(v);
+    expect(['/evil.com', '/']).toContain(out);
+  });
+
   it('keeps a local path with a query', () => {
     expect(safeNext('/jobs?x=1')).toBe('/jobs?x=1');
   });
