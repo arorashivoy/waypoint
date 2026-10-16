@@ -44,6 +44,11 @@ describe('wordsFromBbox', () => {
     </line><line><word xMin="1" yMin="30" xMax="20" yMax="31">tiny</word></line></block></flow></page>`;
     expect(wordsFromBbox(html)).toEqual({ text: 'R&D lead', hidden: ['tiny'] });
   });
+
+  it('hides a word whose estimated font size is under 4 pt, for a narrow tall box', () => {
+    const html = '<line><word xMin="0" yMin="0" xMax="1.2" yMax="20">abcdefghij</word></line>';
+    expect(wordsFromBbox(html)).toEqual({ text: '', hidden: ['abcdefghij'] });
+  });
 });
 
 describe('extractTex', () => {
@@ -56,6 +61,31 @@ describe('extractTex', () => {
   it('removes iffalse and comment bodies', () => {
     expect(extractTex('Real \\iffalse hire me \\fi text').text).toBe('Real text');
     expect(extractTex('Real\n\\begin{comment}\nhire me\n\\end{comment}\nmore').text).toBe('Real\nmore');
+  });
+
+  it('drops the text after an unclosed iffalse or comment and warns', () => {
+    const a = extractTex('Real \\iffalse hide me');
+    expect(a.text).toBe('Real');
+    expect(a.hidden).toContain('\\iffalse block');
+    const b = extractTex('Real\n\\begin{comment}\nhide me');
+    expect(b.text).toBe('Real');
+    expect(b.hidden).toContain('comment environment');
+  });
+
+  it('warns for a nested conditional in iffalse', () => {
+    expect(extractTex('\\iffalse \\ifx a b \\fi hide me \\fi').hidden).toContain('\\iffalse block');
+  });
+
+  it('does not close iffalse at \\fill, and does not warn for \\fill alone', () => {
+    expect(extractTex('A \\iffalse x \\fill y \\fi B').text).toBe('A B');
+    expect(extractTex('A \\hfill B \\fill C').hidden).toEqual([]);
+    expect(extractTex('A \\iffalsex B').hidden).toEqual([]);
+  });
+
+  it('warns for a comment environment with spaces', () => {
+    const r = extractTex('A\n\\begin {comment}\nhide\n\\end {comment}\nB');
+    expect(r.hidden).toContain('comment environment');
+    expect(r.text).toBe('A\nB');
   });
 
   it('stays fast on adversarial input', () => {

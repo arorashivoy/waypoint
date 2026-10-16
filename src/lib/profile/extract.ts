@@ -65,28 +65,52 @@ export async function extractPdf(buf: Buffer): Promise<Extracted> {
 
 const HIDDEN_TEX = /\\(?:text)?color\s*\{\s*white\s*\}|\\fontsize\s*\{\s*[0-3](?:\.\d+)?\s*(?:pt)?\s*\}/i;
 
-/** Remove each `open ... close` span with a linear scan. An open without a close stays. */
-function cut(t: string, open: string, close: string): string {
+const isLetter = (c: string | undefined) => !!c && /[A-Za-z]/.test(c);
+
+/** The index of `word` in `t` from `from`, where a letter does not follow it. */
+function findWord(t: string, word: string, from: number): number {
+  for (let a = t.indexOf(word, from); a >= 0; a = t.indexOf(word, a + 1)) {
+    if (!isLetter(t[a + word.length])) return a;
+  }
+  return -1;
+}
+
+/**
+ * Remove each `open ... close` span with a linear scan. LaTeX hides the text
+ * to the end of the file when there is no close, so the scan does the same.
+ * `\iffalse` and `\fi` match only when no letter follows them.
+ */
+function cut(t: string, open: string, close: string, wordEnds: boolean): string {
   let out = '';
   let from = 0;
   for (;;) {
-    const a = t.indexOf(open, from);
+    const a = wordEnds ? findWord(t, open, from) : t.indexOf(open, from);
     if (a < 0) break;
-    const b = t.indexOf(close, a + open.length);
-    if (b < 0) break;
+    const start = a + open.length;
+    const b = wordEnds ? findWord(t, close, start) : t.indexOf(close, start);
+    if (b < 0) return out + t.slice(from, a);
     out += t.slice(from, a) + ' ';
     from = b + close.length;
   }
   return out + t.slice(from);
 }
 
+const IFFALSE = /\\iffalse(?![A-Za-z])/;
+const COMMENT_BEGIN = /\\begin\s{0,20}\{\s{0,20}comment\s{0,20}\}/g;
+const COMMENT_END = /\\end\s{0,20}\{\s{0,20}comment\s{0,20}\}/g;
+
 /** The words of a .tex file: no comments, no environments, macro arguments kept. */
 export function extractTex(srcIn: string): Extracted {
   const src = srcIn.slice(0, MAX_TEX);
   const hidden = HIDDEN_TEX.test(src) ? ['The .tex file sets white text or a font under 4 pt.'] : [];
+  // Text in these blocks does not show in the PDF. Nesting is hard to parse, so the file gets a warning.
+  if (IFFALSE.test(src)) hidden.push('\\iffalse block');
+  COMMENT_BEGIN.lastIndex = 0;
+  if (COMMENT_BEGIN.test(src)) hidden.push('comment environment');
   let t = src
     .replace(/(^|[^\\])%.*$/gm, '$1');
-  t = cut(cut(t, '\\iffalse', '\\fi'), '\\begin{comment}', '\\end{comment}');
+  t = cut(t.replace(COMMENT_BEGIN, '\\begin{comment}').replace(COMMENT_END, '\\end{comment}'), '\\begin{comment}', '\\end{comment}', false);
+  t = cut(t, '\\iffalse', '\\fi', true);
   t = t
     .replace(/\\(begin|end)\s{0,20}\{[^}]{0,200}\}/g, '\n')
     .replace(/\\item\b/g, '\n');
