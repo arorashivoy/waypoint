@@ -35,6 +35,7 @@ describe('sessions', () => {
     const { user, token } = await makeUser();
     await db.user.update({ where: { id: user.id }, data: { disabledAt: new Date() } });
     expect(await readSession(reqWith(token))).toBeNull();
+    expect(await db.session.findUnique({ where: { tokenHash: hashToken(token) } })).toBeNull();
   });
 
   it('moves the expiry forward at most one time each hour', async () => {

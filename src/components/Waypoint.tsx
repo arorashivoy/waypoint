@@ -34,8 +34,7 @@ export default function Waypoint() {
 
   useEffect(() => {
     refresh().catch((e) => {
-      if (e instanceof ApiError && e.status === 401) window.location.assign('/login');
-      else setToast(String(e.message));
+      if (!(e instanceof ApiError && e.status === 401)) setToast(String(e.message));
     });
   }, [refresh, setToast]);
 

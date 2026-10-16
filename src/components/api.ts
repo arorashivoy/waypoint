@@ -6,6 +6,9 @@ export class ApiError extends Error {
   }
 }
 
+/** Set after the first 401, so the page goes to /login one time only. */
+let redirecting = false;
+
 export async function api<T = Json>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { cache: 'no-store', ...init });
   const text = await res.text();
@@ -14,6 +17,10 @@ export async function api<T = Json>(url: string, init?: RequestInit): Promise<T>
     data = text ? JSON.parse(text) : {};
   } catch {
     data = {};
+  }
+  if (res.status === 401 && typeof window !== 'undefined' && !redirecting && window.location.pathname !== '/login') {
+    redirecting = true;
+    window.location.assign('/login?next=' + encodeURIComponent(window.location.pathname + window.location.search));
   }
   if (!res.ok) throw new ApiError(data.error || `${res.status} ${res.statusText}`, res.status);
   return data as T;
