@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import type { Application, Job } from '@prisma/client';
-import { profileSummary } from '@/lib/user';
+import { isAdmin, profileSummary } from '@/lib/user';
 import { handle, readJson } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
 import type { ResolvedProfile } from '@/lib/claims';
@@ -140,7 +140,11 @@ export const POST = handle(async (req) => {
     // school's alumni list filtered to this company, and the user picks.
     const profile = await profileSummary(user.id);
     const school = profile.school;
-    if (!school) return NextResponse.json({ error: 'No school on your profile. Add an education to claims.yml or import your LinkedIn export.' }, { status: 400 });
+    if (!school) {
+      // Only the admin has claims.yml (until part 3), so a member gets no word of it.
+      const where = (await isAdmin(user.id)) ? 'to claims.yml or import your LinkedIn export' : 'in your profile';
+      return NextResponse.json({ error: `No school on your profile. Add an education ${where}.` }, { status: 400 });
+    }
     const cred = await credentialFor(user.id);
 
     const frame = { school: school.short, role: job.role, company: job.company };
