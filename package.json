@@ -15,6 +15,7 @@
     "check:claims": "tsx scripts/check-claims.ts",
     "gdrive:auth": "tsx --env-file=.env scripts/gdrive-auth.ts",
     "secret:new": "node scripts/new-secret.mjs",
+    "user:create-admin": "tsx --env-file=.env scripts/create-admin.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:live": "WAYPOINT_LIVE=1 vitest run tests/live",
