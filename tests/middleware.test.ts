@@ -19,6 +19,26 @@ describe('middleware', () => {
     expect(passes(run('/', { headers: { cookie: `${SESSION_COOKIE}=abc` } }))).toBe(true);
   });
 
+  it('redirects to the public host behind a tunnel', () => {
+    const res = middleware(new NextRequest(new URL('/', 'http://localhost:3118'), { headers: { host: 'localhost:3118', 'x-forwarded-host': 'wp.shares.zrok.io', 'x-forwarded-proto': 'https' } }));
+    expect(res.headers.get('location')).toBe('https://wp.shares.zrok.io/login?next=%2F');
+  });
+
+  it('redirects to WAYPOINT_PUBLIC_URL when it is set', () => {
+    vi.stubEnv('WAYPOINT_PUBLIC_URL', 'https://wp.shares.zrok.io');
+    try {
+      const res = middleware(new NextRequest(new URL('/jobs', 'http://localhost:3118'), { headers: { host: 'localhost:3118' } }));
+      expect(res.headers.get('location')).toBe('https://wp.shares.zrok.io/login?next=%2Fjobs');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('does not redirect files from public/', () => {
+    expect(passes(run('/icon.png'))).toBe(true);
+    expect(passes(run('/manifest.webmanifest'))).toBe(true);
+  });
+
   it('lets the public pages through', () => {
     expect(passes(run('/login'))).toBe(true);
     expect(passes(run('/invite/abc'))).toBe(true);

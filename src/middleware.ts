@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE } from '@/lib/auth/cookie-name';
-import { sameOrigin } from '@/lib/auth/origin';
+import { publicBase, sameOrigin } from '@/lib/auth/origin';
 
 /**
  * Two jobs, and nothing that needs the database:
@@ -22,10 +22,12 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Files from public/ (icons, the web manifest) have an extension and are not pages.
+  if (/\.[a-z0-9]+$/i.test(pathname)) return NextResponse.next();
   if (PUBLIC_PAGES.some((r) => r.test(pathname))) return NextResponse.next();
   if (req.cookies.get(SESSION_COOKIE)?.value) return NextResponse.next();
 
-  const login = new URL('/login', req.url);
+  const login = new URL('/login', publicBase(req));
   login.searchParams.set('next', pathname + search);
   return NextResponse.redirect(login);
 }

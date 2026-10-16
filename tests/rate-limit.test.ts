@@ -21,6 +21,13 @@ describe('hitLimit', () => {
     expect((await hitLimit(k, 3, 60_000, new Date(t0.getTime() + 60_000))).ok).toBe(true);
   });
 
+  it('does not pass the cap when calls run in parallel', async () => {
+    const k = key();
+    const t0 = new Date();
+    const results = await Promise.all(Array.from({ length: 15 }, () => hitLimit(k, 10, 60_000, t0)));
+    expect(results.filter((r) => r.ok)).toHaveLength(10);
+  });
+
   it('clears a key', async () => {
     const k = key();
     const t0 = new Date();

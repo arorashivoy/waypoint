@@ -7,24 +7,55 @@ export const FIFTEEN_MINUTES = 15 * 60_000;
  * current window. The counts are in the database, so a restart keeps them.
  */
 export async function hitLimit(key: string, max: number, windowMs: number, now = new Date()): Promise<{ ok: boolean; retryAfterSec: number }> {
-  const result = await db.$transaction(async (tx) => {
-    const row = await tx.rateLimit.findUnique({ where: { key } });
-    if (!row || now.getTime() - row.windowStart.getTime() >= windowMs) {
-      await tx.rateLimit.upsert({ where: { key }, create: { key, count: 1, windowStart: now }, update: { count: 1, windowStart: now } });
-      return { ok: true, retryAfterSec: 0 };
-    }
-    if (row.count >= max) {
-      return { ok: false, retryAfterSec: Math.ceil((row.windowStart.getTime() + windowMs - now.getTime()) / 1000) };
-    }
-    await tx.rateLimit.update({ where: { key }, data: { count: { increment: 1 } } });
-    return { ok: true, retryAfterSec: 0 };
-  });
+  const result = await tryHit(key, max, windowMs, now);
   // A false X-Forwarded-For makes a new key for each try. Remove old rows
-  // on about 1 call in 100, so that the table stays small.
+  // on about 1 call in 100, so that the table stays small. A failure here
+  // must not change the limit decision.
   if (Math.random() < 0.01) {
-    await db.rateLimit.deleteMany({ where: { windowStart: { lt: new Date(now.getTime() - 24 * 3600_000) } } });
+    try {
+      await db.rateLimit.deleteMany({ where: { windowStart: { lt: new Date(now.getTime() - 24 * 3600_000) } } });
+    } catch (e) {
+      console.error('[rate-limit] cleanup failed', e);
+    }
   }
   return result;
+}
+
+/** Each step is one conditional write, so parallel calls cannot pass `max`. */
+async function tryHit(key: string, max: number, windowMs: number, now: Date): Promise<{ ok: boolean; retryAfterSec: number }> {
+  const windowEdge = new Date(now.getTime() - windowMs);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    // 1. Count a try in the current window, if there is room.
+    const counted = await db.rateLimit.updateMany({
+      where: { key, windowStart: { gt: windowEdge }, count: { lt: max } },
+      data: { count: { increment: 1 } },
+    });
+    if (counted.count === 1) return { ok: true, retryAfterSec: 0 };
+
+    // 2. Start a new window if the old one has ended.
+    const reset = await db.rateLimit.updateMany({
+      where: { key, windowStart: { lte: windowEdge } },
+      data: { count: 1, windowStart: now },
+    });
+    if (reset.count === 1) return { ok: true, retryAfterSec: 0 };
+
+    // 3. The row is in its window and full, or it does not exist.
+    const row = await db.rateLimit.findUnique({ where: { key } });
+    if (row) {
+      if (row.windowStart > windowEdge && row.count >= max) {
+        return { ok: false, retryAfterSec: Math.ceil((row.windowStart.getTime() + windowMs - now.getTime()) / 1000) };
+      }
+      continue; // The row changed between the steps. Try again.
+    }
+    try {
+      await db.rateLimit.create({ data: { key, count: 1, windowStart: now } });
+      return { ok: true, retryAfterSec: 0 };
+    } catch (e) {
+      if ((e as { code?: string } | null)?.code !== 'P2002') throw e;
+      // Another call made the row first. Try again.
+    }
+  }
+  return { ok: false, retryAfterSec: Math.ceil(windowMs / 1000) };
 }
 
 export async function clearLimit(key: string): Promise<void> {
