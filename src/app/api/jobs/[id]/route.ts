@@ -5,7 +5,7 @@ import { handle, readJson } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
 import { analyseJob, jobView } from '@/lib/analysis';
 import { alumniSearch, isAlumniRequest } from '@/lib/match';
-import { readChat } from '@/lib/cv';
+import { readChat, rethrowForUser } from '@/lib/cv';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -77,11 +77,7 @@ export const GET = handle<{ params: { id: string } }>(async (req, { params }) =>
     inFlight.set(key, work);
   }
 
-  try {
-    return NextResponse.json(await work);
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
-  }
+  return NextResponse.json(await work.catch(rethrowForUser));
 });
 
 export const PATCH = handle<{ params: { id: string } }>(async (req, { params }) => {

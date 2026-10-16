@@ -157,6 +157,7 @@ describe('user B cannot reach the rows of user A', () => {
     const b = await makeUser('admin');
     const res = await refine.POST(request(`/api/jobs/${job.id}/resume/refine`, { method: 'POST', cookie: b.cookie, body: { message: 'change it' } }), ctx({ id: job.id }));
     // B reaches the Claude call, which has no credential (stubbed), so it stops there before any write.
+    expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: 'Add an API key in Settings to use Claude.' });
     expect(await db.application.count({ where: { userId: b.user.id, jobId: job.id } })).toBe(1);
     const after = await db.application.findUniqueOrThrow({ where: { id: app.id } });

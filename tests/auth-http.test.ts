@@ -19,6 +19,13 @@ describe('handle', () => {
     expect((await h(req({}), { params: {} })).status).toBe(404);
   });
 
+  it('turns a Prisma "foreign key failed" into 404', async () => {
+    const h = handle(async () => { throw Object.assign(new Error('Foreign key constraint failed'), { code: 'P2003' }); });
+    const res = await h(req({}), { params: {} });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Not found.' });
+  });
+
   it('hides the message of an unknown error', async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const h = handle(async () => { throw new Error('/home/shivoy/secret/path failed'); });

@@ -11,7 +11,8 @@ export type RouteContext = { params: Record<string, string> };
 
 /**
  * The wrapper for every API route. An HttpError becomes JSON with its status.
- * A Prisma "record not found" (P2025) becomes 404. Any other error is logged
+ * A Prisma "record not found" (P2025) becomes 404, and so does a
+ * "foreign key failed" (P2003): a write that names a job ID that does not exist. Any other error is logged
  * and becomes a 500 with a fixed message, so paths and stack details stay on
  * the server.
  */
@@ -21,7 +22,8 @@ export function handle<C = RouteContext>(fn: (req: NextRequest, ctx: C) => Promi
       return await fn(req, ctx);
     } catch (e) {
       if (e instanceof HttpError) return NextResponse.json({ error: e.message }, { status: e.status });
-      if ((e as { code?: string } | null)?.code === 'P2025') return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+      const code = (e as { code?: string } | null)?.code;
+      if (code === 'P2025' || code === 'P2003') return NextResponse.json({ error: 'Not found.' }, { status: 404 });
       console.error('[api]', req.method, req.nextUrl.pathname, e);
       return NextResponse.json({ error: 'Something went wrong. The server log has the details.' }, { status: 500 });
     }
