@@ -31,7 +31,7 @@ export function request(
   return new NextRequest(new URL(path, ORIGIN), { method: init.method ?? 'GET', headers, body });
 }
 
-export const ctx = (params: Record<string, string> = {}) => ({ params });
+export const ctx = <P extends Record<string, string> = Record<string, string>>(params = {} as P) => ({ params });
 
 /** The value of the session cookie that a response sets, or null. */
 export function cookieFrom(res: Response): string | null {
