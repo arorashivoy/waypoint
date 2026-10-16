@@ -1,0 +1,57 @@
+version: 1
+profile:
+  name: Test Person
+  headline: Backend engineer
+targets:
+  positions:
+    - id: acme-dev
+      title: Developer
+      company: Acme
+      location: Berlin
+      start: 2024
+      end: null
+      summary: Builds payment services.
+      bullets:
+        - id: ledger
+          match: rebuilt the ledger service
+  educations:
+    - id: tu
+      school: Technical University
+      degree: BSc
+      field: Computer Science
+      years: 2023
+      aliases: [TU Test]
+  projects:
+    - id: parser
+      title: Fast parser
+      org: Personal
+      url: https://example.test/parser
+      description: A streaming JSON parser.
+claims:
+  - slug: java
+    kind: language
+    label: Java
+    aliases: [jdk]
+    links:
+      - { to: spring, rel: related }
+    evidence:
+      - { target: position:acme-dev/ledger, depth: built, proof: Rebuilt the ledger in Java., since: 2024-02 }
+    mentions:
+      - { surface: resume }
+  - slug: spring
+    kind: skill
+    label: Spring Boot
+    evidence:
+      - { target: project:parser }
+    mentions:
+      - { surface: linkedin-skills, listed: false }
+  - slug: gpa
+    kind: metric
+    label: GPA
+    value: 8.4
+    scaleMax: 10
+    higherIsBetter: true
+    evidence:
+      - { target: education:tu, depth: mentioned }
+    mentions:
+      - { surface: resume }
