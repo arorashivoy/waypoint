@@ -30,7 +30,10 @@ export async function queueAnalysis(userId: string, limit = 25) {
   // written to `analysis`, and filtering on that would retire it permanently
   // after one bad minute. The try counter is what stops the retry being endless.
   const candidates = await db.job.findMany({
-    where: { cc: { in: onCcs }, analysedAt: null, analysisTries: { lt: MAX_ANALYSIS_TRIES } },
+    where: {
+      cc: { in: onCcs },
+      analyses: { none: { userId, OR: [{ analysedAt: { not: null } }, { tries: { gte: MAX_ANALYSIS_TRIES } }] } },
+    },
     orderBy: { postedAt: 'desc' },
     take: 400,
   });

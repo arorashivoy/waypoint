@@ -11,12 +11,17 @@ generator client {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  picture   String?
-  linkedin  String?
-  createdAt DateTime @default(now())
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  picture      String?
+  linkedin     String?
+  // argon2id. Null only for a user from before part 2 until
+  // `npm run user:create-admin` sets a password.
+  passwordHash String?
+  role         String    @default("member") // "admin" | "member"
+  disabledAt   DateTime?
+  createdAt    DateTime  @default(now())
 
   countries    CountryPref[]
   positions    Position[]
@@ -26,6 +31,12 @@ model User {
   contacts     Contact[]
   applications Application[]
   imports      ProfileImport[]
+  sessions     Session[]
+  secrets      UserSecret[]
+  usage        LlmUsage[]
+  analyses     JobAnalysis[]
+  invitesMade  Invite[]      @relation("InviteCreator")
+  resetLinks   Invite[]      @relation("InviteUser")
 }
 
 model CountryPref {
@@ -121,15 +132,6 @@ model Job {
   description String   @default("")
   postedAt    DateTime @default(now())
   fetchedAt   DateTime @default(now())
-  analysis    String?
-
-  // `analysis` may hold a keyword guess written after a failed Claude call, so
-  // it cannot double as "this has been read". These two can: `analysedAt` is
-  // set only when Claude actually answered, and `analysisTries` bounds the
-  // retries so one permanently failing posting cannot eat the queue budget on
-  // every refresh.
-  analysedAt    DateTime?
-  analysisTries Int       @default(0)
 
   // Set when the company is marked `priority` in config/watchlist.json, whichever
   // source the listing came from. Moves the job up the analysis queue and the list
@@ -137,6 +139,7 @@ model Job {
   priority Boolean @default(false)
 
   applications Application[]
+  analyses     JobAnalysis[]
 
   @@index([cc, postedAt])
 }
@@ -214,4 +217,90 @@ model LlmCache {
   usedAt    DateTime @default(now())
 
   @@index([kind, usedAt])
+}
+
+// The cookie holds a random token. Only its SHA-256 hash is stored here.
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  userAgent  String?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// An invite (kind "invite") or a password reset link (kind "reset").
+// Valid for 7 days, one use. Only the SHA-256 hash of the token is stored.
+model Invite {
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  kind        String
+  email       String?
+  userId      String?
+  createdById String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  user        User?     @relation("InviteUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation("InviteCreator", fields: [createdById], references: [id], onDelete: Cascade)
+}
+
+// Attempt counts for sign-in and token links. A table, so that a restart
+// does not reset the counts.
+model RateLimit {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+}
+
+// An encrypted secret of one user (AES-256-GCM). kind: "anthropic" | "github" | "gdrive".
+model UserSecret {
+  userId     String
+  kind       String
+  iv         String
+  tag        String
+  data       String
+  keyVersion Int      @default(1)
+  last4      String
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, kind])
+}
+
+// One row for each Claude call. credential: "own" | "shared" | "cli".
+model LlmUsage {
+  id              String   @id @default(cuid())
+  userId          String
+  credential      String
+  model           String
+  kind            String
+  inputTokens     Int
+  outputTokens    Int
+  cacheReadTokens Int      @default(0)
+  costUsd         Float
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, credential, createdAt])
+}
+
+// The analysis of one job for one user. It replaces Job.analysis, because the
+// prompt contains the profile of the user.
+model JobAnalysis {
+  userId     String
+  jobId      String
+  analysis   String
+  analysedAt DateTime?
+  tries      Int       @default(0)
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([userId, jobId])
+  @@index([jobId])
 }

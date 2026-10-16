@@ -19,7 +19,8 @@ async function detail(jobId: string, userId: string, force: boolean) {
   const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
   // `analysedAt`, not `analysis`: a job carrying only a keyword heuristic from a
   // failed call should get a real read when you open it, not the stale estimate.
-  if (force || !job.analysedAt) await analyseJob(job, userId, force);
+  const row = await db.jobAnalysis.findUnique({ where: { userId_jobId: { userId, jobId } } });
+  if (force || !row?.analysedAt) await analyseJob(job, userId, force);
 
   const fresh = await db.job.findUniqueOrThrow({ where: { id: jobId } });
   const view = await jobView(fresh, userId);

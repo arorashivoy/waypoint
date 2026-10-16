@@ -139,7 +139,8 @@ export const MAX_ANALYSIS_TRIES = 3;
  * two boards under two externalIds costs one call, not two.
  */
 export async function analyseJob(job: Job, userId: string, force = false): Promise<Analysis> {
-  if (job.analysedAt && job.analysis && !force) return parseAnalysis(job.analysis);
+  const row = await db.jobAnalysis.findUnique({ where: { userId_jobId: { userId, jobId: job.id } } });
+  if (row?.analysedAt && !force) return parseAnalysis(row.analysis);
 
   const profile = await profileSummary(userId);
   let analysis: Analysis;
@@ -158,18 +159,10 @@ export async function analyseJob(job: Job, userId: string, force = false): Promi
     }
   }
 
-  await db.job.update({
-    where: { id: job.id },
-    data: {
-      analysis: JSON.stringify(analysis),
-      analysedAt: read ? new Date() : job.analysedAt,
-      analysisTries: read ? job.analysisTries : job.analysisTries + 1,
-      field: analysis.field || job.field,
-      mode: analysis.mode || job.mode,
-      level: analysis.level || job.level,
-      sponsor: analysis.sponsor ?? job.sponsor,
-      visa: analysis.visa || job.visa,
-    },
+  await db.jobAnalysis.upsert({
+    where: { userId_jobId: { userId, jobId: job.id } },
+    create: { userId, jobId: job.id, analysis: JSON.stringify(analysis), analysedAt: read ? new Date() : null, tries: read ? 0 : 1 },
+    update: { analysis: JSON.stringify(analysis), ...(read ? { analysedAt: new Date() } : { tries: { increment: 1 } }) },
   });
   return analysis;
 }
@@ -216,23 +209,29 @@ function viewOf(job: Job, profile: Profile, contacts: { company: string | null; 
  * queries per page load.
  */
 export async function makeJobViewer(userId: string) {
-  const [profile, contacts] = await Promise.all([
+  const [profile, contacts, rows] = await Promise.all([
     profileSummary(userId),
     db.contact.findMany({ where: { userId } }),
+    db.jobAnalysis.findMany({ where: { userId } }),
   ]);
+  const stored = new Map(rows.map((r) => [r.jobId, r.analysis]));
   const fit = fitFromClaims();
-  return (job: Job) => viewOf(job, profile, contacts, job.analysis ? parseAnalysis(job.analysis) : heuristicAnalysis(job, profile, fit), fit);
+  return (job: Job) => {
+    const raw = stored.get(job.id);
+    return viewOf(job, profile, contacts, raw ? parseAnalysis(raw) : heuristicAnalysis(job, profile, fit), fit);
+  };
 }
 
 export async function jobView(job: Job, userId: string, opts: { analyse?: boolean } = {}) {
-  const [profile, contacts] = await Promise.all([
+  const [profile, contacts, row] = await Promise.all([
     profileSummary(userId),
     db.contact.findMany({ where: { userId } }),
+    db.jobAnalysis.findUnique({ where: { userId_jobId: { userId, jobId: job.id } } }),
   ]);
 
   const fit = fitFromClaims();
-  const analysis: Analysis = job.analysis
-    ? parseAnalysis(job.analysis)
+  const analysis: Analysis = row
+    ? parseAnalysis(row.analysis)
     : opts.analyse
       ? await analyseJob(job, userId)
       : heuristicAnalysis(job, profile, fit);

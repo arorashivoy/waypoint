@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     db.contact.createMany({ data: parsed.contacts.map((c) => ({ ...c, userId })) }),
     db.profileImport.create({ data: { userId, filename: file.name, counts: JSON.stringify(parsed.counts) } }),
     // Analyses were graded against the old profile, so they are stale now.
-    db.job.updateMany({ data: { analysis: null } }),
+    db.jobAnalysis.deleteMany({ where: { userId } }),
   ]);
 
   return NextResponse.json({ ok: true, scope: 'full', counts: parsed.counts });
