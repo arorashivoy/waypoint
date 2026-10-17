@@ -166,6 +166,21 @@ describe('POST /api/jobs/refresh', () => {
     expect(JSON.parse(row.result!)).toHaveProperty('report');
   });
 
+  it('a user with every country off gets the paused note and no fetch', async () => {
+    await makeUser(); // another user, with the default countries on
+    const { cookie, user } = await makeUser();
+    await db.countryPref.updateMany({ where: { userId: user.id }, data: { on: false } });
+    const fetchMock = vi.fn(async () => new Response('no', { status: 404 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { taskId } = await (await refreshRoute.POST(request('/api/jobs/refresh', { method: 'POST', cookie }), ctx())).json();
+    await runOnce(undefined, { userId: user.id });
+    const row = await db.task.findUniqueOrThrow({ where: { id: taskId } });
+    expect(row.status).toBe('done');
+    expect(JSON.parse(row.result!)).toMatchObject({ added: 0, total: 0, report: [], note: 'Every country is paused.' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await db.task.count({ where: { userId: user.id, kind: 'analysis' } })).toBe(0);
+  });
+
   it('refuses a force value that is not a boolean', async () => {
     const { cookie } = await makeUser();
     const res = await refreshRoute.POST(request('/api/jobs/refresh', { method: 'POST', cookie, body: { force: 'yes' } }), ctx());

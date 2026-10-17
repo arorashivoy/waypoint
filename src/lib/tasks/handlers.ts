@@ -48,6 +48,10 @@ registerHandler('analysis', z.object({ jobId: z.string(), batch: z.string() }), 
 registerHandler('refresh', z.object({ force: z.boolean() }), async ({ force }, task) => {
   const userId = task.userId;
   if (!userId) return { skipped: 'no-user' };
+  // A user with no country on gets the paused note. No fetch and no analysis run.
+  if (!(await db.countryPref.count({ where: { userId, on: true } }))) {
+    return { added: 0, total: 0, report: [], analysing: null, note: 'Every country is paused.' };
+  }
   // The feed cache is global and a board returns every country. So the refresh keeps the
   // countries of all active users, not only the countries of the user who started it.
   const prefs = await db.countryPref.findMany({ where: { on: true, user: { disabledAt: null } }, select: { cc: true } });
