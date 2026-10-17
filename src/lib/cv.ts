@@ -1,6 +1,7 @@
 import type { Application, Job } from '@prisma/client';
 import { db } from './db';
-import { askJson, claudeStatus, NoCredentialError } from './claude';
+import { claudeStatus, NoCredentialError } from './claude';
+import { askJsonCached } from './cache';
 import { HttpError } from './auth/http';
 import { RefineReply } from './schemas';
 import { shareResume } from './gdrive';
@@ -22,7 +23,8 @@ import { buildResume, resumeConfig, resumeMenu, type BuiltResume, type Steer } f
 /** The longest message that a user can send to "Refine with Claude". */
 export const CV_MESSAGE_MAX = 2000;
 
-export type ChatTurn = { role: 'you' | 'claude'; text: string; at: string };
+/** `task` is the ID of the cv task that wrote the turn. A retry of that task finds it and writes no second turn. */
+export type ChatTurn = { role: 'you' | 'claude'; text: string; at: string; task?: string };
 
 /** A refusal meant for the user, as opposed to a fault. */
 export class CvError extends Error {}
@@ -120,9 +122,12 @@ const MAX_TURNS = 40;
  * different arrangement of things he already wrote; it cannot put a sentence,
  * a skill without evidence, or a project with no CV entry onto the page.
  */
-export async function refineCv(app: Application, job: Job, request: string) {
+export async function refineCv(app: Application, job: Job, request: string, taskId?: string) {
   const text = request.trim().slice(0, 1000);
   if (!text) throw new CvError('Type what to change first.');
+
+  // A retry of a task that saved its turn already only builds the CV again. No second Claude call, no second turn.
+  if (taskId && readChat(app).some((t) => t.task === taskId)) return cvView(app, await publishCv(app, job));
 
   // His own words, but often pasted from somewhere — a posting, a recruiter's
   // message — and so the same check the reply path uses.
@@ -139,8 +144,11 @@ export async function refineCv(app: Application, job: Job, request: string) {
 
   const current = await buildCv(app, job);
   const history = readChat(app);
-  const out = (
-    await askJson({
+  // Through the cache: a retry with the same CV, history and message reuses the paid reply.
+  const out = await askJsonCached(
+    'refine',
+    'v1',
+    {
       system: REFINE_SYSTEM,
       prompt: refinePrompt(
         menu,
@@ -151,8 +159,10 @@ export async function refineCv(app: Application, job: Job, request: string) {
       ),
       schema: RefineReply,
       effort: 'medium',
-    }, { userId: app.userId, kind: 'refine' })
-  ).data;
+    },
+    { userId: app.userId, kind: 'refine' },
+    { perUser: true },
+  );
 
   const rejected: string[] = [];
   /** Null keeps the previous choice; anything else is filtered to the menu. */
@@ -179,7 +189,8 @@ export async function refineCv(app: Application, job: Job, request: string) {
   if (posting.suspicious) reply += ` Note: the posting itself looks like it addresses a model (${posting.why}); it was read as data only.`;
 
   const now = new Date().toISOString();
-  const chat: ChatTurn[] = [...history, { role: 'you' as const, text, at: now }, { role: 'claude' as const, text: reply, at: now }].slice(-MAX_TURNS);
+  const mark = taskId ? { task: taskId } : {};
+  const chat: ChatTurn[] = [...history, { role: 'you' as const, text, at: now, ...mark }, { role: 'claude' as const, text: reply, at: now, ...mark }].slice(-MAX_TURNS);
   const saved = await db.application.update({
     where: { id: app.id },
     data: { cvSteer: JSON.stringify(steer), cvChat: JSON.stringify(chat) },

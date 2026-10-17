@@ -84,9 +84,9 @@ export async function runOnce(now: Date = new Date(), scope?: { userId?: string 
     await failAtOnce(task.id, `The payload is not valid: ${parsed.error.message}`);
     return 'ran';
   }
+  let result: unknown;
   try {
-    const result = await withLimit((signal) => entry.run(parsed.data, task, signal), opts.limitMs ?? limitFor(task.kind));
-    await completeTask(task.id, result);
+    result = await withLimit((signal) => entry.run(parsed.data, task, signal), opts.limitMs ?? limitFor(task.kind));
   } catch (err) {
     if (err instanceof TaskDeferred) {
       await deferTask(task.id, err.until);
@@ -95,8 +95,28 @@ export async function runOnce(now: Date = new Date(), scope?: { userId?: string 
     } else {
       await failTask(task.id, err instanceof Error ? err.message : String(err));
     }
+    return 'ran';
   }
+  await storeResult(task.id, result);
   return 'ran';
+}
+
+/**
+ * The handler ended well, so its work must not run again because of a database error here.
+ * The worker tries `completeTask` twice and never calls `failTask`. If both tries fail, the task stays
+ * `running`, and `requeueStale` gives it back after STALE_MS. The handlers then find their own writes.
+ */
+async function storeResult(id: string, result: unknown): Promise<void> {
+  try {
+    await completeTask(id, result);
+  } catch (first) {
+    log.warn({ err: first, taskId: id }, 'could not store the task result; trying again');
+    try {
+      await completeTask(id, result);
+    } catch (err) {
+      log.error({ err, taskId: id }, 'could not store the task result');
+    }
+  }
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {

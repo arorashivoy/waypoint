@@ -114,7 +114,7 @@ registerHandler(
       create: { userId, jobId },
     });
     try {
-      if (action === 'refine') return await refineCv(app, job, message ?? '');
+      if (action === 'refine') return await refineCv(app, job, message ?? '', task.id);
       if (action === 'reset') return await resetCv(app, job);
       const view = cvView(app, await publishCv(app, job));
       if (!view.pdfUrl) {
@@ -128,6 +128,16 @@ registerHandler(
     }
   },
 );
+
+/**
+ * The count of drafts that this task wrote already, or null. The drafts of a task have its ID as their batch ID,
+ * and `createDrafts` writes them in one statement. So a retry after the write (for example when the result could
+ * not be stored) returns this count and writes nothing.
+ */
+async function draftsOfTask(userId: string, taskId: string): Promise<number | null> {
+  const n = await db.profileDraft.count({ where: { userId, batchId: taskId } });
+  return n ? n : null;
+}
 
 /** The error of an import that the user must read, or null when a retry can help. */
 function importFatal(e: unknown): TaskFatal | null {
@@ -153,6 +163,11 @@ registerHandler(
     // The file stays while a retry can still happen. It goes when the task ends: done, fatal or the last attempt.
     let ends = task.attempts > RETRY_DELAYS_MS.length;
     try {
+      const written = await draftsOfTask(userId, task.id);
+      if (written !== null) {
+        ends = true;
+        return { drafts: written, dropped: 0, hidden: 0 };
+      }
       let buf: Buffer;
       try {
         buf = readFileSync(path);
@@ -161,7 +176,7 @@ registerHandler(
         throw new TaskFatal('The uploaded file is gone. Upload the résumé again.');
       }
       try {
-        const result = await draftsFromResume(userId, type, buf);
+        const result = await draftsFromResume(userId, type, buf, task.id);
         ends = true;
         return result;
       } catch (e) {
@@ -181,8 +196,10 @@ registerHandler(
 registerHandler('github-import', z.object({ username: z.string().max(100), repo: z.string().max(100) }), async ({ username, repo }, task) => {
   const userId = task.userId;
   if (!userId) return { skipped: 'no-user' };
+  const written = await draftsOfTask(userId, task.id);
+  if (written !== null) return { drafts: written, dropped: 0 };
   try {
-    return await draftsFromRepo(userId, username, repo);
+    return await draftsFromRepo(userId, username, repo, task.id);
   } catch (e) {
     throw importFatal(e) ?? e;
   }

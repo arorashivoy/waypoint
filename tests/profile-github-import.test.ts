@@ -8,7 +8,7 @@ vi.mock('@/lib/claude', async (orig) => ({
     ask.prompts.push(req.prompt);
     const r = ask.replies.shift();
     if (r instanceof Error) throw r;
-    return { data: r, raw: '', usage: { model: 'claude-sonnet-test', inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 } };
+    return { data: r, raw: JSON.stringify(r), usage: { model: 'claude-sonnet-test', inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 } };
   }),
 }));
 
@@ -159,6 +159,37 @@ describe('GitHub import', () => {
     expect(b.status).toBe('done');
     const drafts = await listDrafts(u.user.id);
     expect(drafts.map((d) => d.type)).toEqual(['project']);
+  });
+
+  it('a second run of the same task makes no second Claude call and no second set of drafts', async () => {
+    const u = await makeUser();
+    ask.replies = [parserReply];
+    const { taskIds } = await (await post(u.cookie, ['parser'])).json();
+    await drain(u.user.id);
+    const count = (await listDrafts(u.user.id)).length;
+    expect(count).toBeGreaterThan(0);
+    // As if the result could not be stored: requeueStale gives the task back, and it runs again.
+    await db.task.update({ where: { id: taskIds[0] }, data: { status: 'queued', runAt: new Date() } });
+    await drain(u.user.id);
+    const again = await taskOf(taskIds[0]);
+    expect(again.status).toBe('done');
+    expect(JSON.parse(again.result!).drafts).toBe(count);
+    expect((await listDrafts(u.user.id)).length).toBe(count);
+    expect(ask.prompts.length).toBe(1);
+  });
+
+  it('a new import of the same repo reuses the cached reply', async () => {
+    const u = await makeUser();
+    ask.replies = [parserReply];
+    const { taskIds } = await (await post(u.cookie, ['parser'])).json();
+    await drain(u.user.id);
+    // The GitHub facts are the same, so the prompt is the same. No reply waits in the queue for the second task.
+    await db.profileDraft.updateMany({ where: { userId: u.user.id }, data: { status: 'rejected' } });
+    const second = (await (await post(u.cookie, ['parser'])).json()).taskIds[0];
+    expect(second).not.toBe(taskIds[0]);
+    await drain(u.user.id);
+    expect((await taskOf(second)).status).toBe('done');
+    expect(ask.prompts.length).toBe(1);
   });
 
   it('runs the failed repo again after an ordinary error', async () => {

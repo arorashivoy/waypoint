@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { db } from '../db';
 import { HttpError } from '../auth/http';
-import { askJson } from '../claude';
+import { askJsonCached } from '../cache';
 import { checkForInjection } from '../injection';
 import { GUARD, untrusted } from '../prompts';
 import { sniffResume } from '../uploads';
@@ -212,7 +212,11 @@ export async function checkResumeUpload(userId: string, upload: { name: string; 
 }
 
 /** The worker part of the import: the same checks again, then the Claude call, the quote rule and the draft writes. */
-export async function draftsFromResume(userId: string, kind: ResumeKind, buf: Buffer): Promise<{ drafts: number; dropped: number; hidden: number }> {
+/**
+ * `batchId` is the ID of the task. The handler checks it before a retry, so a retry never writes the drafts twice.
+ * The Claude call goes through the cache, so a retry with the same file does not pay again.
+ */
+export async function draftsFromResume(userId: string, kind: ResumeKind, buf: Buffer, batchId: string = randomUUID()): Promise<{ drafts: number; dropped: number; hidden: number }> {
   const ex = await extractFor(kind, buf);
   await refuseBadResume(userId, kind, ex);
   const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } });
@@ -222,8 +226,8 @@ export async function draftsFromResume(userId: string, kind: ResumeKind, buf: Bu
   const scan = checkForInjection(ex.text);
   if (scan.suspicious) warnings.push(`The résumé text has a warning sign: ${scan.why}. Check each draft.`);
 
-  const { data } = await askJson({ system: RESUME_IMPORT_SYSTEM, prompt: resumeImportPrompt(ex.text), schema: ResumeReply, effort: 'medium', maxTokens: 8000 }, { userId, kind: 'resume-import' });
+  const data = await askJsonCached('resume-import', 'v1', { system: RESUME_IMPORT_SYSTEM, prompt: resumeImportPrompt(ex.text), schema: ResumeReply, effort: 'medium', maxTokens: 8000 }, { userId, kind: 'resume-import' }, { perUser: true });
   const { items, dropped } = buildResumeDrafts(data, ex.text, user.name);
-  const drafts = await createDrafts(userId, { batchId: randomUUID(), source: 'resume', items, warnings });
+  const drafts = await createDrafts(userId, { batchId, source: 'resume', items, warnings });
   return { drafts, dropped, hidden: ex.hidden.length };
 }

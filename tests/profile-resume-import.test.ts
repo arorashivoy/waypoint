@@ -7,7 +7,7 @@ vi.mock('@/lib/claude', async (orig) => ({
   askJson: vi.fn(async (req: { system: string; prompt: string }) => {
     ask.calls.push(req);
     if (ask.reply instanceof Error) throw ask.reply;
-    return { data: ask.reply, raw: '', usage: { model: 'claude-sonnet-test', inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 } };
+    return { data: ask.reply, raw: JSON.stringify(ask.reply), usage: { model: 'claude-sonnet-test', inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 } };
   }),
 }));
 
@@ -182,6 +182,34 @@ describe('POST /api/profile/resume-import', () => {
     expect(done.status).toBe('done');
     expect(JSON.parse(done.result!).drafts).toBeGreaterThan(0);
     expect((await listDrafts(u.user.id)).every((d) => d.source === 'resume')).toBe(true);
+  });
+
+  it('a second run of the same task makes no second Claude call and no second set of drafts', async () => {
+    const u = await makeUser();
+    const { taskId } = await (await resumeRoute(await pdfUpload(u.cookie, texUpload(), 'cv.tex', ''), ctx())).json();
+    await runOnce(undefined, { userId: u.user.id });
+    const first = JSON.parse((await taskOf(taskId)).result!);
+    const count = (await listDrafts(u.user.id)).length;
+    expect(count).toBe(first.drafts);
+    expect(ask.calls.length).toBe(1);
+    // As if the result could not be stored: requeueStale gives the task back, and it runs again.
+    await db.task.update({ where: { id: taskId }, data: { status: 'queued', runAt: new Date() } });
+    await runOnce(undefined, { userId: u.user.id });
+    const again = await taskOf(taskId);
+    expect(again.status).toBe('done');
+    expect(JSON.parse(again.result!).drafts).toBe(count);
+    expect((await listDrafts(u.user.id)).length).toBe(count);
+    expect(ask.calls.length).toBe(1);
+  });
+
+  it('a new import of the same file reuses the cached reply', async () => {
+    const u = await makeUser();
+    for (let i = 0; i < 2; i++) {
+      const { taskId } = await (await resumeRoute(await pdfUpload(u.cookie, texUpload(), 'cv.tex', ''), ctx())).json();
+      await runOnce(undefined, { userId: u.user.id });
+      expect((await taskOf(taskId)).status).toBe('done');
+    }
+    expect(ask.calls.length).toBe(1);
   });
 
   it('a .tex with hidden markers still gets 400 before a task exists', async () => {

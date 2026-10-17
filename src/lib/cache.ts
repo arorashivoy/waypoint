@@ -28,7 +28,7 @@ export function cacheKey(version: string, system: string, prompt: string, model 
 
 /** Kinds are for pruning and for keeping the reply path out; they are not part
  *  of the key, so mislabelling costs a statistic, never a wrong answer. */
-export type CacheKind = 'analysis' | 'note' | 'referral';
+export type CacheKind = 'analysis' | 'note' | 'referral' | 'resume-import' | 'github-import' | 'refine';
 
 /** Concurrent callers with the same key share one in-flight call, so a refresh
  *  that queues two copies of the same advert side by side still asks once. */
@@ -38,9 +38,13 @@ const inFlight = new Map<string, Promise<unknown>>();
  * The cache stores the raw JSON text, not the parsed object, so a schema fix
  * reads every stored reply again for free. A stored reply that no longer
  * matches the schema is a miss, not an error.
+ *
+ * `perUser` puts the user ID into the key. The imports and the refine chat use it:
+ * their prompt holds the private text of one user, so the reply of one user never
+ * goes to another user.
  */
-export async function askJsonCached<T>(kind: CacheKind, version: string, req: AskRequest<T>, ctx: CallContext): Promise<T> {
-  const key = cacheKey(version, req.system, req.prompt);
+export async function askJsonCached<T>(kind: CacheKind, version: string, req: AskRequest<T>, ctx: CallContext, opts: { perUser?: boolean } = {}): Promise<T> {
+  const key = cacheKey(opts.perUser ? `${version}\0user:${ctx.userId}` : version, req.system, req.prompt);
 
   const hit = await db.llmCache.findUnique({ where: { key } });
   if (hit) {

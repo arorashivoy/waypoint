@@ -1,8 +1,14 @@
 import { randomBytes } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/tasks/queue', async (orig) => {
+  const real = await orig<typeof import('@/lib/tasks/queue')>();
+  return { ...real, completeTask: vi.fn(real.completeTask), failTask: vi.fn(real.failTask) };
+});
+
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { enqueue, lastBeat, type TaskRow } from '@/lib/tasks/queue';
+import { completeTask, enqueue, failTask, lastBeat, type TaskRow } from '@/lib/tasks/queue';
 import { TaskDeferred, limitFor, runOnce, startWorker } from '@/lib/tasks/worker';
 import { registerHandler } from '@/lib/tasks/handlers';
 import { makeUser } from './helpers/http';
@@ -33,6 +39,35 @@ describe('worker', () => {
     const r = await row(t.id);
     expect(r.status).toBe('done');
     expect(JSON.parse(r.result!)).toEqual({ n: 1 });
+  });
+
+  it('a failed completeTask is tried once more, and failTask is never called', async () => {
+    const t = await setup();
+    let runs = 0;
+    current = async () => {
+      runs++;
+      return { n: 3 };
+    };
+    vi.mocked(failTask).mockClear();
+    vi.mocked(completeTask).mockRejectedValueOnce(new Error('SQLITE_BUSY'));
+    await runOnce(new Date(), t.scope);
+    const r = await row(t.id);
+    expect(r.status).toBe('done');
+    expect(JSON.parse(r.result!)).toEqual({ n: 3 });
+    expect(runs).toBe(1);
+    expect(failTask).not.toHaveBeenCalled();
+  });
+
+  it('if completeTask fails twice, the task stays running for requeueStale, with no failTask', async () => {
+    const t = await setup();
+    current = async () => ({ n: 4 });
+    vi.mocked(failTask).mockClear();
+    vi.mocked(completeTask).mockRejectedValueOnce(new Error('SQLITE_BUSY')).mockRejectedValueOnce(new Error('SQLITE_BUSY'));
+    await runOnce(new Date(), t.scope);
+    const r = await row(t.id);
+    expect(r.status).toBe('running');
+    expect(r.attempts).toBe(1);
+    expect(failTask).not.toHaveBeenCalled();
   });
 
   it('a handler error goes to failTask', async () => {

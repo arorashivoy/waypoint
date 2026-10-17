@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { askJson } from '../claude';
+import { askJsonCached } from '../cache';
 import { checkForInjection } from '../injection';
 import { GUARD, untrusted, untrustedFields } from '../prompts';
 import { githubToken, languages, listRepos, readme, type Repo } from '../github';
@@ -161,7 +161,11 @@ async function refuseAtCap(userId: string): Promise<void> {
 }
 
 /** The worker part of the import, for one repo: the facts, the Claude call, the quote rule and the draft writes. */
-export async function draftsFromRepo(userId: string, username: string, name: string): Promise<{ drafts: number; dropped: number }> {
+/**
+ * `batchId` is the ID of the task. The handler checks it before a retry, so a retry never writes the drafts twice.
+ * The Claude call goes through the cache, so a retry with the same repo facts does not pay again.
+ */
+export async function draftsFromRepo(userId: string, username: string, name: string, batchId: string = randomUUID()): Promise<{ drafts: number; dropped: number }> {
   await refuseAtCap(userId);
   const repo = (await listRepos(userId, username)).find((r) => r.name === name);
   if (!repo) throw new HttpError(404, `GitHub lists no repo with the name "${name.slice(0, 100)}" for ${username}.`);
@@ -172,8 +176,8 @@ export async function draftsFromRepo(userId: string, username: string, name: str
   if (repo.fork) warnings.push('This repository is a fork. Check that the work in it is yours.');
   const scan = checkForInjection(repoSource(repo, langs, text));
   if (scan.suspicious) warnings.push(`The repository facts or README have a warning sign: ${scan.why}. Check the draft.`);
-  const { data } = await askJson({ system: GITHUB_IMPORT_SYSTEM, prompt: githubPrompt(repo, langs, text), schema: GithubReply, effort: 'low', maxTokens: 2000 }, { userId, kind: 'github-import' });
+  const data = await askJsonCached('github-import', 'v1', { system: GITHUB_IMPORT_SYSTEM, prompt: githubPrompt(repo, langs, text), schema: GithubReply, effort: 'low', maxTokens: 2000 }, { userId, kind: 'github-import' }, { perUser: true });
   const built = buildRepoDrafts(data, repo, repoSource(repo, langs, text), taken, warnings);
-  const drafts = await createDrafts(userId, { batchId: randomUUID(), source: 'github', items: built.items });
+  const drafts = await createDrafts(userId, { batchId, source: 'github', items: built.items });
   return { drafts, dropped: built.dropped };
 }
