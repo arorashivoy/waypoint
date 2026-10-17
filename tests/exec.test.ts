@@ -258,6 +258,7 @@ describe('rclone and systemctl templates', () => {
     await expect(r(['copy', '--no-traverse', 'data/backups/2026-10-17.db', 'gdrive:w'])).rejects.toThrow(/backup file/);
     await expect(r(['copy', '--no-traverse', file, '--bwlimit=1'])).rejects.toThrow(/remote/);
     await expect(r(['copy', '--no-traverse', file, 'gdrive:a b'])).rejects.toThrow(/remote/);
+    await expect(r(['copy', '--no-traverse', file, '-x:y'])).rejects.toThrow(/remote/);
   });
   it('accepts systemctl --user is-active for the two units', async () => {
     for (const u of ['waypoint-web', 'waypoint-worker']) {

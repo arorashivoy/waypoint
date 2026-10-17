@@ -123,7 +123,7 @@ function checkPdftotext(args: readonly string[], opts: RunOptions): string | nul
   return 'pdftotext takes only -v, or -layout or -bbox-layout <in> <out> with both files inside a work folder in the temp folder';
 }
 
-export const RCLONE_REMOTE = /^[A-Za-z0-9_-]+:[A-Za-z0-9._\/-]*$/;
+export const RCLONE_REMOTE = /^[A-Za-z0-9][A-Za-z0-9_-]*:[A-Za-z0-9._\/-]*$/;
 const BACKUP_FILE = /^\d{4}-\d{2}-\d{2}(-users\.tar\.gz|\.db)$/;
 const UNITS = ['waypoint-web', 'waypoint-worker'];
 

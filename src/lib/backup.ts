@@ -20,6 +20,7 @@ const SAFE_PATH = /^[A-Za-z0-9._\/-]+$/;
 const BACKUP_NAME = /^(\d{4}-\d{2}-\d{2})(\.db|-users\.tar\.gz)$/;
 const KEEP_DAILY = 14;
 const KEEP_WEEKLY = 8;
+const STOPPED = new Set(['inactive', 'failed', 'unknown']);
 const UNITS = ['waypoint-web', 'waypoint-worker'] as const;
 
 /** The path of the database file, from DATABASE_URL. Prisma reads a relative path from the prisma folder. */
@@ -58,7 +59,20 @@ export async function backupNow(
   mkdirSync(usersDir, { recursive: true, mode: 0o700 });
   rmSync(usersFile, { force: true });
   try {
-    await tar.create({ gzip: true, cwd: usersDir, portable: true, file: usersFile }, ['.']);
+    await tar.create(
+      {
+        gzip: true,
+        cwd: usersDir,
+        portable: true,
+        file: usersFile,
+        // Keep plain files and folders only, so the restore check always accepts the archive.
+        filter: (_path, entry) => {
+          const st = entry as { isFile?: () => boolean; isDirectory?: () => boolean };
+          return Boolean(st.isFile?.() || st.isDirectory?.());
+        },
+      },
+      ['.'],
+    );
   } catch (e) {
     rmSync(usersFile, { force: true });
     throw e;
@@ -127,6 +141,10 @@ export async function uploadBackup(files: string[]): Promise<void> {
   }
 }
 
+/**
+ * Fails closed: a unit counts as stopped only when systemctl says so, or when
+ * systemctl is not installed. Any other answer counts as running.
+ */
 async function runningUnits(): Promise<string[]> {
   const running: string[] = [];
   for (const unit of UNITS) {
@@ -136,9 +154,11 @@ async function runningUnits(): Promise<string[]> {
         timeoutMs: 10_000,
         env: programEnv('systemctl'),
       });
-      if (r.stdout.trim() === 'active') running.push(unit);
-    } catch {
-      // systemctl is missing or did not answer: the unit is not running.
+      if (!STOPPED.has(r.stdout.trim())) running.push(unit);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/is not installed|ENOENT/.test(msg)) continue;
+      running.push(`${unit} (systemctl could not be asked: ${msg.slice(0, 120)})`);
     }
   }
   return running;
@@ -186,7 +206,7 @@ export async function restoreBackup(opts: {
   target?: string;
 }): Promise<void> {
   const running = await runningUnits();
-  if (running.length) throw new Error(`Stop ${running.join(' and ')} before the restore. Nothing changed.`);
+  if (running.length) throw new Error(`Stop ${running.join(' and ')} before the restore, or check that systemctl can answer. Nothing changed.`);
 
   if (!existsSync(opts.dbFile) || !isSqlite(opts.dbFile)) throw new Error('The database file is missing or is not an SQLite file. Nothing changed.');
   if (opts.usersTar) {
@@ -195,26 +215,57 @@ export async function restoreBackup(opts: {
   }
 
   const target = opts.target ?? join(opts.dataDir, 'waypoint.db');
-  if (existsSync(target)) {
-    const backups = join(opts.dataDir, 'backups');
+  const stamp = new Date().toISOString().replace(/:/g, '-');
+  const backups = join(opts.dataDir, 'backups');
+  const usersDir = resolve(opts.usersDir);
+  const newUsers = `${usersDir}.restore-new`;
+  const dbTmp = `${target}.restore-tmp`;
+  const cleanup = () => {
+    rmSync(newUsers, { recursive: true, force: true });
+    rmSync(dbTmp, { force: true });
+  };
+
+  try {
+    // Prepare everything first. A failure here leaves the old data as it was.
+    if (opts.usersTar) {
+      rmSync(newUsers, { recursive: true, force: true });
+      mkdirSync(newUsers, { recursive: true, mode: 0o700 });
+      await tar.extract({ file: opts.usersTar, cwd: newUsers, strict: true });
+    }
+    mkdirSync(dirname(target), { recursive: true });
+    copyFileSync(opts.dbFile, dbTmp);
+
     mkdirSync(backups, { recursive: true, mode: 0o700 });
-    const copy = join(backups, `pre-restore-${new Date().toISOString().replace(/:/g, '-')}.db`);
-    copyFileSync(target, copy);
-    // A crash can leave data in the WAL file. Keep it next to the copy.
-    if (existsSync(`${target}-wal`)) copyFileSync(`${target}-wal`, `${copy}-wal`);
-    log.info({ copy }, 'saved the old database');
+    if (existsSync(target)) {
+      const copy = join(backups, `pre-restore-${stamp}.db`);
+      copyFileSync(target, copy);
+      // A crash can leave data in the WAL file. Keep it next to the copy.
+      if (existsSync(`${target}-wal`)) copyFileSync(`${target}-wal`, `${copy}-wal`);
+      log.info({ copy }, 'saved the old database');
+    }
+
+    // Swap the users folder. The old folder moves to the backups folder.
+    let oldUsers: string | null = null;
+    if (opts.usersTar) {
+      if (existsSync(usersDir)) {
+        oldUsers = join(backups, `pre-restore-${stamp}-users`);
+        renameSync(usersDir, oldUsers);
+      }
+      try {
+        renameSync(newUsers, usersDir);
+      } catch (e) {
+        if (oldUsers) renameSync(oldUsers, usersDir);
+        throw e;
+      }
+      log.info({ oldUsers }, 'replaced the users folder');
+    }
+  } catch (e) {
+    cleanup();
+    throw e;
   }
 
-  if (opts.usersTar) {
-    mkdirSync(opts.usersDir, { recursive: true, mode: 0o700 });
-    await tar.extract({ file: opts.usersTar, cwd: opts.usersDir, strict: true });
-  }
-
-  // Copy to a temporary name in the same folder, then rename, so the replace is one step.
-  mkdirSync(dirname(target), { recursive: true });
-  const tmp = `${target}.restore-tmp`;
-  copyFileSync(opts.dbFile, tmp);
-  renameSync(tmp, target);
+  // Remove -wal and -shm first: an old WAL must never meet the new file.
   rmSync(`${target}-wal`, { force: true });
   rmSync(`${target}-shm`, { force: true });
+  renameSync(dbTmp, target);
 }

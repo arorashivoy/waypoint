@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, linkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, linkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
@@ -13,7 +13,7 @@ vi.mock('@/lib/exec', async (importOriginal) => {
 
 import { runProgram } from '@/lib/exec';
 import { resetEnvForTests } from '@/lib/env';
-import { backupNow, databasePath, pruneBackups, restoreBackup, uploadBackup } from '@/lib/backup';
+import { backupNow, checkArchive, databasePath, pruneBackups, restoreBackup, uploadBackup } from '@/lib/backup';
 
 const run = vi.mocked(runProgram);
 const work = mkdtempSync(join(tmpdir(), 'wp-backup-'));
@@ -83,6 +83,20 @@ describe('backupNow', () => {
   });
 });
 
+describe('backupNow archive filter', () => {
+  it('leaves out a symlink, so checkArchive accepts the archive', async () => {
+    const users = fresh('u');
+    writeFileSync(join(users, 'real.txt'), 'x');
+    symlinkSync('/etc/passwd', join(users, 'link'));
+    const r = await backupNow({ dir: fresh('b'), usersDir: users, now: NOW }, client);
+    await expect(checkArchive(r.users)).resolves.toBeUndefined();
+    const names: string[] = [];
+    await tar.list({ file: r.users, onReadEntry: (e) => void names.push(String(e.path)) });
+    expect(names.some((p) => p.endsWith('real.txt'))).toBe(true);
+    expect(names.some((p) => p.endsWith('link'))).toBe(false);
+  });
+});
+
 describe('pruneBackups', () => {
   it('keeps 14 daily and 8 weekly', async () => {
     const dir = fresh('p');
@@ -119,6 +133,13 @@ describe('uploadBackup', () => {
 
   it('refuses a bad remote name and starts no process', async () => {
     vi.stubEnv('WAYPOINT_BACKUP_REMOTE', 'gdrive:a b; rm -rf /');
+    resetEnvForTests();
+    await expect(uploadBackup(['/x/2026-10-17.db'])).rejects.toThrow(/REMOTE/);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('refuses a remote that starts with a dash', async () => {
+    vi.stubEnv('WAYPOINT_BACKUP_REMOTE', '-x:y');
     resetEnvForTests();
     await expect(uploadBackup(['/x/2026-10-17.db'])).rejects.toThrow(/REMOTE/);
     expect(run).not.toHaveBeenCalled();
@@ -176,6 +197,26 @@ describe('restoreBackup', () => {
     unchanged(s);
   });
 
+  it.each([['empty output', ''], ['activating', 'activating\n'], ['reloading', 'reloading\n']])('refuses when systemctl prints %s', async (_n, out) => {
+    const s = await setup();
+    run.mockResolvedValue({ code: 0, stdout: out, stderr: '' });
+    await expect(restoreBackup({ dbFile: s.made.db, dataDir: s.dataDir, usersDir: s.usersDir })).rejects.toThrow(/Stop/);
+    unchanged(s);
+  });
+
+  it('refuses when systemctl fails in another way than a missing program', async () => {
+    const s = await setup();
+    run.mockRejectedValue(new Error('systemctl took longer than 10000 ms'));
+    await expect(restoreBackup({ dbFile: s.made.db, dataDir: s.dataDir, usersDir: s.usersDir })).rejects.toThrow(/could not be asked/);
+    unchanged(s);
+  });
+
+  it.each(['inactive', 'failed', 'unknown'])('accepts the answer %s', async (out) => {
+    const s = await setup();
+    run.mockResolvedValue({ code: 3, stdout: `${out}\n`, stderr: '' });
+    await restoreBackup({ dbFile: s.made.db, dataDir: s.dataDir, usersDir: s.usersDir });
+  });
+
   it('treats a missing systemctl as not running', async () => {
     const s = await setup();
     run.mockRejectedValue(new Error('systemctl is not installed'));
@@ -225,6 +266,45 @@ describe('restoreBackup', () => {
     expect(readFileSync(s.target).equals(readFileSync(s.made.db))).toBe(true);
     expect(existsSync(`${s.target}-wal`)).toBe(false);
     expect(existsSync(`${s.target}-shm`)).toBe(false);
+  });
+
+  it('removes a user folder that the archive lacks and keeps it in the pre-restore copy', async () => {
+    const s = await setup();
+    mkdirSync(join(s.usersDir, 'orphan99'));
+    writeFileSync(join(s.usersDir, 'orphan99', 'secret.txt'), 'private');
+    const users = fresh('u3');
+    mkdirSync(join(users, 'abc12345'));
+    writeFileSync(join(users, 'abc12345', 'cv.txt'), 'new');
+    const made = await backupNow({ dir: fresh('b'), usersDir: users, now: NOW }, client);
+    await restoreBackup({ dbFile: made.db, usersTar: made.users, dataDir: s.dataDir, usersDir: s.usersDir });
+    expect(readdirSync(s.usersDir)).toEqual(['abc12345']);
+    const old = readdirSync(join(s.dataDir, 'backups')).find((f) => /^pre-restore-.*-users$/.test(f))!;
+    expect(readFileSync(join(s.dataDir, 'backups', old, 'orphan99', 'secret.txt'), 'utf8')).toBe('private');
+    expect(readdirSync(s.dataDir).filter((f) => f.includes('restore-new'))).toEqual([]);
+  });
+
+  it('leaves the old users folder and database as they were with a broken archive', async () => {
+    const s = await setup();
+    const broken = join(fresh('arcout'), 'broken.tar.gz');
+    const good = await archive((cwd) => (writeFileSync(join(cwd, 'f.txt'), 'x'.repeat(5000)), ['f.txt']));
+    const bytes = readFileSync(good);
+    writeFileSync(broken, bytes.subarray(0, Math.floor(bytes.length / 2)));
+    await expect(restoreBackup({ dbFile: s.made.db, usersTar: broken, dataDir: s.dataDir, usersDir: s.usersDir })).rejects.toThrow();
+    expect(readFileSync(s.target, 'utf8')).toBe('OLD DATABASE');
+    expect(readdirSync(s.usersDir)).toEqual(['old.txt']);
+    expect(readdirSync(s.dataDir).filter((f) => f.includes('restore-'))).toEqual([]);
+  });
+
+  it.skipIf(process.getuid?.() === 0)('leaves the old data as it was when the new folder cannot be made', async () => {
+    const s = await setup();
+    chmodSync(s.dataDir, 0o500); // the new users folder is a sibling of the old one, in this folder
+    try {
+      await expect(restoreBackup({ dbFile: s.made.db, usersTar: s.made.users, dataDir: s.dataDir, usersDir: s.usersDir })).rejects.toThrow(/EACCES/);
+    } finally {
+      chmodSync(s.dataDir, 0o700);
+    }
+    expect(readFileSync(s.target, 'utf8')).toBe('OLD DATABASE');
+    expect(readdirSync(s.usersDir)).toEqual(['old.txt']);
   });
 
   it('extracts the users archive', async () => {
