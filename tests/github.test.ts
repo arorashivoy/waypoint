@@ -33,6 +33,20 @@ const REPOS = [
 ];
 
 describe('github client', () => {
+  it('a reply cut at 1 MB is not cached', async () => {
+    const { user } = await makeUser();
+    const big = 'x'.repeat(1024 * 1024 + 10);
+    const calls = stubGithub({ '/repos/octo/parser/readme': { body: big, etag: '"big"' }, '/repos/octo/small/readme': { body: 'small', etag: '"small"' } });
+    expect((await readme(user.id, { owner: 'octo', name: 'parser' }, null)).length).toBe(4096);
+    await readme(user.id, { owner: 'octo', name: 'parser' }, null);
+    expect(calls[1].headers['if-none-match']).toBeUndefined();
+    expect(await db.githubCache.count({ where: { userId: user.id } })).toBe(0);
+    // A small reply still gets cached with its ETag.
+    await readme(user.id, { owner: 'octo', name: 'small' }, null);
+    await readme(user.id, { owner: 'octo', name: 'small' }, null);
+    expect(calls[3].headers['if-none-match']).toBe('"small"');
+  });
+
   it('lists repos from api.github.com only, builds the URL itself and drops bad names', async () => {
     const { user } = await makeUser();
     const calls = stubGithub({ '/users/octo/repos': { body: REPOS } });

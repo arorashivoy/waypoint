@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import type { ClaimsDoc } from '@/lib/profile/doc';
 import { ApiError, upload } from '../api';
+import { runTask } from '../tasks';
 import DraftList from './DraftList';
 import GithubSource from './GithubSource';
 import HistoryPanel from './HistoryPanel';
@@ -46,7 +47,7 @@ export default function ImportsTab({ doc, version, state, changed, setToast, onC
           <span className="label">Résumé (PDF or .tex, 10 MB or less)</span>
           <div><FileButton label="Upload a résumé" accept=".pdf,.tex,application/pdf" run={async (f) => {
             try {
-              const r = await upload<{ drafts: number; dropped: number; hidden: number }>('/api/profile/resume-import', f);
+              const r = await runTask<{ drafts: number; dropped: number; hidden: number }>(() => upload<{ taskId: string }>('/api/profile/resume-import', f));
               setToast(`Made ${r.drafts} ${r.drafts === 1 ? 'draft' : 'drafts'}.${r.dropped ? ` Dropped ${r.dropped} items whose quote is not in the file.` : ''}${r.hidden ? ' The file has hidden text: see the warnings.' : ''}`);
               await imported();
             } catch (e) { fail(e); }

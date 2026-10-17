@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { post } from '../api';
+import { runTask } from '../tasks';
 
 type Repo = { name: string; description: string | null; fork: boolean; language: string | null; stars: number; private: boolean };
 const MAX = 10;
@@ -29,8 +30,22 @@ export default function GithubSource({ done, setToast }: { done: () => Promise<v
   const run = async () => {
     setBusy(true);
     try {
-      const r = await post<{ drafts: number; dropped: number }>('/api/profile/github/import', { username: username.trim(), repos: picked });
-      setToast(`Made ${r.drafts} ${r.drafts === 1 ? 'draft' : 'drafts'}.${r.dropped ? ` Dropped ${r.dropped} items that had no quote from the repository.` : ''}`);
+      const { taskIds } = await post<{ taskIds: string[] }>('/api/profile/github/import', { username: username.trim(), repos: picked });
+      const results = await Promise.allSettled(taskIds.map((taskId) => runTask<{ drafts: number; dropped: number }>(async () => ({ taskId }))));
+      let drafts = 0;
+      let dropped = 0;
+      let firstError = '';
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          drafts += r.value.drafts;
+          dropped += r.value.dropped;
+        } else if (!firstError) {
+          firstError = (r.reason as Error).message;
+        }
+      }
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      const counts = `Made ${drafts} ${drafts === 1 ? 'draft' : 'drafts'}.${dropped ? ` Dropped ${dropped} items that had no quote from the repository.` : ''}`;
+      setToast(failed ? `${counts} ${failed} of ${results.length} repositories failed: ${firstError}` : counts);
       setRepos(null);
       await done();
     } catch (e) {

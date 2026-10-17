@@ -1,4 +1,10 @@
+import { readFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { z } from 'zod';
+import { HttpError } from '@/lib/auth/http';
+import { draftsFromResume } from '@/lib/profile/resume-import';
+import { draftsFromRepo } from '@/lib/profile/github-import';
+import { userDir } from '@/lib/user-files';
 import { db } from '@/lib/db';
 import { analyseJob } from '@/lib/analysis';
 import { NoCredentialError, claudeStatus, credentialFor } from '@/lib/claude';
@@ -8,7 +14,7 @@ import { searchQueries } from '@/lib/resume';
 import { CV_MESSAGE_MAX, NO_RESUME, CvError, cvView, publishCv, refineCv, resetCv } from '@/lib/cv';
 import { claimsFor, isAdmin } from '@/lib/user';
 import { TaskDeferred, TaskFatal } from '@/lib/tasks/worker';
-import type { TaskKind, TaskRow } from '@/lib/tasks/queue';
+import { RETRY_DELAYS_MS, type TaskKind, type TaskRow } from '@/lib/tasks/queue';
 
 type Entry = {
   schema: z.ZodType<unknown>;
@@ -116,3 +122,62 @@ registerHandler(
     }
   },
 );
+
+/** The error of an import that the user must read, or null when a retry can help. */
+function importFatal(e: unknown): TaskFatal | null {
+  if (e instanceof NoCredentialError) return new TaskFatal(e.message);
+  // A 4xx error is a fact about the request. A 429 or a 5xx error from GitHub can pass, so the task runs again.
+  if (e instanceof HttpError && e.status < 500 && e.status !== 429) return new TaskFatal(e.message);
+  return null;
+}
+
+/** The only file names that the server makes for a waiting résumé upload. */
+export const RESUME_FILE = /^[a-z0-9]{8,40}\.(pdf|tex)$/;
+
+registerHandler(
+  'resume-import',
+  z
+    .object({ file: z.string().regex(RESUME_FILE), name: z.string().max(255), type: z.enum(['pdf', 'tex']) })
+    .refine((p) => p.file.endsWith(`.${p.type}`), 'The file name and the type do not match.'),
+  async ({ file, type }, task) => {
+    const userId = task.userId;
+    if (!userId) return { skipped: 'no-user' };
+    // The path comes from the userId of the task and the name that the server made. Never from the payload alone.
+    const path = join(userDir(userId, 'imports'), file);
+    // The file stays while a retry can still happen. It goes when the task ends: done, fatal or the last attempt.
+    let ends = task.attempts > RETRY_DELAYS_MS.length;
+    try {
+      let buf: Buffer;
+      try {
+        buf = readFileSync(path);
+      } catch {
+        ends = true;
+        throw new TaskFatal('The uploaded file is gone. Upload the résumé again.');
+      }
+      try {
+        const result = await draftsFromResume(userId, type, buf);
+        ends = true;
+        return result;
+      } catch (e) {
+        const fatal = importFatal(e);
+        if (fatal) {
+          ends = true;
+          throw fatal;
+        }
+        throw e;
+      }
+    } finally {
+      if (ends) rmSync(path, { force: true });
+    }
+  },
+);
+
+registerHandler('github-import', z.object({ username: z.string().max(100), repo: z.string().max(100) }), async ({ username, repo }, task) => {
+  const userId = task.userId;
+  if (!userId) return { skipped: 'no-user' };
+  try {
+    return await draftsFromRepo(userId, username, repo);
+  } catch (e) {
+    throw importFatal(e) ?? e;
+  }
+});

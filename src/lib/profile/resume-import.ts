@@ -1,6 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { z } from 'zod';
 import { db } from '../db';
 import { HttpError } from '../auth/http';
@@ -8,7 +6,6 @@ import { askJson } from '../claude';
 import { checkForInjection } from '../injection';
 import { GUARD, untrusted } from '../prompts';
 import { sniffResume } from '../uploads';
-import { userDir } from '../user-files';
 import { slugify } from './doc';
 import { createDrafts, MAX_PENDING, type NewDraft } from './drafts';
 import { extractPdf, extractTex } from './extract';
@@ -186,11 +183,16 @@ export function buildResumeDrafts(rawReply: ResumeReplyData, text: string, name:
   return { items, dropped };
 }
 
-export async function importResume(userId: string, upload: { name: string; type: string; buf: Buffer }): Promise<{ drafts: number; dropped: number; hidden: number }> {
-  const kind = sniffResume(upload.name, upload.type, upload.buf);
-  const ex = kind.kind === 'pdf' ? await extractPdf(upload.buf) : extractTex(kind.text);
+export type ResumeKind = 'pdf' | 'tex';
+
+async function extractFor(kind: ResumeKind, buf: Buffer) {
+  return kind === 'pdf' ? extractPdf(buf) : extractTex(buf.toString('utf8').replace(/^\uFEFF/, ''));
+}
+
+/** The refusals that the route and the handler share: hidden text in a .tex file, almost no text, and the cap of pending drafts. */
+async function refuseBadResume(userId: string, kind: ResumeKind, ex: Awaited<ReturnType<typeof extractFor>>): Promise<void> {
   // A .tex file can keep hidden text in its text, so Waypoint refuses the whole file. A PDF has its hidden words removed already.
-  if (kind.kind === 'tex' && ex.hidden.length) {
+  if (kind === 'tex' && ex.hidden.length) {
     throw new HttpError(400, 'This file has hidden text (white text, very small text, or a block that LaTeX does not show). Remove it, then upload the file again.');
   }
   if (ex.text.replace(/\s/g, '').length < 200) {
@@ -199,6 +201,20 @@ export async function importResume(userId: string, upload: { name: string; type:
   // Check the cap before the Claude call, so a user at the cap does not pay for a refused import.
   const pending = await db.profileDraft.count({ where: { userId, status: 'pending' } });
   if (pending >= MAX_PENDING) throw new HttpError(409, 'You have too many drafts to review. Accept or reject some drafts, then import again.');
+}
+
+/** The route part of the import: the checks before any file is saved or any task exists. Returns the type of the file. */
+export async function checkResumeUpload(userId: string, upload: { name: string; type: string; buf: Buffer }): Promise<ResumeKind> {
+  const kind = sniffResume(upload.name, upload.type, upload.buf);
+  const ex = kind.kind === 'pdf' ? await extractPdf(upload.buf) : extractTex(kind.text);
+  await refuseBadResume(userId, kind.kind, ex);
+  return kind.kind;
+}
+
+/** The worker part of the import: the same checks again, then the Claude call, the quote rule and the draft writes. */
+export async function draftsFromResume(userId: string, kind: ResumeKind, buf: Buffer): Promise<{ drafts: number; dropped: number; hidden: number }> {
+  const ex = await extractFor(kind, buf);
+  await refuseBadResume(userId, kind, ex);
   const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } });
 
   const warnings: string[] = [];
@@ -206,17 +222,8 @@ export async function importResume(userId: string, upload: { name: string; type:
   const scan = checkForInjection(ex.text);
   if (scan.suspicious) warnings.push(`The résumé text has a warning sign: ${scan.why}. Check each draft.`);
 
-  // The upload stays in the user's folder, named by an ID that the server makes.
-  const batchId = randomUUID();
-  const file = join(userDir(userId, 'imports'), `${batchId}.${kind.kind}`);
-  writeFileSync(file, upload.buf, { mode: 0o600 });
-  try {
-    const { data } = await askJson({ system: RESUME_IMPORT_SYSTEM, prompt: resumeImportPrompt(ex.text), schema: ResumeReply, effort: 'medium', maxTokens: 8000 }, { userId, kind: 'resume-import' });
-    const { items, dropped } = buildResumeDrafts(data, ex.text, user.name);
-    const drafts = await createDrafts(userId, { batchId, source: 'resume', items, warnings });
-    return { drafts, dropped, hidden: ex.hidden.length };
-  } catch (e) {
-    rmSync(file, { force: true });
-    throw e;
-  }
+  const { data } = await askJson({ system: RESUME_IMPORT_SYSTEM, prompt: resumeImportPrompt(ex.text), schema: ResumeReply, effort: 'medium', maxTokens: 8000 }, { userId, kind: 'resume-import' });
+  const { items, dropped } = buildResumeDrafts(data, ex.text, user.name);
+  const drafts = await createDrafts(userId, { batchId: randomUUID(), source: 'resume', items, warnings });
+  return { drafts, dropped, hidden: ex.hidden.length };
 }

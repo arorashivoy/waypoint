@@ -139,32 +139,41 @@ export function buildRepoDrafts(reply: GithubReplyData, repo: Repo, source: stri
   return { items, dropped };
 }
 
-export async function importRepos(userId: string, username: string, names: string[]): Promise<{ drafts: number; dropped: number; repos: number }> {
+/**
+ * The route part of the import: the pending cap and the repo names. Throws 409 or 404.
+ * Returns the names that GitHub lists for the user.
+ */
+export async function checkRepos(userId: string, username: string, names: string[]): Promise<string[]> {
   // Check the cap before any Claude call, so a user at the cap does not pay for a refused import.
-  const pending = await db.profileDraft.count({ where: { userId, status: 'pending' } });
-  if (pending >= MAX_PENDING) throw new HttpError(409, 'You have too many drafts to review. Accept or reject some drafts, then import again.');
+  await refuseAtCap(userId);
   const all = await listRepos(userId, username);
   const byName = new Map(all.map((r) => [r.name, r]));
-  const chosen = names.map((n) => {
+  return names.map((n) => {
     const r = byName.get(n);
     if (!r) throw new HttpError(404, `GitHub lists no repo with the name "${n.slice(0, 100)}" for ${username}.`);
-    return r;
+    return r.name;
   });
+}
+
+async function refuseAtCap(userId: string): Promise<void> {
+  const pending = await db.profileDraft.count({ where: { userId, status: 'pending' } });
+  if (pending >= MAX_PENDING) throw new HttpError(409, 'You have too many drafts to review. Accept or reject some drafts, then import again.');
+}
+
+/** The worker part of the import, for one repo: the facts, the Claude call, the quote rule and the draft writes. */
+export async function draftsFromRepo(userId: string, username: string, name: string): Promise<{ drafts: number; dropped: number }> {
+  await refuseAtCap(userId);
+  const repo = (await listRepos(userId, username)).find((r) => r.name === name);
+  if (!repo) throw new HttpError(404, `GitHub lists no repo with the name "${name.slice(0, 100)}" for ${username}.`);
   const token = await githubToken(userId);
   const taken: Taken = { project: new Set(), claim: new Set() };
-  const items: NewDraft[] = [];
-  let dropped = 0;
-  for (const repo of chosen) {
-    const [langs, text] = await Promise.all([languages(userId, repo, token), readme(userId, repo, token)]);
-    const warnings: string[] = [];
-    if (repo.fork) warnings.push('This repository is a fork. Check that the work in it is yours.');
-    const scan = checkForInjection(repoSource(repo, langs, text));
-    if (scan.suspicious) warnings.push(`The repository facts or README have a warning sign: ${scan.why}. Check the draft.`);
-    const { data } = await askJson({ system: GITHUB_IMPORT_SYSTEM, prompt: githubPrompt(repo, langs, text), schema: GithubReply, effort: 'low', maxTokens: 2000 }, { userId, kind: 'github-import' });
-    const built = buildRepoDrafts(data, repo, repoSource(repo, langs, text), taken, warnings);
-    items.push(...built.items);
-    dropped += built.dropped;
-  }
-  const drafts = await createDrafts(userId, { batchId: randomUUID(), source: 'github', items });
-  return { drafts, dropped, repos: chosen.length };
+  const [langs, text] = await Promise.all([languages(userId, repo, token), readme(userId, repo, token)]);
+  const warnings: string[] = [];
+  if (repo.fork) warnings.push('This repository is a fork. Check that the work in it is yours.');
+  const scan = checkForInjection(repoSource(repo, langs, text));
+  if (scan.suspicious) warnings.push(`The repository facts or README have a warning sign: ${scan.why}. Check the draft.`);
+  const { data } = await askJson({ system: GITHUB_IMPORT_SYSTEM, prompt: githubPrompt(repo, langs, text), schema: GithubReply, effort: 'low', maxTokens: 2000 }, { userId, kind: 'github-import' });
+  const built = buildRepoDrafts(data, repo, repoSource(repo, langs, text), taken, warnings);
+  const drafts = await createDrafts(userId, { batchId: randomUUID(), source: 'github', items: built.items });
+  return { drafts, dropped: built.dropped };
 }

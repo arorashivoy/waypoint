@@ -59,9 +59,11 @@ async function get(userId: string, path: string, token: string | null, accept = 
     throw new HttpError(502, 'GitHub did not answer. Try again later.');
   }
   if (res.status === 304 && cached) return { status: 200, body: cached.body };
-  const body = (await res.text()).slice(0, MAX_BODY);
+  const full = await res.text();
+  const body = full.slice(0, MAX_BODY);
   const etag = res.headers.get('etag');
-  if (res.ok && etag) {
+  // A reply cut at 1 MB is not whole. Cache it and the next 304 would give a cut reply as if it were whole.
+  if (res.ok && etag && full.length <= MAX_BODY) {
     await db.githubCache.upsert({
       where: { userId_url: { userId, url: key } },
       create: { userId, url: key, etag, body },

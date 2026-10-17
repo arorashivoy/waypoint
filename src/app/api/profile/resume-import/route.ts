@@ -1,25 +1,38 @@
+import { randomBytes } from 'node:crypto';
+import { rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth/guard';
 import { handle, HttpError } from '@/lib/auth/http';
 import { hitLimit } from '@/lib/auth/rate-limit';
-import { NoCredentialError } from '@/lib/claude';
-import { importResume } from '@/lib/profile/resume-import';
+import { checkResumeUpload } from '@/lib/profile/resume-import';
+import { enqueue } from '@/lib/tasks/queue';
 import { MAX_RESUME_BYTES, readFormFile } from '@/lib/uploads';
+import { userDir } from '@/lib/user-files';
 
 export const maxDuration = 300;
 
 const DAY = 24 * 60 * 60_000;
 
-/** Uploads a résumé (PDF or .tex, 10 MB or less). Claude drafts the profile items; the user accepts them in the Imports tab. */
+/**
+ * Uploads a résumé (PDF or .tex, 10 MB or less). The route checks the file, saves it and queues a task.
+ * The worker asks Claude for the drafts; the user accepts them in the Imports tab.
+ */
 export const POST = handle(async (req) => {
   const user = await requireUser(req);
   const limit = await hitLimit(`resume-import:${user.id}`, 10, DAY);
   if (!limit.ok) throw new HttpError(429, 'You imported 10 résumés in the last 24 hours. Try again later.');
   const upload = await readFormFile(req, MAX_RESUME_BYTES, 'The file is larger than 10 MB.');
+  const type = await checkResumeUpload(user.id, upload);
+  // The file waits in the user's folder under a name that the server makes. The task holds only that name.
+  const file = `${randomBytes(12).toString('hex')}.${type}`;
+  const path = join(userDir(user.id, 'imports'), file);
+  writeFileSync(path, upload.buf, { mode: 0o600 });
   try {
-    return NextResponse.json({ ok: true, ...(await importResume(user.id, upload)) });
+    const { id } = await enqueue({ kind: 'resume-import', userId: user.id, payload: { file, name: upload.name.slice(0, 255), type } });
+    return NextResponse.json({ taskId: id });
   } catch (e) {
-    if (e instanceof NoCredentialError) throw new HttpError(409, e.message);
+    rmSync(path, { force: true });
     throw e;
   }
 });
