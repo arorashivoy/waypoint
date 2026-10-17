@@ -30,6 +30,7 @@ import { ctx, formRequest, makeUser, request } from './helpers/http';
 import * as claudeRoute from '@/app/api/claude/route';
 import * as countries from '@/app/api/countries/route';
 import * as jobDetail from '@/app/api/jobs/[id]/route';
+import * as taskRoute from '@/app/api/tasks/[id]/route';
 import * as jobResume from '@/app/api/jobs/[id]/resume/route';
 import * as refine from '@/app/api/jobs/[id]/resume/refine/route';
 import * as refresh from '@/app/api/jobs/refresh/route';
@@ -90,6 +91,7 @@ describe('every route refuses a request without a session', () => {
     ['POST /api/jobs/[id]/resume/refine', refine.POST as Handler, { id: 'x' }],
     ['DELETE /api/jobs/[id]/resume/refine', refine.DELETE as Handler, { id: 'x' }],
     ['POST /api/jobs/refresh', refresh.POST as Handler],
+    ['GET /api/tasks/[id]', taskRoute.GET as Handler, { id: 'x' }],
     ['POST /api/outreach', outreach.POST as Handler],
     ['PATCH /api/outreach/[id]', outreachEvent.PATCH as Handler, { id: 'x' }],
     ['GET /api/profile', profileRoute.GET as Handler],
