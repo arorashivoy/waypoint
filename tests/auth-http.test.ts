@@ -55,6 +55,14 @@ describe('handle', () => {
     }
   });
 
+  it('adds the ID to a response with immutable headers', async () => {
+    const h = handle(async () => Response.redirect('http://localhost:3117/login', 302));
+    const res = await h(req({ 'x-request-id': 'abc-12345678' }), { params: {} });
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('http://localhost:3117/login');
+    expect(res.headers.get('x-request-id')).toBe('abc-12345678');
+  });
+
   it('a valid incoming ID is kept', async () => {
     const h = handle(async () => NextResponse.json({ ok: true }));
     const res = await h(req({ 'x-request-id': 'abc-12345678' }), { params: {} });

@@ -26,8 +26,15 @@ export function handle<C = RouteContext>(fn: (req: NextRequest, ctx: C) => Promi
     const incoming = req.headers.get('x-request-id');
     const reqId = incoming && REQUEST_ID.test(incoming) ? incoming : randomUUID();
     const done = (res: Response): Response => {
-      res.headers.set('x-request-id', reqId);
-      return res;
+      try {
+        res.headers.set('x-request-id', reqId);
+        return res;
+      } catch {
+        // The headers are immutable (Response.redirect, a response from fetch). Copy the response with the new header.
+        const headers = new Headers(res.headers);
+        headers.set('x-request-id', reqId);
+        return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+      }
     };
     try {
       return done(await fn(req, ctx));
