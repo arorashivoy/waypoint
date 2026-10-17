@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/analysis', async (orig) => {
@@ -25,10 +25,11 @@ async function newJob(cc: string) {
   });
 }
 
-// A country code of its own keeps the jobs of other test files out of the selection.
+// makeUser turns on every real country, so the code must be one no country uses.
+// The X range is for user-assigned codes: X plus one random letter A-Z.
 async function setup(jobs = 3) {
   const { user } = await makeUser();
-  const cc = randomBytes(1).toString('hex').toUpperCase();
+  const cc = `X${String.fromCharCode(65 + randomInt(26))}`;
   await db.countryPref.create({ data: { userId: user.id, cc, on: true, rank: 0 } });
   const made = [];
   for (let i = 0; i < jobs; i++) made.push(await newJob(cc));
