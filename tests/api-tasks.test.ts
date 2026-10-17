@@ -23,13 +23,26 @@ describe('GET /api/tasks/[id]', () => {
     expect((await (await get(id, cookie)).json()).result).toEqual({ ok: 1 });
   });
 
-  it('gives a null result when the stored JSON is bad', async () => {
+  it('shows a done task with a bad stored result as failed', async () => {
     const { user, cookie } = await makeUser();
     const { id } = await enqueue({ kind: 'cv', userId: user.id, payload: null });
     await db.task.update({ where: { id }, data: { status: 'done', result: '{bad' } });
     const res = await get(id, cookie);
     expect(res.status).toBe(200);
-    expect((await res.json()).result).toBeNull();
+    const body = await res.json();
+    expect(body.status).toBe('failed');
+    expect(body.error).toBe('The result of this task could not be read.');
+    expect(body.result).toBeNull();
+  });
+
+  it('keeps a done task with a null result column as done', async () => {
+    const { user, cookie } = await makeUser();
+    const { id } = await enqueue({ kind: 'cv', userId: user.id, payload: null });
+    await db.task.update({ where: { id }, data: { status: 'done', result: null } });
+    const body = await (await get(id, cookie)).json();
+    expect(body.status).toBe('done');
+    expect(body.error).toBeNull();
+    expect(body.result).toBeNull();
   });
 
   it('shows the error only when the task failed', async () => {
