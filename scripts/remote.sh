@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# For dev mode only. In production, the systemd units (deploy/systemd) replace this script.
 # Serves Waypoint and opens a public HTTPS tunnel to it, in the background.
 #
 #   ./scripts/remote.sh [start]   start the server and tunnel, then return

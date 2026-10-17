@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# In production, the systemd units (deploy/systemd) replace this script.
 # Production twin of remote.sh: builds, serves with `next start`, and tunnels,
 # in the background. Takes the same commands: start (default), stop, restart,
 # status, logs. Use this on an always-on host like the Pi, where `next dev`
