@@ -9,6 +9,7 @@ import {
   failTask,
   requeueStale,
 } from '@/lib/tasks/queue';
+import { log } from '@/lib/log';
 
 /** A handler throws this to run the task again later. The count of attempts stays. */
 export class TaskDeferred extends Error {
@@ -94,7 +95,7 @@ export async function startWorker(opts: {
   beatId?: string;
 }): Promise<void> {
   const { signal, idleMs = 2000, beatMs = 30_000, scope, beatId } = opts;
-  const beatNow = () => beat(process.pid, new Date(), beatId).catch((e) => console.error('heartbeat failed', e));
+  const beatNow = () => beat(process.pid, new Date(), beatId).catch((e) => log.error({ err: e }, 'heartbeat failed'));
   await beatNow();
   const beatTimer = setInterval(() => void beatNow(), beatMs);
   let lastRequeue = 0;
@@ -113,7 +114,7 @@ export async function startWorker(opts: {
         }
         if ((await runOnce(new Date(), scope)) === 'idle') await sleep(idleMs, signal);
       } catch (err) {
-        console.error('worker loop error', err);
+        log.error({ err }, 'worker loop error');
         await sleep(idleMs, signal);
       }
     }

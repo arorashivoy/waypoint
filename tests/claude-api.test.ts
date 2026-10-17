@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import Anthropic from '@anthropic-ai/sdk';
+import { log } from '@/lib/log';
 import { askApi } from '@/lib/claude/api';
 import { HookReply } from '@/lib/schemas';
 import { ClaudeCallError, RefusalError } from '@/lib/claude/types';
@@ -108,11 +109,11 @@ describe('askApi', () => {
 
   it('logs any other 400, sets no banner and rethrows', async () => {
     clearFailures('shared');
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const spy = vi.spyOn(log, 'error').mockImplementation(() => {});
     const client = fake(() => { throw badRequest('output_config.format is not valid'); });
     await expect(askApi('k', req, { failureKey: 'shared', client })).rejects.toBeInstanceOf(Anthropic.BadRequestError);
     expect(claudeQuotaFailure('shared')).toBeNull();
-    expect(spy).toHaveBeenCalledWith('[claude] API request refused (400):', expect.stringContaining('output_config.format'));
+    expect(spy).toHaveBeenCalledWith({ message: expect.stringContaining('output_config.format') }, 'Claude API request refused (400)');
     spy.mockRestore();
   });
 

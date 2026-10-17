@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { db } from '@/lib/db';
+import { log as appLog } from '@/lib/log';
 import { checkYaml } from '@/lib/profile/doc';
 import { saveProfile } from '@/lib/profile/store';
 import { userDir, usersRoot } from '@/lib/user-files';
@@ -99,7 +100,7 @@ describe('DELETE /api/account', () => {
   it('still answers ok and clears the cookie when the folder cannot be removed', async () => {
     const u = await makeUser();
     userDir(u.user.id, 'imports');
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const log = vi.spyOn(appLog, 'error').mockImplementation(() => {});
     fail.remove = true;
     try {
       const res = await del(u, TEST_PASSWORD);

@@ -4,6 +4,7 @@ import { credentialFor, failureKey } from './credential';
 import { extractJson } from './json';
 import { ClaudeCallError, NoCredentialError, type AskRequest, type AskResult, type CallContext, type Credential, type Usage } from './types';
 import { recordUsage } from './usage';
+import { log } from '@/lib/log';
 
 /**
  * The one way to call Claude.
@@ -50,7 +51,7 @@ export async function askJson<T>(req: AskRequest<T>, ctx: CallContext, credentia
     throw e;
   } finally {
     // A failed write of the usage row must not hide the reply or the error.
-    if (usage) await recordUsage(ctx.userId, source, ctx.kind, usage).catch((err) => console.error('[claude] could not record usage:', (err as Error).message));
+    if (usage) await recordUsage(ctx.userId, source, ctx.kind, usage).catch((err) => log.error({ err }, 'could not record usage'));
   }
 }
 

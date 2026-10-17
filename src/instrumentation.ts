@@ -3,11 +3,12 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
   const { env } = await import('./lib/env');
+  const { log } = await import('./lib/log');
   try {
     env();
   } catch (err) {
     // Next 14.2 logs a failed hook and keeps serving, so exit here.
-    console.error(err instanceof Error ? err.message : err);
+    log.fatal({ err }, 'bad environment');
     process.exit(1);
   }
 }

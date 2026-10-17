@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 import { handle, HttpError, readJson } from '@/lib/auth/http';
+import { log } from '@/lib/log';
 import { publicBase, sameOrigin } from '@/lib/auth/origin';
 
 const req = (headers: Record<string, string>, method = 'POST', body?: string) =>
@@ -36,11 +37,49 @@ describe('handle', () => {
   });
 
   it('hides the message of an unknown error', async () => {
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const spy = vi.spyOn(log, 'error').mockImplementation(() => {});
     const h = handle(async () => { throw new Error('/home/shivoy/secret/path failed'); });
     const res = await h(req({}), { params: {} });
     expect(res.status).toBe(500);
     expect(JSON.stringify(await res.json())).not.toContain('/home');
+    spy.mockRestore();
+  });
+
+  it('each response has an x-request-id', async () => {
+    const ok = handle(async () => NextResponse.json({ ok: true }));
+    const bad = handle(async () => { throw new HttpError(404, 'Not found.'); });
+    const notModified = handle(async () => new NextResponse(null, { status: 304 }));
+    for (const h of [ok, bad, notModified]) {
+      const id = (await h(req({}), { params: {} })).headers.get('x-request-id');
+      expect(id).toMatch(/^[A-Za-z0-9-]{8,64}$/);
+    }
+  });
+
+  it('a valid incoming ID is kept', async () => {
+    const h = handle(async () => NextResponse.json({ ok: true }));
+    const res = await h(req({ 'x-request-id': 'abc-12345678' }), { params: {} });
+    expect(res.headers.get('x-request-id')).toBe('abc-12345678');
+  });
+
+  it('a bad incoming ID is replaced', async () => {
+    const h = handle(async () => NextResponse.json({ ok: true }));
+    for (const bad of ['short', 'has space in it 123', 'x'.repeat(65), 'a/b\\c-12345678']) {
+      const id = (await h(req({ 'x-request-id': bad }), { params: {} })).headers.get('x-request-id');
+      expect(id).not.toBe(bad);
+      expect(id).toMatch(/^[A-Za-z0-9-]{8,64}$/);
+    }
+  });
+
+  it('a 500 logs the request ID and no query string', async () => {
+    const spy = vi.spyOn(log, 'error').mockImplementation(() => {});
+    const h = handle(async () => { throw new Error('boom'); });
+    const r = new NextRequest('http://localhost:3117/api/x?token=secret', { method: 'GET', headers: { 'x-request-id': 'req-12345678' } });
+    const res = await h(r, { params: {} });
+    expect(res.headers.get('x-request-id')).toBe('req-12345678');
+    const fields = (spy.mock.calls[0] as unknown[])[0] as Record<string, unknown>;
+    expect(fields).toMatchObject({ reqId: 'req-12345678', method: 'GET', path: '/api/x' });
+    expect(fields.err).toBeInstanceOf(Error);
+    expect(JSON.stringify(spy.mock.calls)).not.toContain('secret');
     spy.mockRestore();
   });
 

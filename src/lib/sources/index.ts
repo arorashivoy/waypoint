@@ -3,6 +3,7 @@ import path from 'node:path';
 import { ccFromLocation, cityFromLocation, decodeEntities, fieldFromText, levelFromPosting, modeFromText, resolvePlace, sponsorFromText, stripHtml } from './geo';
 import { COUNTRIES, VISA_ROUTE } from '../countries';
 import { fetchBoard, type Commit, FeedSkip, recordFailure, withFeedStatus } from './feed-fetch';
+import { log } from '@/lib/log';
 
 export type RawJob = {
   externalId: string;
@@ -659,7 +660,7 @@ export async function fetchAll(activeCcs: string[], queries: string[], opts: { f
       const error = String(res.reason).slice(0, 140);
       // The report only reaches the browser, so a dead board would otherwise
       // never show up in the server log.
-      console.warn(`[refresh] ${t.label}${t.company ? ` · ${t.company}` : ''} failed: ${error}`);
+      log.warn({ source: t.label, company: t.company, error }, 'refresh failed');
       // A parse error comes after the request, so the board records it here.
       commits.delete(t.board);
       await recordFailure(t.board, res.reason);

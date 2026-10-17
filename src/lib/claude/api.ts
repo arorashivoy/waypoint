@@ -4,6 +4,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { assertSonnet, costUsd, MODEL } from './model';
 import { clearFailures, setAuthFailure, setQuotaFailure } from './failures';
 import { ClaudeCallError, RefusalError, type AskRequest, type Usage } from './types';
+import { log } from '@/lib/log';
 
 /**
  * An API key, through the official SDK, with structured output.
@@ -80,7 +81,7 @@ export async function askApi<T>(key: string, req: AskRequest<T>, opts: { failure
             : 'The shared Anthropic key has no credit. Add credit, or add your own API key in Settings.',
         );
       } else {
-        console.error('[claude] API request refused (400):', message.slice(0, 300));
+        log.error({ message: message.slice(0, 300) }, 'Claude API request refused (400)');
       }
     }
     throw e;

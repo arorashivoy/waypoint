@@ -1,10 +1,11 @@
 import { EnvError, env } from '@/lib/env';
+import { log } from '@/lib/log';
 
 try {
   env();
 } catch (err) {
   if (err instanceof EnvError) {
-    console.error(err.message);
+    log.error({ err }, 'bad environment');
     process.exit(1);
   }
   throw err;
@@ -17,9 +18,9 @@ async function main() {
   const stop = () => ac.abort();
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);
-  console.log(`Worker started (pid ${process.pid})`);
+  log.info('worker started');
   await startWorker({ signal: ac.signal });
-  console.log('Worker stopped');
+  log.info('worker stopped');
 }
 
 void main();

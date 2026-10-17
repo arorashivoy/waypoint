@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { log } from '@/lib/log';
 
 export const FIFTEEN_MINUTES = 15 * 60_000;
 
@@ -15,7 +16,7 @@ export async function hitLimit(key: string, max: number, windowMs: number, now =
     try {
       await db.rateLimit.deleteMany({ where: { windowStart: { lt: new Date(now.getTime() - 24 * 3600_000) } } });
     } catch (e) {
-      console.error('[rate-limit] cleanup failed', e);
+      log.error({ err: e }, 'rate-limit cleanup failed');
     }
   }
   return result;

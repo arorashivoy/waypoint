@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { log } from '@/lib/log';
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient; dbReady?: Promise<void> };
 
@@ -15,7 +16,7 @@ export const dbReady: Promise<void> =
     .$queryRawUnsafe('PRAGMA journal_mode=WAL')
     .then(() => undefined)
     .catch((e) => {
-      console.error('[db] could not set WAL mode:', (e as Error).message);
+      log.error({ err: e }, 'could not set WAL mode');
     });
 
 if (process.env.NODE_ENV !== 'production') {

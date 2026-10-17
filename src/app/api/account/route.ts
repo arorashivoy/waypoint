@@ -6,6 +6,7 @@ import { verifyPassword } from '@/lib/auth/password';
 import { FIFTEEN_MINUTES, hitLimit } from '@/lib/auth/rate-limit';
 import { clearSessionCookie } from '@/lib/auth/session';
 import { removeUserDir } from '@/lib/user-files';
+import { log } from '@/lib/log';
 
 /**
  * Deletes the signed-in user and all their data (spec 7.6, Data). The rows go
@@ -26,7 +27,7 @@ export const DELETE = handle(async (req) => {
     removeUserDir(user.id);
   } catch (e) {
     // The account is gone already. A file error must not give a 500 or keep the cookie.
-    console.error('Could not remove the user folder of a deleted account.', (e as Error).message);
+    log.error({ err: e }, 'could not remove the user folder of a deleted account');
   }
   const res = NextResponse.json({ ok: true });
   clearSessionCookie(res, req);

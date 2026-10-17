@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { db } from './db';
 import { env } from './env';
+import { log } from '@/lib/log';
 
 /**
  * Secrets of each user: the Anthropic key, the GitHub token and the Drive
@@ -59,7 +60,7 @@ export async function readSecret(userId: string, kind: SecretKind): Promise<stri
   try {
     return unseal(row, aadOf(userId, kind));
   } catch (e) {
-    console.error(`[secrets] cannot decrypt the ${kind} secret of user ${userId}:`, (e as Error).message);
+    log.error({ kind, userId, err: e }, 'cannot decrypt a secret');
     return null;
   }
 }
