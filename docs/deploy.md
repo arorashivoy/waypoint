@@ -11,6 +11,9 @@ use `scripts/deploy.sh` for each update (step 10).
 - **Never overwrite a `.env`.** Each copy has its own values, for example its own `PORT`. Add each
   new key as one line.
 - **Stop the old app before you copy the database.** A running app writes to the `-wal` file.
+- **Dev mode needs the worker.** Without the systemd units, run `npm run worker` next to
+  `npm run dev`. `scripts/remote.sh` and `scripts/start.sh` start the worker for you. Without a
+  worker, every task (refresh, CV build, import, analysis) stays in the queue.
 
 ## What you need
 

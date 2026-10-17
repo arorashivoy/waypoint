@@ -252,10 +252,14 @@ LinkedIn's User Agreement and puts the user's account at risk.
 
 ```bash
 npm run dev                      # development, http://localhost:3117
+npm run worker                   # the task worker. Run it next to npm run dev, in a second terminal
 npm run build && npm start       # production. Stop the dev server first: build overwrites .next
-./scripts/remote.sh              # dev server plus a public tunnel. Accounts protect the app
+./scripts/remote.sh              # dev server, worker and a public tunnel. Accounts protect the app
 ./scripts/start.sh               # same, but builds and runs the production server
 ```
+
+Dev mode needs the worker. Without it, every task (refresh, CV build, import, analysis) stays
+in the queue, and the screen waits. `remote.sh` and `start.sh` start the worker for you.
 
 Checklist with the user:
 1. Sign in works.
