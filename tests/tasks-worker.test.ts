@@ -8,14 +8,17 @@ import { registerHandler } from '@/lib/tasks/handlers';
 import { makeUser } from './helpers/http';
 
 // All test files share one database. Each test makes its own user and passes it as the scope.
-// The test handler sits on the real kind 'refresh'. Each test sets `current` to its own function.
-// The kind 'cv' has no handler in this file: it stands for an unknown kind.
+// The tests use two fake kinds that no task registers: 'test-kind' has a handler, 'test-unknown' has none.
+// Real kinds are never used, so a real handler in handlers.ts cannot change these tests.
+// Each test sets `current` to its own function.
+const KIND = 'test-kind' as never;
+const UNKNOWN = 'test-unknown' as never;
 
 type Fn = (payload: { n: number }, task: TaskRow) => Promise<unknown>;
 let current: Fn = async () => ({});
-registerHandler('refresh', z.object({ n: z.number() }), (p, t) => current(p, t));
+registerHandler(KIND, z.object({ n: z.number() }), (p, t) => current(p, t));
 
-async function setup(payload: unknown = { n: 1 }, kind: 'refresh' | 'cv' = 'refresh') {
+async function setup(payload: unknown = { n: 1 }, kind: never = KIND) {
   const { user } = await makeUser();
   const { id } = await enqueue({ kind, userId: user.id, payload });
   return { scope: { userId: user.id }, id, userId: user.id };
@@ -57,11 +60,11 @@ describe('worker', () => {
   });
 
   it('a task of an unknown kind fails at once', async () => {
-    const t = await setup({}, 'cv');
+    const t = await setup({}, UNKNOWN);
     await runOnce(new Date(), t.scope);
     const r = await row(t.id);
     expect(r.status).toBe('failed');
-    expect(r.lastError).toContain('cv');
+    expect(r.lastError).toContain('test-unknown');
   });
 
   it('a payload that fails the schema fails at once', async () => {
