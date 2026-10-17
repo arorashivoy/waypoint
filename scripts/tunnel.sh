@@ -19,7 +19,17 @@ zrok_holder() {
     name==n && space==ns && tok!="" { print tok }'
 }
 
-stale="$(zrok_holder)"
+stale="$(zrok_holder)" || true
 [ -n "$stale" ] && zrok2 delete share "$stale" >/dev/null 2>&1 || true
+
+# Wait until the web server answers, so the share does not open on a closed port.
+ready=0
+for _ in $(seq 1 60); do
+  if curl -sf -o /dev/null -m 5 "http://localhost:$PORT/api/health"; then ready=1; break; fi
+  sleep 1
+done
+if [ "$ready" != 1 ]; then
+  echo "The web server did not answer on port $PORT within 60 seconds." >&2; exit 1
+fi
 
 exec zrok2 share public "localhost:$PORT" -n "$ZROK_NS:$ZROK_NAME" --headless

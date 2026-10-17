@@ -1,9 +1,7 @@
 # One backup run. The timer starts it. install-units.sh fills in the placeholders.
-# The start limit stops a failed backup from retrying each 5 seconds for ever.
+# It has no Restart and no Install section: a failed backup waits for the next night.
 [Unit]
 Description=Waypoint backup
-StartLimitIntervalSec=600
-StartLimitBurst=3
 
 [Service]
 Type=oneshot
@@ -11,8 +9,3 @@ WorkingDirectory=@CHECKOUT@
 EnvironmentFile=@CHECKOUT@/.env
 Environment=PATH=@NODE_BIN@:/usr/local/bin:/usr/bin:/bin
 ExecStart=/usr/bin/env npm run backup
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=default.target

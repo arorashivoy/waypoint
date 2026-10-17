@@ -10,8 +10,8 @@ const read = (p: string) => readFileSync(join(root, p), 'utf8');
 const services = ['web', 'worker', 'tunnel', 'backup'].map((n) => `deploy/systemd/waypoint-${n}.service`);
 
 describe('systemd units', () => {
-  for (const file of services) {
-    it(`each service has Restart=on-failure, WorkingDirectory, EnvironmentFile and WantedBy=default.target (${file})`, () => {
+  for (const file of services.slice(0, 3)) {
+    it(`each long-running service has Restart=on-failure, WorkingDirectory, EnvironmentFile and WantedBy=default.target (${file})`, () => {
       const t = read(file);
       expect(t).toMatch(/^Restart=on-failure$/m);
       expect(t).toMatch(/^RestartSec=5$/m);
@@ -21,6 +21,18 @@ describe('systemd units', () => {
       expect(t).not.toContain('%h');
     });
   }
+
+  it('the backup service has no Restart, StartLimit or Install lines', () => {
+    const t = read(services[3]);
+    expect(t).not.toMatch(/^(Restart|RestartSec|StartLimit\w*)=/m);
+    expect(t).not.toContain('[Install]');
+    expect(t).toMatch(/^WorkingDirectory=@CHECKOUT@$/m);
+    expect(t).toMatch(/^EnvironmentFile=@CHECKOUT@\/\.env$/m);
+  });
+
+  it('the tunnel service wants the web service', () => {
+    expect(read(services[2])).toMatch(/^Wants=.*waypoint-web\.service/m);
+  });
 
   it('the units start the right commands', () => {
     expect(read(services[0])).toMatch(/^ExecStart=\/usr\/bin\/env npm run start$/m);
@@ -48,20 +60,34 @@ describe('scripts', () => {
     const lines = read('scripts/deploy.sh').split('\n').map((l) => l.trim());
     const steps = [
       'git pull --ff-only',
-      'npm ci',
       'npm run backup',
+      'systemctl --user stop waypoint-worker waypoint-web',
+      'npm ci',
       'npx prisma migrate deploy',
       'npm run build',
-      'systemctl --user restart waypoint-web waypoint-worker waypoint-tunnel',
+      'systemctl --user start waypoint-web waypoint-worker',
+      'systemctl --user restart waypoint-tunnel',
     ];
     const at = steps.map((s) => lines.indexOf(s));
     expect(at.every((i) => i >= 0)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
-    expect(at[5]).toBe(Math.max(...at));
+    expect(at[7]).toBe(Math.max(...at));
   });
 
-  it('deploy.sh has set -euo pipefail', () => {
-    expect(read('scripts/deploy.sh')).toMatch(/^set -euo pipefail$/m);
+  it('deploy.sh has set -euo pipefail, an ERR trap, unset DATABASE_URL and the checkout guard', () => {
+    const t = read('scripts/deploy.sh');
+    expect(t).toMatch(/^set -euo pipefail$/m);
+    expect(t).toMatch(/^trap .* ERR$/m);
+    expect(t).toMatch(/^unset DATABASE_URL$/m);
+    expect(t).toContain('show -p WorkingDirectory --value waypoint-web');
+    expect(t.indexOf('show -p WorkingDirectory')).toBeLessThan(t.indexOf('git pull'));
+  });
+
+  it('tunnel.sh waits for the health check before the share', () => {
+    const t = read('scripts/tunnel.sh');
+    expect(t).toContain('/api/health');
+    expect(t.indexOf('/api/health')).toBeLessThan(t.indexOf('exec zrok2'));
+    expect(t).toContain('stale="$(zrok_holder)" || true');
   });
 
   it('tunnel.sh reads the port with port.mjs and runs the share with exec', () => {
@@ -78,6 +104,8 @@ describe('scripts', () => {
   it('install-units.sh checks the path and does not run enable or linger', () => {
     const t = read('scripts/install-units.sh');
     expect(t).toContain('A-Za-z0-9._/-');
+    expect(t).toContain('realpath');
+    expect(t).toContain('/.env');
     const code = t.split('\n').filter((l) => !/^\s*(#|echo)/.test(l)).join('\n');
     expect(code).not.toMatch(/systemctl --user (enable|start|restart)/);
     expect(code).not.toContain('loginctl');

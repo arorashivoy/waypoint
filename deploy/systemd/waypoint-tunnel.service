@@ -3,7 +3,7 @@
 [Unit]
 Description=Waypoint zrok tunnel
 After=network-online.target waypoint-web.service
-Wants=network-online.target
+Wants=network-online.target waypoint-web.service
 
 [Service]
 Type=simple

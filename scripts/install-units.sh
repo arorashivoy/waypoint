@@ -17,8 +17,18 @@ esac
 if [[ ! "$CHECKOUT" =~ ^[A-Za-z0-9._/-]+$ ]]; then
   echo "The path may use only the characters A-Z a-z 0-9 . _ / -" >&2; exit 1
 fi
+case "/$CHECKOUT/" in
+  */../*) echo "The path must not hold a .. segment: $CHECKOUT" >&2; exit 1 ;;
+esac
 if [ ! -d "$CHECKOUT" ]; then
   echo "The folder does not exist: $CHECKOUT" >&2; exit 1
+fi
+CHECKOUT="$(realpath "$CHECKOUT")"
+if [[ ! "$CHECKOUT" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+  echo "The real path uses a character that a unit cannot hold: $CHECKOUT" >&2; exit 1
+fi
+if [ ! -f "$CHECKOUT/.env" ]; then
+  echo "The file $CHECKOUT/.env does not exist. Make it first (see .env.example)." >&2; exit 1
 fi
 
 NODE_PATH_FOUND="$(command -v node || true)"
