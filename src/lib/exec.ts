@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
  * looks for "bad" flags only. An argument that is not in the template is
  * refused. There is no shell, so quotes and semicolons are plain characters.
  *
- * The lint rule in eslint.config.mjs (Task 9) stops any other module from
+ * The lint rule in eslint.config.mjs stops any other module from
  * importing child_process.
  */
 
