@@ -17,6 +17,9 @@ import { CvError, publishCv, refineCv } from '@/lib/cv';
 import { NoCredentialError } from '@/lib/claude';
 import * as jobDetail from '@/app/api/jobs/[id]/route';
 import * as jobResume from '@/app/api/jobs/[id]/resume/route';
+import * as refreshRoute from '@/app/api/jobs/refresh/route';
+import { runOnce } from '@/lib/tasks/worker';
+import '@/lib/tasks/handlers';
 import * as refine from '@/app/api/jobs/[id]/resume/refine/route';
 import { ctx, makeUser, request } from './helpers/http';
 
@@ -130,6 +133,39 @@ describe('a new analysis needs a POST', () => {
     const { user, cookie } = await makeUser();
     const job = await analysedJob(user.id);
     const res = await jobDetail.POST(request(`/api/jobs/${job.id}`, { method: 'POST', cookie, body: {} }), ctx({ id: job.id }));
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /api/jobs/refresh', () => {
+  it('returns a taskId, and a second POST returns the same taskId', async () => {
+    const { cookie, user } = await makeUser();
+    const first = await refreshRoute.POST(request('/api/jobs/refresh', { method: 'POST', cookie, body: { force: true } }), ctx());
+    expect(first.status).toBe(200);
+    const { taskId } = await first.json();
+    expect(typeof taskId).toBe('string');
+    const second = await refreshRoute.POST(request('/api/jobs/refresh', { method: 'POST', cookie }), ctx());
+    expect((await second.json()).taskId).toBe(taskId);
+    const row = await db.task.findUniqueOrThrow({ where: { id: taskId } });
+    expect(row).toMatchObject({ kind: 'refresh', userId: user.id, dedupeKey: `refresh:${user.id}` });
+    expect(JSON.parse(row.payload)).toEqual({ force: true });
+  });
+
+  it('the worker runs the refresh and returns the result', async () => {
+    const { cookie, user } = await makeUser();
+    // A paused country list keeps the test off the network.
+    await db.countryPref.updateMany({ where: { userId: user.id }, data: { on: false } });
+    const res = await refreshRoute.POST(request('/api/jobs/refresh', { method: 'POST', cookie }), ctx());
+    const { taskId } = await res.json();
+    await runOnce(undefined, { userId: user.id });
+    const row = await db.task.findUniqueOrThrow({ where: { id: taskId } });
+    expect(row.status).toBe('done');
+    expect(JSON.parse(row.result!)).toMatchObject({ added: 0, total: 0, report: [], note: 'Every country is paused.' });
+  });
+
+  it('refuses a force value that is not a boolean', async () => {
+    const { cookie } = await makeUser();
+    const res = await refreshRoute.POST(request('/api/jobs/refresh', { method: 'POST', cookie, body: { force: 'yes' } }), ctx());
     expect(res.status).toBe(400);
   });
 });

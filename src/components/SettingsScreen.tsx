@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, copyText, del, leaveSession, patch, post, put, upload } from './api';
 
 type Status = { mode: 'own' | 'shared' | 'cli' | 'none'; detail: string; keyHint: string | null; sharedAvailable: boolean; capUsd: number; sharedSpentUsd: number; capReached: boolean; resetsAt: string };
+type FailedBoard = { board: string; status: string; fetchedAt: string; error: string | null };
 type SessionRow = { id: string; current: boolean; userAgent: string | null; createdAt: string; lastSeenAt: string };
 type UserRow = { id: string; email: string; name: string; role: string; disabled: boolean; createdAt: string; lastSeenAt: string | null; sharedSpentUsd: number };
 
@@ -33,6 +34,7 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [feeds, setFeeds] = useState<FailedBoard[]>([]);
   const [claude, setClaude] = useState<Status | null>(null);
   const [key, setKey] = useState('');
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -45,8 +47,9 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
   const [link, setLink] = useState<{ url: string; expiresAt: string; label: string } | null>(null);
 
   const load = useCallback(async () => {
-    const [s, c, g] = await Promise.all([api<{ sessions: SessionRow[] }>('/api/account/sessions'), api<Status>('/api/account/claude'), api<{ hint: string | null }>('/api/account/github')]);
+    const [s, c, g, fd] = await Promise.all([api<{ sessions: SessionRow[] }>('/api/account/sessions'), api<Status>('/api/account/claude'), api<{ hint: string | null }>('/api/account/github'), api<FailedBoard[]>('/api/feeds')]);
     setSessions(s.sessions);
+    setFeeds(fd);
     setClaude(c);
     setGithubHint(g.hint);
     if (isAdmin) setUsers((await api<{ users: UserRow[] }>('/api/admin/users')).users);
@@ -143,6 +146,20 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
           </form>
         )}
         <span className="hint">Google Drive links stay in the admin's .env until a later part.</span>
+      </Section>
+
+      <Section title="Job boards">
+        {feeds.length === 0 ? (
+          <span>All job boards work.</span>
+        ) : (
+          <div className="stack" style={{ gap: 8 }}>
+            {feeds.map((f) => (
+              <span key={f.board} className="hint" style={{ overflowWrap: 'anywhere' }}>
+                {f.board} · {when(f.fetchedAt)} · {f.error ?? 'No error text.'}
+              </span>
+            ))}
+          </div>
+        )}
       </Section>
 
       <Section title="Data">

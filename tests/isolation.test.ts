@@ -34,6 +34,7 @@ import * as taskRoute from '@/app/api/tasks/[id]/route';
 import * as jobResume from '@/app/api/jobs/[id]/resume/route';
 import * as refine from '@/app/api/jobs/[id]/resume/refine/route';
 import * as refresh from '@/app/api/jobs/refresh/route';
+import * as feeds from '@/app/api/feeds/route';
 import * as outreach from '@/app/api/outreach/route';
 import * as outreachEvent from '@/app/api/outreach/[id]/route';
 import * as profileRoute from '@/app/api/profile/route';
@@ -91,6 +92,7 @@ describe('every route refuses a request without a session', () => {
     ['POST /api/jobs/[id]/resume/refine', refine.POST as Handler, { id: 'x' }],
     ['DELETE /api/jobs/[id]/resume/refine', refine.DELETE as Handler, { id: 'x' }],
     ['POST /api/jobs/refresh', refresh.POST as Handler],
+    ['GET /api/feeds', feeds.GET as Handler],
     ['GET /api/tasks/[id]', taskRoute.GET as Handler, { id: 'x' }],
     ['POST /api/outreach', outreach.POST as Handler],
     ['PATCH /api/outreach/[id]', outreachEvent.PATCH as Handler, { id: 'x' }],

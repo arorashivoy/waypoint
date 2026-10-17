@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ccFromLocation, cityFromLocation, decodeEntities, fieldFromText, levelFromPosting, modeFromText, resolvePlace, sponsorFromText, stripHtml } from './geo';
 import { COUNTRIES, VISA_ROUTE } from '../countries';
+import { fetchBoard, FeedSkip, recordFailure, withFeedStatus } from './feed-fetch';
 
 export type RawJob = {
   externalId: string;
@@ -21,7 +22,7 @@ export type RawJob = {
   priority: boolean;
 };
 
-export type FetchReport = { source: string; company?: string; got: number; kept: number; error?: string };
+export type FetchReport = { source: string; company?: string; got: number; kept: number; error?: string; status?: 'skipped' | 'not-modified' };
 
 type Ats = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'smartrecruiters' | 'workday' | 'microsoft' | 'amazon' | 'apple' | 'google';
 
@@ -48,7 +49,15 @@ export async function watchlist(): Promise<WatchEntry[]> {
 
 const UA = { 'user-agent': 'Waypoint/0.1 (personal job search; single user)' };
 
-async function getJson(url: string): Promise<any> {
+/** `feed` makes the request a cached board: the 6-hour skip and the conditional headers apply. */
+type Feed = { board: string; force: boolean };
+
+async function getJson(url: string, feed?: Feed): Promise<any> {
+  if (feed) {
+    const r = await fetchBoard(feed.board, url, { headers: UA, cache: 'no-store' }, { force: feed.force });
+    if (r.status !== 'ok') throw new FeedSkip(r.status);
+    return r.json;
+  }
   const res = await fetch(url, { headers: UA, cache: 'no-store' });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
@@ -82,8 +91,8 @@ function keepInCountries(jobs: RawJob[], ccs: string[]): RawJob[] {
 // --- Public ATS board APIs. All four publish a documented, unauthenticated
 // --- endpoint intended for exactly this: republishing a company's own openings.
 
-async function greenhouse(e: Board): Promise<RawJob[]> {
-  const data = await getJson(`https://boards-api.greenhouse.io/v1/boards/${e.token}/jobs?content=true`);
+async function greenhouse(e: Board, feed: Feed): Promise<RawJob[]> {
+  const data = await getJson(`https://boards-api.greenhouse.io/v1/boards/${e.token}/jobs?content=true`, feed);
   return (data.jobs || []).map((j: any) => {
     const location = j.location?.name || '';
     return shape({
@@ -101,8 +110,8 @@ async function greenhouse(e: Board): Promise<RawJob[]> {
   });
 }
 
-async function lever(e: Board): Promise<RawJob[]> {
-  const data = await getJson(`https://api.lever.co/v0/postings/${e.token}?mode=json`);
+async function lever(e: Board, feed: Feed): Promise<RawJob[]> {
+  const data = await getJson(`https://api.lever.co/v0/postings/${e.token}?mode=json`, feed);
   return (data || []).map((j: any) => {
     const location = j.categories?.location || '';
     return shape({
@@ -118,8 +127,8 @@ async function lever(e: Board): Promise<RawJob[]> {
   });
 }
 
-async function ashby(e: Board): Promise<RawJob[]> {
-  const data = await getJson(`https://api.ashbyhq.com/posting-api/job-board/${e.token}?includeCompensation=false`);
+async function ashby(e: Board, feed: Feed): Promise<RawJob[]> {
+  const data = await getJson(`https://api.ashbyhq.com/posting-api/job-board/${e.token}?includeCompensation=false`, feed);
   return (data.jobs || []).map((j: any) => {
     const location = j.location || '';
     return shape({
@@ -135,8 +144,8 @@ async function ashby(e: Board): Promise<RawJob[]> {
   });
 }
 
-async function workable(e: Board): Promise<RawJob[]> {
-  const data = await getJson(`https://apply.workable.com/api/v1/widget/accounts/${e.token}?details=true`);
+async function workable(e: Board, feed: Feed): Promise<RawJob[]> {
+  const data = await getJson(`https://apply.workable.com/api/v1/widget/accounts/${e.token}?details=true`, feed);
   return (data.jobs || []).map((j: any) => {
     const location = [j.city, j.country].filter(Boolean).join(', ');
     return shape({
@@ -499,8 +508,8 @@ async function google(e: { company: string }, ccs: string[]): Promise<RawJob[]> 
 
 // --- Aggregators.
 
-async function arbeitnow(): Promise<RawJob[]> {
-  const data = await getJson('https://www.arbeitnow.com/api/job-board-api');
+async function arbeitnow(feed: Feed): Promise<RawJob[]> {
+  const data = await getJson('https://www.arbeitnow.com/api/job-board-api', feed);
   return (data.data || []).map((j: any) => {
     const location = j.location || '';
     const tags: string[] = j.tags || [];
@@ -540,14 +549,14 @@ const MUSE_CITIES: Record<string, string[]> = {
   IN: ['Bengaluru, India', 'Hyderabad, India', 'Pune, India'],
 };
 
-async function themuse(cc: string, page: number): Promise<RawJob[]> {
+async function themuse(cc: string, page: number, feed: Feed): Promise<RawJob[]> {
   const cities = MUSE_CITIES[cc] || [];
   if (!cities.length) return [];
   const url = new URL('https://www.themuse.com/api/public/jobs');
   for (const c of cities) url.searchParams.append('location', c);
   url.searchParams.set('category', 'Software Engineering');
   url.searchParams.set('page', String(page));
-  const data = await getJson(url.toString());
+  const data = await getJson(url.toString(), feed);
 
   return (data.results || [])
     .map((j: any) => {
@@ -569,13 +578,13 @@ async function themuse(cc: string, page: number): Promise<RawJob[]> {
 
 const ADZUNA_COUNTRY: Record<string, string> = { DE: 'de', NL: 'nl', PL: 'pl', IN: 'in', BE: 'be', PT: 'pt', LU: 'lu', IE: 'ie' };
 
-async function adzuna(cc: string, what: string): Promise<RawJob[]> {
+async function adzuna(cc: string, what: string, feed: Feed): Promise<RawJob[]> {
   const id = process.env.ADZUNA_APP_ID;
   const key = process.env.ADZUNA_APP_KEY;
   const country = ADZUNA_COUNTRY[cc];
   if (!id || !key || !country) return [];
   const url = `https://api.adzuna.com/v1/api/jobs/${country}/search/1?app_id=${id}&app_key=${key}&results_per_page=50&what=${encodeURIComponent(what)}&content-type=application/json`;
-  const data = await getJson(url);
+  const data = await getJson(url, feed);
   return (data.results || []).map((j: any) => {
     const location = j.location?.display_name || '';
     return shape({
@@ -597,44 +606,61 @@ async function adzuna(cc: string, what: string): Promise<RawJob[]> {
  * search endpoints that robots.txt allows, and aggregator APIs. LinkedIn, Indeed,
  * StepStone, Glassdoor and Meta forbid it, so the UI links out to them.
  */
-export async function fetchAll(activeCcs: string[], queries: string[]): Promise<{ jobs: RawJob[]; report: FetchReport[] }> {
+export async function fetchAll(activeCcs: string[], queries: string[], opts: { force: boolean }): Promise<{ jobs: RawJob[]; report: FetchReport[] }> {
   const report: FetchReport[] = [];
   const out: RawJob[] = [];
   const list = await watchlist();
+  const { force } = opts;
 
   const boards = { greenhouse, lever, ashby, workable };
   const careers = { smartrecruiters, workday, microsoft, amazon, apple, google };
-  const tasks: { label: string; company?: string; run: () => Promise<RawJob[]> }[] = [];
+  // Each entry is one board with a stable key for the FeedFetch table.
+  const tasks: { board: string; label: string; company?: string; run: () => Promise<RawJob[]> }[] = [];
   for (const e of list) {
     if (e.ats === 'link') continue;
     if (e.countries && !e.countries.some((cc) => activeCcs.includes(cc))) continue;
+    const board = `${e.ats}:${e.token}`;
+    // A company board is one GET request for JSON, so it sends conditional headers.
+    // A careers site makes several requests or a POST, so it gets the skip and the status only.
     const run = e.ats in boards
-      ? () => boards[e.ats as keyof typeof boards](e as Board)
-      : () => careers[e.ats as keyof typeof careers](e as Board, activeCcs);
-    tasks.push({ label: e.ats, company: e.company, run });
+      ? () => boards[e.ats as keyof typeof boards](e as Board, { board, force })
+      : () => withFeedStatus(board, { force }, () => careers[e.ats as keyof typeof careers](e as Board, activeCcs));
+    tasks.push({ board, label: e.ats, company: e.company, run });
   }
 
-  if (activeCcs.includes('DE')) tasks.push({ label: 'Arbeitnow', run: arbeitnow });
+  if (activeCcs.includes('DE')) tasks.push({ board: 'arbeitnow', label: 'Arbeitnow', run: () => arbeitnow({ board: 'arbeitnow', force }) });
   for (const cc of activeCcs) {
-    for (const page of [0, 1, 2]) tasks.push({ label: `The Muse ${cc}`, run: () => themuse(cc, page) });
-    for (const q of queries) tasks.push({ label: `Adzuna ${cc}`, run: () => adzuna(cc, q) });
+    for (const page of [0, 1, 2]) {
+      const board = `themuse:${cc}:${page}`;
+      tasks.push({ board, label: `The Muse ${cc}`, run: () => themuse(cc, page, { board, force }) });
+    }
+    for (const q of queries) {
+      const board = `adzuna:${cc}:${q.toLowerCase()}`;
+      tasks.push({ board, label: `Adzuna ${cc}`, run: () => adzuna(cc, q, { board, force }) });
+    }
   }
 
   const settled = await Promise.allSettled(tasks.map((t) => t.run()));
-  settled.forEach((res, i) => {
+  for (const [i, res] of settled.entries()) {
     const t = tasks[i];
     if (res.status === 'rejected') {
+      if (res.reason instanceof FeedSkip) {
+        report.push({ source: t.label, company: t.company, got: 0, kept: 0, status: res.reason.status });
+        continue;
+      }
       const error = String(res.reason).slice(0, 140);
       // The report only reaches the browser, so a dead board would otherwise
       // never show up in the server log.
       console.warn(`[refresh] ${t.label}${t.company ? ` · ${t.company}` : ''} failed: ${error}`);
+      // A parse error comes after the request, so the board records it here.
+      await recordFailure(t.board, res.reason);
       report.push({ source: t.label, company: t.company, got: 0, kept: 0, error });
-      return;
+      continue;
     }
     const kept = keepInCountries(res.value, activeCcs);
     report.push({ source: t.label, company: t.company, got: res.value.length, kept: kept.length });
     out.push(...kept);
-  });
+  }
 
   // Priority follows the company, not the source, so a Google listing that
   // reaches us through Adzuna or The Muse counts even though Google itself is

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { runTask } from './tasks';
 import { api, copyAndOpen, copyText, del, draftCopyOpen, patch, post } from './api';
 import { FILTER_GROUPS, POSTED_WINDOWS } from '@/lib/countries';
 import type { Screen } from './Waypoint';
@@ -31,6 +32,7 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
   const [topOnly, setTopOnly] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastReport, setLastReport] = useState<string | null>(null);
 
   const onCcs = new Set(state.countries.filter((c: any) => c.on).map((c: any) => c.cc));
 
@@ -63,18 +65,22 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
 
   const countLabel = `${jobs.length} ${jobs.length === 1 ? 'role' : 'roles'}`;
 
-  const doRefresh = async () => {
+  const doRefresh = async (force = false) => {
     setRefreshing(true);
     try {
-      const res = await post<{ added: number; total: number; report: any[]; analysing?: { total: number } }>('/api/jobs/refresh');
+      const res = await runTask<{ added: number; total: number; report: any[]; analysing?: { total: number } | null; note?: string }>(
+        () => post<{ taskId: string }>('/api/jobs/refresh', { force }),
+      );
       await refresh();
       const failed = (res.report || []).filter((r) => r.error);
       const queued = res.analysing?.total || 0;
-      setToast(
+      const text =
+        res.note ??
         `${res.added} new, ${res.total} live in your countries.` +
           (queued ? ` Claude is reading the top ${queued}.` : '') +
-          (failed.length ? ` ${failed.length} source${failed.length > 1 ? 's' : ''} failed: ${failed.map((r) => r.source).join(', ')}.` : ''),
-      );
+          (failed.length ? ` ${failed.length} source${failed.length > 1 ? 's' : ''} failed: ${failed.map((r) => r.source).join(', ')}.` : '');
+      setToast(text);
+      setLastReport(text);
     } catch (e) {
       setToast((e as Error).message);
     } finally {
@@ -110,7 +116,7 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
-        <button className="btn desktop-only" onClick={doRefresh} disabled={refreshing}>
+        <button className="btn desktop-only" onClick={() => doRefresh()} disabled={refreshing}>
           {refreshing ? 'Fetching…' : 'Refresh feeds'}
         </button>
         <button className="btn mobile-only" style={{ borderRadius: 22 }} onClick={() => setSheet(true)}>
@@ -137,6 +143,15 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
         </button>
       </div>
 
+      {lastReport && (
+        <div className="stack" style={{ gap: 4, padding: '0 var(--gutter) 10px', alignItems: 'flex-start' }}>
+          <span style={{ fontSize: 13, color: 'var(--muted-2)' }}>{lastReport}</span>
+          <button style={{ fontSize: 13, background: 'none', border: 0, padding: 0, textDecoration: 'underline', cursor: 'pointer', color: 'inherit' }} onClick={() => doRefresh(true)} disabled={refreshing}>
+            Fetch all boards again
+          </button>
+        </div>
+      )}
+
       <div className="mobile-only" style={{ padding: '0 var(--gutter) 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <label className="sr-only" htmlFor="wp-m-search">Search roles</label>
         <input id="wp-m-search" type="search" className="field" style={{ width: '100%' }} placeholder="Search role, company, city" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -156,7 +171,7 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
         </div>
         <div className="row" style={{ gap: 10 }}>
           <span className="grow" style={{ fontSize: 13, color: 'var(--muted-2)' }}>{countLabel}</span>
-          <button className="btn" style={{ height: 36, fontSize: 14 }} onClick={doRefresh} disabled={refreshing}>
+          <button className="btn" style={{ height: 36, fontSize: 14 }} onClick={() => doRefresh()} disabled={refreshing}>
             {refreshing ? 'Fetching…' : 'Refresh feeds'}
           </button>
         </div>
