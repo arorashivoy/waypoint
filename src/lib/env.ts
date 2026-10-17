@@ -26,6 +26,11 @@ const schema = z.object({
   WAYPOINT_CLAUDE_TIMEOUT_MS: z.preprocess(empty, z.coerce.number().int().positive().max(600_000, { error: 'must be 600000 (10 minutes) or less' }).default(120_000)),
   WAYPOINT_PUBLIC_URL: z.preprocess(empty, z.url({ error: 'must be a full URL, for example https://name.shares.zrok.io' }).optional()),
   WAYPOINT_SHARED_MONTHLY_USD: z.preprocess(empty, z.coerce.number().nonnegative().default(5)),
+  WAYPOINT_BACKUP_REMOTE: z.preprocess(empty, z.string().optional()),
+  WAYPOINT_ZROK_NAME: z.preprocess(empty, z.string().optional()),
+  WAYPOINT_ZROK_NAMESPACE: z.preprocess(empty, z.string().optional()),
+  WAYPOINT_USERS_DIR: z.preprocess(empty, z.string().optional()),
+  LOG_LEVEL: z.preprocess(empty, z.enum(['fatal', 'error', 'warn', 'info', 'debug'], { error: 'must be one of fatal, error, warn, info, debug' }).default('info')),
 });
 
 export type Env = z.infer<typeof schema>;

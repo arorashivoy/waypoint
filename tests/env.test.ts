@@ -43,4 +43,16 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ ...ok, WAYPOINT_PUBLIC_URL: 'not a url' })).toThrow(EnvError);
     expect(() => parseEnv({ ...ok, WAYPOINT_PUBLIC_URL: 'not a url' })).toThrow(/WAYPOINT_PUBLIC_URL/);
   });
+
+  it('LOG_LEVEL must be one of the levels', () => {
+    expect(parseEnv(ok).LOG_LEVEL).toBe('info');
+    expect(parseEnv({ ...ok, LOG_LEVEL: 'debug' }).LOG_LEVEL).toBe('debug');
+    expect(() => parseEnv({ ...ok, LOG_LEVEL: 'loud' })).toThrow(/LOG_LEVEL must be one of fatal, error, warn, info, debug/);
+  });
+
+  it('WAYPOINT_BACKUP_REMOTE is optional', () => {
+    expect(parseEnv(ok).WAYPOINT_BACKUP_REMOTE).toBeUndefined();
+    expect(parseEnv({ ...ok, WAYPOINT_BACKUP_REMOTE: '' }).WAYPOINT_BACKUP_REMOTE).toBeUndefined();
+    expect(parseEnv({ ...ok, WAYPOINT_BACKUP_REMOTE: 'me@host:b/' }).WAYPOINT_BACKUP_REMOTE).toBe('me@host:b/');
+  });
 });

@@ -65,6 +65,7 @@ import * as accountGithub from '@/app/api/account/github/route';
 import * as githubRepos from '@/app/api/profile/github/repos/route';
 import * as githubImport from '@/app/api/profile/github/import/route';
 import * as adminInvites from '@/app/api/admin/invites/route';
+import * as adminHealth from '@/app/api/admin/health/route';
 import * as adminUsers from '@/app/api/admin/users/route';
 import * as adminUser from '@/app/api/admin/users/[id]/route';
 import * as adminReset from '@/app/api/admin/users/[id]/reset/route';
@@ -130,6 +131,7 @@ describe('every route refuses a request without a session', () => {
     ['PUT /api/account/claude', accountClaude.PUT as Handler],
     ['DELETE /api/account/claude', accountClaude.DELETE as Handler],
     ['POST /api/admin/invites', adminInvites.POST as Handler],
+    ['GET /api/admin/health', adminHealth.GET as Handler],
     ['GET /api/admin/users', adminUsers.GET as Handler],
     ['PATCH /api/admin/users/[id]', adminUser.PATCH as Handler, { id: 'x' }],
     ['POST /api/admin/users/[id]/reset', adminReset.POST as Handler, { id: 'x' }],
