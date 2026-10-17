@@ -137,7 +137,7 @@ export const RESUME_FILE = /^[a-z0-9]{8,40}\.(pdf|tex)$/;
 registerHandler(
   'resume-import',
   z
-    .object({ file: z.string().regex(RESUME_FILE), name: z.string().max(255), type: z.enum(['pdf', 'tex']) })
+    .object({ file: z.string().regex(RESUME_FILE), type: z.enum(['pdf', 'tex']) })
     .refine((p) => p.file.endsWith(`.${p.type}`), 'The file name and the type do not match.'),
   async ({ file, type }, task) => {
     const userId = task.userId;

@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const ask = vi.hoisted(() => ({ reply: null as unknown, calls: [] as { system: string; prompt: string }[] }));
+const ask = vi.hoisted(() => ({ noCredential: false, reply: null as unknown, calls: [] as { system: string; prompt: string }[] }));
 vi.mock('@/lib/claude', async (orig) => ({
   ...(await orig<typeof import('@/lib/claude')>()),
+  credentialFor: vi.fn(async () => (ask.noCredential ? null : ({ kind: 'api', key: 'k', source: 'own' } as never))),
   askJson: vi.fn(async (req: { system: string; prompt: string }) => {
     ask.calls.push(req);
     if (ask.reply instanceof Error) throw ask.reply;
@@ -59,6 +60,7 @@ const reply = (): ResumeReplyData => ({
 });
 
 beforeEach(() => {
+  ask.noCredential = false;
   ask.reply = reply();
   ask.calls.length = 0;
 });
@@ -173,7 +175,7 @@ describe('POST /api/profile/resume-import', () => {
     const { taskId } = await res.json();
     const queued = await taskOf(taskId);
     expect(queued).toMatchObject({ kind: 'resume-import', userId: u.user.id, status: 'queued' });
-    expect(JSON.parse(queued.payload)).toMatchObject({ name: 'cv.tex', type: 'tex', file: expect.stringMatching(/^[a-z0-9]{8,40}\.tex$/) });
+    expect(JSON.parse(queued.payload)).toMatchObject({ type: 'tex', file: expect.stringMatching(/^[a-z0-9]{8,40}\.tex$/) });
     await runOnce(undefined, { userId: u.user.id });
     const done = await taskOf(taskId);
     expect(done.status).toBe('done');
@@ -211,7 +213,17 @@ describe('POST /api/profile/resume-import', () => {
     expect(ask.calls.length).toBe(4);
   });
 
-  it('fails at once and deletes the file without a Claude credential', async () => {
+  it('answers 409 without a Claude credential, before a file is saved or a task is made', async () => {
+    const u = await makeUser();
+    ask.noCredential = true;
+    const res = await resumeRoute(await pdfUpload(u.cookie, texUpload(), 'cv.tex', 'application/x-tex'), ctx());
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe(new NoCredentialError().message);
+    expect(filesOf(u.user.id)).toEqual([]);
+    expect(await db.task.count({ where: { userId: u.user.id } })).toBe(0);
+  });
+
+  it('fails at once and deletes the file when the credential goes away while the task waits', async () => {
     const u = await makeUser();
     ask.reply = new NoCredentialError();
     const { taskId } = await (await resumeRoute(await pdfUpload(u.cookie, texUpload(), 'cv.tex', 'application/x-tex'), ctx())).json();
@@ -238,7 +250,7 @@ describe('POST /api/profile/resume-import', () => {
 
   it('refuses a task payload with a path in the file name', async () => {
     const u = await makeUser();
-    const { id } = await enqueue({ kind: 'resume-import', userId: u.user.id, payload: { file: '../../etc/passwd.pdf', name: 'x.pdf', type: 'pdf' } });
+    const { id } = await enqueue({ kind: 'resume-import', userId: u.user.id, payload: { file: '../../etc/passwd.pdf', type: 'pdf' } });
     await runOnce(undefined, { userId: u.user.id });
     expect(await taskOf(id)).toMatchObject({ status: 'failed' });
     expect(ask.calls.length).toBe(0);

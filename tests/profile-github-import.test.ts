@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const ask = vi.hoisted(() => ({ replies: [] as unknown[], prompts: [] as string[] }));
+const ask = vi.hoisted(() => ({ noCredential: false, replies: [] as unknown[], prompts: [] as string[] }));
 vi.mock('@/lib/claude', async (orig) => ({
   ...(await orig<typeof import('@/lib/claude')>()),
+  credentialFor: vi.fn(async () => (ask.noCredential ? null : ({ kind: 'api', key: 'k', source: 'own' } as never))),
   askJson: vi.fn(async (req: { prompt: string }) => {
     ask.prompts.push(req.prompt);
     const r = ask.replies.shift();
@@ -54,6 +55,7 @@ const parserReply = {
 };
 
 beforeEach(() => {
+  ask.noCredential = false;
   stub();
   ask.replies = [];
   ask.prompts = [];
@@ -103,14 +105,44 @@ describe('GitHub import', () => {
     }
   });
 
+  it('answers 409 without a Claude credential, before any task is made', async () => {
+    const u = await makeUser();
+    ask.noCredential = true;
+    const res = await post(u.cookie, ['parser', 'forked']);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe(new NoCredentialError().message);
+    expect(await db.task.count({ where: { userId: u.user.id } })).toBe(0);
+  });
+
+  it('makes 2 tasks for the same repo name under 2 user names', async () => {
+    const u = await makeUser();
+    const other = async (username: string) => {
+      const res = await importRoute(request('/api/profile/github/import', { method: 'POST', cookie: u.cookie, body: { username, repos: ['parser'] } }), ctx());
+      return (await res.json()).taskIds as string[];
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: URL | string) => {
+        const p = new URL(String(input)).pathname;
+        const user = p.split('/')[2];
+        return p.endsWith('/repos') ? Response.json([{ name: 'parser', owner: { login: user }, description: 'x', fork: false, language: null, topics: [], stargazers_count: 0, pushed_at: null, private: false }]) : new Response('no', { status: 404 });
+      }),
+    );
+    const a = await other('octo');
+    const b = await other('other');
+    expect(a[0]).not.toBe(b[0]);
+    expect((await other('OCTO'))[0]).toBe(a[0]);
+    expect((await taskOf(b[0])).dedupeKey).toBe(`github:${u.user.id}:other/parser`);
+  });
+
   it('makes one task per repo, with a dedupe key, and returns the same task for a second request', async () => {
     const u = await makeUser();
     const { taskIds } = await (await post(u.cookie, ['parser', 'forked'])).json();
     expect(taskIds.length).toBe(2);
     const rows = await Promise.all(taskIds.map(taskOf));
     expect(rows.map((r) => [r.kind, r.userId, r.dedupeKey, JSON.parse(r.payload)])).toEqual([
-      ['github-import', u.user.id, `github:${u.user.id}:parser`, { username: 'octo', repo: 'parser' }],
-      ['github-import', u.user.id, `github:${u.user.id}:forked`, { username: 'octo', repo: 'forked' }],
+      ['github-import', u.user.id, `github:${u.user.id}:octo/parser`, { username: 'octo', repo: 'parser' }],
+      ['github-import', u.user.id, `github:${u.user.id}:octo/forked`, { username: 'octo', repo: 'forked' }],
     ]);
     expect((await (await post(u.cookie, ['parser'])).json()).taskIds).toEqual([taskIds[0]]);
     expect(ask.prompts).toEqual([]);

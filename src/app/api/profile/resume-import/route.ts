@@ -5,12 +5,11 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth/guard';
 import { handle, HttpError } from '@/lib/auth/http';
 import { hitLimit } from '@/lib/auth/rate-limit';
+import { NoCredentialError, credentialFor } from '@/lib/claude';
 import { checkResumeUpload } from '@/lib/profile/resume-import';
 import { enqueue } from '@/lib/tasks/queue';
 import { MAX_RESUME_BYTES, readFormFile } from '@/lib/uploads';
 import { userDir } from '@/lib/user-files';
-
-export const maxDuration = 300;
 
 const DAY = 24 * 60 * 60_000;
 
@@ -24,12 +23,14 @@ export const POST = handle(async (req) => {
   if (!limit.ok) throw new HttpError(429, 'You imported 10 résumés in the last 24 hours. Try again later.');
   const upload = await readFormFile(req, MAX_RESUME_BYTES, 'The file is larger than 10 MB.');
   const type = await checkResumeUpload(user.id, upload);
+  // No credential: refuse now, before a file is saved or a task is made. The handler checks again when it runs.
+  if (!(await credentialFor(user.id))) throw new HttpError(409, new NoCredentialError().message);
   // The file waits in the user's folder under a name that the server makes. The task holds only that name.
   const file = `${randomBytes(12).toString('hex')}.${type}`;
   const path = join(userDir(user.id, 'imports'), file);
   writeFileSync(path, upload.buf, { mode: 0o600 });
   try {
-    const { id } = await enqueue({ kind: 'resume-import', userId: user.id, payload: { file, name: upload.name.slice(0, 255), type } });
+    const { id } = await enqueue({ kind: 'resume-import', userId: user.id, payload: { file, type } });
     return NextResponse.json({ taskId: id });
   } catch (e) {
     rmSync(path, { force: true });

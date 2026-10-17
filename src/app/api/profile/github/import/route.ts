@@ -2,10 +2,9 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth/guard';
 import { handle, HttpError, readJson } from '@/lib/auth/http';
 import { hitLimit } from '@/lib/auth/rate-limit';
+import { NoCredentialError, credentialFor } from '@/lib/claude';
 import { checkRepos } from '@/lib/profile/github-import';
 import { enqueue } from '@/lib/tasks/queue';
-
-export const maxDuration = 300;
 
 /** Checks the repo names, then queues one task for each repo. The client waits for all the tasks. */
 export const POST = handle(async (req) => {
@@ -19,9 +18,11 @@ export const POST = handle(async (req) => {
   const limit = await hitLimit(`github-import:${user.id}`, 20, 24 * 60 * 60_000);
   if (!limit.ok) throw new HttpError(429, 'You ran 20 GitHub imports in the last 24 hours. Try again later.');
   const names = await checkRepos(user.id, username, [...new Set(repos as string[])]);
+  // No credential: refuse now, before any task is made. The handler checks again when it runs.
+  if (!(await credentialFor(user.id))) throw new HttpError(409, new NoCredentialError().message);
   const ids = new Set<string>();
   for (const repo of names) {
-    const { id } = await enqueue({ kind: 'github-import', userId: user.id, payload: { username, repo }, dedupeKey: `github:${user.id}:${repo.toLowerCase()}` });
+    const { id } = await enqueue({ kind: 'github-import', userId: user.id, payload: { username, repo }, dedupeKey: `github:${user.id}:${username.toLowerCase()}/${repo.toLowerCase()}` });
     ids.add(id);
   }
   return NextResponse.json({ taskIds: [...ids] });
