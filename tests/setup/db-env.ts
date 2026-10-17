@@ -18,6 +18,8 @@ export async function setup(): Promise<void> {
   const client = new PrismaClient({ datasourceUrl: `${process.env.DATABASE_URL}?connection_limit=1` });
   try {
     await applyMigrations(client);
+    // The test files write in parallel. WAL lets readers continue while one file writes.
+    await client.$queryRawUnsafe('PRAGMA journal_mode=WAL');
   } finally {
     await client.$disconnect();
   }

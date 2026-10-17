@@ -71,7 +71,7 @@ describe('analysis through the queue', () => {
     const { id } = await enqueue({ kind: 'analysis', userId, payload: { jobId: jobs[0].id, batch: 'b' } });
     await runOnce(undefined, { userId });
     expect(analyseJob).toHaveBeenCalledWith(expect.objectContaining({ id: jobs[0].id }), userId);
-    expect((await db.task.findUniqueOrThrow({ where: { id } })).status).toBe('done');
+    expect(await db.task.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: 'done', lastError: null });
   });
 
   it('the handler skips a job that is gone', async () => {
