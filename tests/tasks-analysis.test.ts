@@ -45,10 +45,15 @@ describe('analysis through the queue', () => {
   it('queueAnalysis makes one task per job and no duplicates', async () => {
     const { userId } = await setup(3);
     const first = await queueAnalysis(userId);
-    const n = first.total;
-    expect(n).toBeGreaterThan(0);
+    expect(first.total).toBeGreaterThan(0);
+    // Other test files add jobs to the shared database, so the second call can
+    // add tasks for those. The check looks only at the jobs of the first call.
+    const jobIdOf = (row: { payload: string }) => (JSON.parse(row.payload) as { jobId: string }).jobId;
+    const firstJobIds = (await tasks(userId)).map(jobIdOf);
     await queueAnalysis(userId);
-    expect(await tasks(userId)).toHaveLength(n);
+    const jobIds = (await tasks(userId)).map(jobIdOf);
+    expect(new Set(jobIds).size).toBe(jobIds.length);
+    for (const jobId of firstJobIds) expect(jobIds.filter((id) => id === jobId)).toHaveLength(1);
   });
 
   it('analysisProgress counts the latest batch', async () => {
