@@ -132,15 +132,16 @@ export async function requeueStale(now: Date = new Date(), scope?: { userId?: st
   return r.count;
 }
 
-export async function beat(pid: number, now: Date = new Date()): Promise<void> {
+/** `id` names the heartbeat row. The worker uses the default. Tests use their own id. */
+export async function beat(pid: number, now: Date = new Date(), id = 'worker'): Promise<void> {
   await db.workerHeartbeat.upsert({
-    where: { id: 'worker' },
-    create: { id: 'worker', pid, beatAt: now, startedAt: now },
+    where: { id },
+    create: { id, pid, beatAt: now, startedAt: now },
     update: { pid, beatAt: now },
   });
 }
 
-export async function lastBeat(): Promise<Date | null> {
-  const row = await db.workerHeartbeat.findUnique({ where: { id: 'worker' } });
+export async function lastBeat(id = 'worker'): Promise<Date | null> {
+  const row = await db.workerHeartbeat.findUnique({ where: { id } });
   return row?.beatAt ?? null;
 }

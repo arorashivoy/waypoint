@@ -12,6 +12,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "setup": "prisma generate && prisma migrate deploy && tsx prisma/seed.ts",
+    "worker": "tsx --env-file=.env scripts/worker.ts",
     "check:claims": "tsx scripts/check-claims.ts",
     "migrate:claims": "tsx --env-file=.env scripts/migrate-claims.ts",
     "gdrive:auth": "tsx --env-file=.env scripts/gdrive-auth.ts",
