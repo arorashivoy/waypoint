@@ -3,27 +3,29 @@ import { db } from '@/lib/db';
 import { profileSummary } from '@/lib/user';
 import { handle, HttpError, readJson } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
-import { analyseJob, jobView } from '@/lib/analysis';
+import { MAX_ANALYSIS_TRIES, jobView } from '@/lib/analysis';
+import { credentialFor } from '@/lib/claude';
+import { queueJobAnalysis } from '@/lib/queue';
 import { alumniSearch, isAlumniRequest } from '@/lib/match';
-import { readChat, rethrowForUser } from '@/lib/cv';
+import { readChat } from '@/lib/cv';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;
 
 /**
- * A Claude call costs tens of seconds, and React's dev double-effect plus an
- * impatient tap can fire the same GET three times. Concurrent calls for one job
- * share a single promise, so the model runs once.
+ * The route never calls Claude. A job with no analysis gets an `analysis` task, and the worker
+ * runs it. Until then the screen shows the keyword estimate, and `analysing` holds the task ID.
  */
-const inFlight = new Map<string, Promise<any>>();
-
-async function detail(jobId: string, userId: string, force: boolean) {
-  const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
+async function needsAnalysis(jobId: string, userId: string): Promise<boolean> {
   // `analysedAt` on the `JobAnalysis` row, not the row itself: a job carrying only a keyword heuristic from a
   // failed call should get a real read when you open it, not the stale estimate.
   const row = await db.jobAnalysis.findUnique({ where: { userId_jobId: { userId, jobId } } });
-  if (force || !row?.analysedAt) await analyseJob(job, userId, force);
+  if (row?.analysedAt) return false;
+  // The try counter stops a posting that breaks the model each time. A POST can still ask again.
+  if ((row?.tries ?? 0) >= MAX_ANALYSIS_TRIES) return false;
+  return !!(await credentialFor(userId));
+}
 
+async function detail(jobId: string, userId: string, analysing: string | null) {
   const fresh = await db.job.findUniqueOrThrow({ where: { id: jobId } });
   const view = await jobView(fresh, userId);
 
@@ -50,6 +52,8 @@ async function detail(jobId: string, userId: string, force: boolean) {
     projects: view.analysis.projects.map((p, i) => ({ ...p, rank: String(i + 1) })),
     routes: view.routes,
     match: view.match,
+    // The task that reads this job now, or null. The screen waits for it and then loads the job again.
+    analysing,
     // So the message can be copied again after a reload, or when the browser
     // blocked the clipboard the first time.
     referral: referral && { copy: referral.body, open: referral.contactUrl, name: referral.contactName, alumni: isAlumniRequest(referral) },
@@ -66,32 +70,25 @@ async function detail(jobId: string, userId: string, force: boolean) {
   };
 }
 
-function shared(jobId: string, userId: string, force: boolean) {
-  const key = `${userId}:${jobId}:${force}`;
-  let work = inFlight.get(key);
-  if (!work) {
-    work = detail(jobId, userId, force).finally(() => inFlight.delete(key));
-    inFlight.set(key, work);
-  }
-  return work.catch(rethrowForUser);
-}
-
-/** Opens a job. It analyses the job only if it has no analysis yet. */
+/** Opens a job. If the job has no analysis yet, it queues an analysis task. */
 export const GET = handle<{ params: { id: string } }>(async (req, { params }) => {
   const user = await requireUser(req);
-  return NextResponse.json(await shared(params.id, user.id, false));
+  await db.job.findUniqueOrThrow({ where: { id: params.id } });
+  const analysing = (await needsAnalysis(params.id, user.id)) ? await queueJobAnalysis(user.id, params.id) : null;
+  return NextResponse.json(await detail(params.id, user.id, analysing));
 });
 
 /**
- * `{ reanalyse: true }` runs a new Claude analysis. This is a POST and not a
- * GET query, because a new analysis spends Claude credit, and the origin
+ * `{ reanalyse: true }` queues a new Claude analysis and returns `{ taskId }`. This is a POST
+ * and not a GET query, because a new analysis spends Claude credit, and the origin
  * check covers only writes: a link on another site can start a GET.
  */
 export const POST = handle<{ params: { id: string } }>(async (req, { params }) => {
   const user = await requireUser(req);
   const body = await readJson(req);
   if (body.reanalyse !== true) throw new HttpError(400, 'Send { "reanalyse": true } to analyse the job again.');
-  return NextResponse.json(await shared(params.id, user.id, true));
+  await db.job.findUniqueOrThrow({ where: { id: params.id } });
+  return NextResponse.json({ taskId: await queueJobAnalysis(user.id, params.id, true) });
 });
 
 export const PATCH = handle<{ params: { id: string } }>(async (req, { params }) => {

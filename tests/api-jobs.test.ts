@@ -6,6 +6,11 @@ vi.mock('@/lib/cv', async (orig) => {
   return { ...real, publishCv: vi.fn(real.publishCv), refineCv: vi.fn(real.refineCv) };
 });
 
+vi.mock('@/lib/claude', async (orig) => {
+  const real = await orig<typeof import('@/lib/claude')>();
+  return { ...real, credentialFor: vi.fn(real.credentialFor) };
+});
+
 vi.mock('@/lib/analysis', async (orig) => {
   const real = await orig<typeof import('@/lib/analysis')>();
   return { ...real, analyseJob: vi.fn(async () => ({}) as never) };
@@ -14,7 +19,7 @@ vi.mock('@/lib/analysis', async (orig) => {
 import { db } from '@/lib/db';
 import { analyseJob } from '@/lib/analysis';
 import { CvError, publishCv, refineCv } from '@/lib/cv';
-import { NoCredentialError } from '@/lib/claude';
+import { NoCredentialError, credentialFor } from '@/lib/claude';
 import * as jobDetail from '@/app/api/jobs/[id]/route';
 import * as jobResume from '@/app/api/jobs/[id]/resume/route';
 import * as refreshRoute from '@/app/api/jobs/refresh/route';
@@ -115,14 +120,51 @@ describe('a new analysis needs a POST', () => {
     expect(analyseJob).not.toHaveBeenCalled();
   });
 
-  it('POST { reanalyse: true } runs a new analysis and sends the job', async () => {
+  it('POST { reanalyse: true } queues a forced analysis task; the worker runs it, not the request', async () => {
     const { user, cookie } = await makeUser();
     const job = await analysedJob(user.id);
     vi.mocked(analyseJob).mockClear();
     const res = await jobDetail.POST(request(`/api/jobs/${job.id}`, { method: 'POST', cookie, body: { reanalyse: true } }), ctx({ id: job.id }));
     expect(res.status).toBe(200);
-    expect((await res.json()).id).toBe(job.id);
+    const { taskId } = await res.json();
+    expect(analyseJob).not.toHaveBeenCalled();
+    const row = await db.task.findUniqueOrThrow({ where: { id: taskId } });
+    expect(row).toMatchObject({ kind: 'analysis', userId: user.id, dedupeKey: `analysis:${user.id}:${job.id}` });
+    expect(JSON.parse(row.payload)).toEqual({ jobId: job.id, force: true });
+    vi.mocked(credentialFor).mockResolvedValueOnce({ kind: 'api', key: 'k', source: 'own' });
+    await runOnce(undefined, { userId: user.id });
     expect(analyseJob).toHaveBeenCalledWith(expect.objectContaining({ id: job.id }), user.id, true);
+  });
+
+  it('GET of a job with no analysis queues one task and never calls Claude', async () => {
+    const { user, cookie } = await makeUser();
+    const job = await newJob();
+    vi.mocked(analyseJob).mockClear();
+    const open = async () => {
+      vi.mocked(credentialFor).mockResolvedValueOnce({ kind: 'api', key: 'k', source: 'own' });
+      const res = await jobDetail.GET(request(`/api/jobs/${job.id}`, { cookie }), ctx({ id: job.id }));
+      expect(res.status).toBe(200);
+      return (await res.json()).analysing as string;
+    };
+    const taskId = await open();
+    expect(typeof taskId).toBe('string');
+    expect(await open()).toBe(taskId);
+    expect(analyseJob).not.toHaveBeenCalled();
+    const row = await db.task.findUniqueOrThrow({ where: { id: taskId } });
+    expect(row).toMatchObject({ kind: 'analysis', userId: user.id, dedupeKey: `analysis:${user.id}:${job.id}` });
+    expect(JSON.parse(row.payload)).toEqual({ jobId: job.id });
+  });
+
+  it('GET of an analysed job, or with no credential, queues nothing', async () => {
+    const { user, cookie } = await makeUser();
+    const done = await analysedJob(user.id);
+    const res = await jobDetail.GET(request(`/api/jobs/${done.id}`, { cookie }), ctx({ id: done.id }));
+    expect((await res.json()).analysing).toBeNull();
+    const fresh = await newJob();
+    vi.mocked(credentialFor).mockResolvedValueOnce(null);
+    const res2 = await jobDetail.GET(request(`/api/jobs/${fresh.id}`, { cookie }), ctx({ id: fresh.id }));
+    expect((await res2.json()).analysing).toBeNull();
+    expect(await db.task.count({ where: { userId: user.id, kind: 'analysis' } })).toBe(0);
   });
 
   it('POST without { reanalyse: true } is 400', async () => {

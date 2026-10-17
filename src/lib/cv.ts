@@ -8,7 +8,8 @@ import { checkForInjection } from './injection';
 import { REFINE_SYSTEM, refinePrompt } from './prompts';
 import { claimsFor, isAdmin } from './user';
 import { userDir } from './user-files';
-import { buildResume, resumeMenu, type BuiltResume, type Steer } from './resume';
+import { existsSync } from 'node:fs';
+import { buildResume, resumeConfig, resumeMenu, type BuiltResume, type Steer } from './resume';
 
 /**
  * One job's CV as a thing the user can hold: built from the posting plus any
@@ -64,8 +65,19 @@ export async function buildCv(app: Application, job: Job, opts: { compile?: bool
 
 export type Published = { resume: BuiltResume | null; driveUrl: string | null; driveReason: string | null };
 
-export async function publishCv(app: Application, job: Job): Promise<Published> {
-  const resume = await buildCv(app, job);
+/** Why a referral links the base CV: the tailored PDF is not built yet. */
+export const BASE_CV_REASON = 'The tailored CV is not built yet, so the message links the base CV. Press "Generate résumé" to build it.';
+
+/**
+ * Builds the CV of the application and puts it on Drive. The worker calls it with the default
+ * (compile). A web request passes `compile: false`: it uses the built PDF if it exists, else the base PDF.
+ */
+export async function publishCv(app: Application, job: Job, opts: { compile?: boolean } = {}): Promise<Published> {
+  let resume = await buildCv(app, job, { compile: opts.compile });
+  if (resume?.path && opts.compile === false && !existsSync(resume.path)) {
+    const base = resumeConfig().pdf;
+    resume = base && existsSync(base) ? { ...resume, path: base, tailored: false, lead: null, reason: BASE_CV_REASON } : null;
+  }
   if (!resume || !resume.path) {
     return { resume: null, driveUrl: null, driveReason: (await isAdmin(app.userId)) ? null : NO_RESUME };
   }

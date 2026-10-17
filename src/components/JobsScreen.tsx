@@ -342,10 +342,20 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
     setCvBusy(null);
     setCvError(null);
     api(`/api/jobs/${id}`)
-      .then((j: any) => {
+      .then(async (j: any) => {
         if (!live) return;
         setJob(j);
         setCv(j.cv);
+        // The worker reads the job. The screen shows the estimate until the task ends, then loads the job again.
+        if (!j.analysing) return;
+        try {
+          await runTask(async () => ({ taskId: j.analysing }));
+          const done = await api<any>(`/api/jobs/${id}`);
+          if (live) setJob({ ...done, analysing: null });
+        } catch {
+          // The estimate stays. A later visit queues the analysis again.
+          if (live) setJob((cur: any) => cur && { ...cur, analysing: null });
+        }
       })
       .catch((e) => setToast(e.message));
     return () => { live = false; };
@@ -448,6 +458,7 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
           <span className="mono" style={{ fontSize: 13, color: 'var(--muted)' }}>{job.place} · {job.mode} · {job.visa}</span>
           <h2 className="display" style={{ margin: 0, fontSize: phone ? 28 : 34, lineHeight: 1.1, fontWeight: 700, letterSpacing: '-0.02em' }}>{job.role}</h2>
           <span style={{ fontSize: 16, color: 'var(--muted)' }}>{job.company} · found on {job.sourceList} · {job.match}% match</span>
+          {job.analysing && <span role="status" style={{ fontSize: 14, color: 'var(--muted)' }}>Claude is reading the description. The score is an estimate until it ends.</span>}
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           <a className="btn" href={job.url} target="_blank" rel="noopener noreferrer">Open posting</a>

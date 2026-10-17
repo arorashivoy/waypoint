@@ -71,8 +71,15 @@ describe('analysis through the queue', () => {
     const { userId, jobs } = await setup(1);
     const { id } = await enqueue({ kind: 'analysis', userId, payload: { jobId: jobs[0].id, batch: 'b' } });
     await runOnce(undefined, { userId });
-    expect(analyseJob).toHaveBeenCalledWith(expect.objectContaining({ id: jobs[0].id }), userId);
+    expect(analyseJob).toHaveBeenCalledWith(expect.objectContaining({ id: jobs[0].id }), userId, false);
     expect(await db.task.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: 'done', lastError: null });
+  });
+
+  it('analysisProgress does not count a task of the job screen (no batch)', async () => {
+    const { userId, jobs } = await setup(2);
+    await enqueue({ kind: 'analysis', userId, payload: { jobId: jobs[0].id, batch: 'b2' } });
+    await enqueue({ kind: 'analysis', userId, payload: { jobId: jobs[1].id } });
+    expect(await analysisProgress(userId)).toEqual({ running: true, done: 0, total: 1, failed: 0 });
   });
 
   it('the handler skips a job that is gone', async () => {

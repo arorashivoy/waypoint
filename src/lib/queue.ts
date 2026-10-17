@@ -19,8 +19,9 @@ export type Progress = { running: boolean; done: number; total: number; failed: 
 const EMPTY: Progress = { running: false, done: 0, total: 0, failed: 0 };
 
 export async function analysisProgress(userId: string): Promise<Progress> {
+  // Only the tasks of a refresh have a batch. A task that the job screen queues has none.
   const newest = await db.task.findFirst({
-    where: { userId, kind: 'analysis' },
+    where: { userId, kind: 'analysis', payload: { contains: '"batch":' } },
     orderBy: { createdAt: 'desc' },
     select: { payload: true },
   });
@@ -87,4 +88,19 @@ export async function queueAnalysis(userId: string, limit = 25) {
     });
   }
   return analysisProgress(userId);
+}
+
+/**
+ * Queues one `analysis` task for one job, for the job screen. It has no batch, so the
+ * progress of a refresh does not count it. The dedupe key is the same as in `queueAnalysis`,
+ * so a job that a refresh queued already gets no second task.
+ */
+export async function queueJobAnalysis(userId: string, jobId: string, force = false): Promise<string> {
+  const { id } = await enqueue({
+    kind: 'analysis',
+    userId,
+    payload: force ? { jobId, force } : { jobId },
+    dedupeKey: `analysis:${userId}:${jobId}`,
+  });
+  return id;
 }

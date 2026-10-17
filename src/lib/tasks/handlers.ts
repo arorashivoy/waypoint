@@ -37,7 +37,9 @@ export function registerHandler<P>(
 // The worker enqueues maintenance each hour. It keeps the model cache under its size limit.
 registerHandler('maintenance', z.unknown(), async () => ({ pruned: await pruneCacheBySize() }));
 
-registerHandler('analysis', z.object({ jobId: z.string(), batch: z.string() }), async ({ jobId }, task) => {
+// A refresh queues tasks with a `batch` (for the progress count). The job screen queues one task with no batch.
+// `force` asks for a new analysis even when one exists.
+registerHandler('analysis', z.object({ jobId: z.string(), batch: z.string().optional(), force: z.boolean().optional() }), async ({ jobId, force }, task) => {
   const userId = task.userId;
   if (!userId) return { skipped: 'no-user' };
   const job = await db.job.findUnique({ where: { id: jobId } });
@@ -49,7 +51,7 @@ registerHandler('analysis', z.object({ jobId: z.string(), batch: z.string() }), 
     }
     return { skipped: 'no-credential' };
   }
-  await analyseJob(job, userId);
+  await analyseJob(job, userId, force ?? false);
   return {};
 });
 

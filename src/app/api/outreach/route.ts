@@ -41,6 +41,7 @@ const profileLink = (c: { name: string; profileUrl: string | null }, company: st
 async function draftReferral(app: Application, job: Job, profile: ResolvedProfile, contactName: string) {
   const cred = await credentialFor(app.userId);
   const candidates = [...profile.projects.map((p) => p.title), ...profile.positions.map((p) => p.title)].filter(Boolean);
+  // Part 5 moves this Claude call to the worker. Until then it stays in the request.
   const slots: Slots =
     !cred
       ? { highlight: candidates[0] || '', hook: 'it lines up closely with what I build today', proof: `I ${profile.headline.toLowerCase()}` }
@@ -54,7 +55,10 @@ async function draftReferral(app: Application, job: Job, profile: ResolvedProfil
   // Uploaded before the message is written, because the message quotes the
   // link. One Drive file per posting: a referrer who opens it weeks later
   // still sees the CV that was tailored for their company.
-  const { resume, driveReason } = await publishCv(app, job);
+  //
+  // The request never compiles: only the worker starts LaTeX. If the tailored
+  // PDF is not built yet, the message links the base PDF.
+  const { resume, driveReason } = await publishCv(app, job, { compile: false });
 
   const message = renderReferral({
     firstName: contactName.split(' ')[0],
