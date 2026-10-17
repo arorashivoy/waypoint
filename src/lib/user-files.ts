@@ -18,7 +18,7 @@ function checked(userId: string): string {
   return join(usersRoot(), userId);
 }
 
-export function userDir(userId: string, sub?: 'imports'): string {
+export function userDir(userId: string, sub?: 'imports' | 'resumes'): string {
   const base = checked(userId);
   mkdirSync(base, { recursive: true, mode: 0o700 });
   chmodSync(base, 0o700);

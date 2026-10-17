@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { basename } from 'path';
 import { db } from '@/lib/db';
 import { handle } from '@/lib/auth/http';
@@ -7,11 +7,12 @@ import { requireUser } from '@/lib/auth/guard';
 import { NO_RESUME, buildCv } from '@/lib/cv';
 import { isAdmin } from '@/lib/user';
 
-export const maxDuration = 300;
-
 /**
  * The CV for one application, tailored to its posting and to any refinement
  * made with "Refine with Claude".
+ *
+ * The route does not compile. The worker builds the PDF (a `cv` task). The route works out
+ * the expected path and serves the file, or answers 404 if the file is not there yet.
  *
  * Rebuilt rather than stored against the application row: `buildResume` keys
  * its output on a hash of the rendered LaTeX, so an unchanged selection is a
@@ -23,9 +24,13 @@ export const GET = handle<{ params: { id: string } }>(async (req, { params }) =>
   const app = await db.application.findFirst({ where: { id: params.id, userId: user.id }, include: { job: true } });
   if (!app) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
-  const resume = await buildCv(app, app.job);
+  const resume = await buildCv(app, app.job, { compile: false });
   if (!resume || !resume.path) {
     return NextResponse.json({ error: (await isAdmin(user.id)) ? 'No CV configured. Set RESUME_PDF, and RESUME_TEX to tailor it.' : NO_RESUME }, { status: 404 });
+  }
+
+  if (!existsSync(resume.path)) {
+    return NextResponse.json({ error: 'The CV is not built yet. Build it first.' }, { status: 404 });
   }
 
   const name = `${user.name.replace(/[^\w]+/g, '_')}_${app.job.company.replace(/[^\w]+/g, '_')}.pdf`;

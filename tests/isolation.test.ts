@@ -26,6 +26,8 @@ import { readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db } from '@/lib/db';
+import { runOnce } from '@/lib/tasks/worker';
+import '@/lib/tasks/handlers';
 import { ctx, formRequest, makeUser, request } from './helpers/http';
 import * as claudeRoute from '@/app/api/claude/route';
 import * as countries from '@/app/api/countries/route';
@@ -218,7 +220,8 @@ describe('user B cannot reach the rows of user A', () => {
     const { job, app } = await seedA();
     const b = await makeUser();
     const res = await jobResume.POST(request(`/api/jobs/${job.id}/resume`, { method: 'POST', cookie: b.cookie }), ctx({ id: job.id }));
-    expect(res.status).toBeLessThan(500);
+    expect(res.status).toBe(200);
+    await runOnce(undefined, { userId: b.user.id });
     const after = await db.application.findUniqueOrThrow({ where: { id: app.id } });
     expect(after.cvChat).toContain('secret chat of A');
     expect(after.cvPath).toBeNull();
@@ -230,9 +233,11 @@ describe('user B cannot reach the rows of user A', () => {
     // An admin passes the isAdmin gate in refineCv, so the call goes as far as it can without Claude.
     const b = await makeUser('admin');
     const res = await refine.POST(request(`/api/jobs/${job.id}/resume/refine`, { method: 'POST', cookie: b.cookie, body: { message: 'change it' } }), ctx({ id: job.id }));
-    // B reaches the Claude call, which has no credential (stubbed), so it stops there before any write.
-    expect(res.status).toBe(409);
-    expect(await res.json()).toEqual({ error: 'Add an API key in Settings to use Claude.' });
+    expect(res.status).toBe(200);
+    const { taskId } = await res.json();
+    await runOnce(undefined, { userId: b.user.id });
+    // B reaches the Claude call, which has no credential (stubbed), so the task stops there before any write.
+    expect(await db.task.findUniqueOrThrow({ where: { id: taskId } })).toMatchObject({ status: 'failed', lastError: 'Add an API key in Settings to use Claude.' });
     expect(await db.application.count({ where: { userId: b.user.id, jobId: job.id } })).toBe(1);
     const after = await db.application.findUniqueOrThrow({ where: { id: app.id } });
     expect(after.cvChat).toContain('secret chat of A');
@@ -243,7 +248,8 @@ describe('user B cannot reach the rows of user A', () => {
     const { job, app } = await seedA();
     const b = await makeUser();
     const res = await refine.DELETE(request(`/api/jobs/${job.id}/resume/refine`, { method: 'DELETE', cookie: b.cookie }), ctx({ id: job.id }));
-    expect(res.status).toBeLessThan(300);
+    expect(res.status).toBe(200);
+    await runOnce(undefined, { userId: b.user.id });
     expect(await db.application.count({ where: { userId: b.user.id, jobId: job.id } })).toBe(1);
     expect((await db.application.findUniqueOrThrow({ where: { id: app.id } })).cvChat).toContain('secret chat of A');
   });

@@ -414,12 +414,12 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
     await refresh();
   };
 
-  const cvCall = async (kind: 'generate' | 'refine' | 'reset', call: () => Promise<Cv>) => {
+  const cvCall = async (kind: 'generate' | 'refine' | 'reset', start: () => Promise<{ taskId: string }>) => {
     const forId = id;
     setCvBusy(kind);
     setCvError(null);
     try {
-      const fresh = await call();
+      const fresh = await runTask<Cv>(start);
       if (shown.current === forId) setCv(fresh);
       return true;
     } catch (e) {
@@ -429,9 +429,9 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
       if (shown.current === forId) setCvBusy(null);
     }
   };
-  const generateCv = () => cvCall('generate', () => post<Cv>(`/api/jobs/${id}/resume`));
-  const refineCv = (message: string) => cvCall('refine', () => post<Cv>(`/api/jobs/${id}/resume/refine`, { message }));
-  const resetCv = () => cvCall('reset', () => del<Cv>(`/api/jobs/${id}/resume/refine`));
+  const generateCv = () => cvCall('generate', () => post<{ taskId: string }>(`/api/jobs/${id}/resume`));
+  const refineCv = (message: string) => cvCall('refine', () => post<{ taskId: string }>(`/api/jobs/${id}/resume/refine`, { message }));
+  const resetCv = () => cvCall('reset', () => del<{ taskId: string }>(`/api/jobs/${id}/resume/refine`));
 
   const cvProps = { cv, busy: cvBusy, onGenerate: generateCv };
 

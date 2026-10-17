@@ -7,6 +7,7 @@ import { shareResume } from './gdrive';
 import { checkForInjection } from './injection';
 import { REFINE_SYSTEM, refinePrompt } from './prompts';
 import { claimsFor, isAdmin } from './user';
+import { userDir } from './user-files';
 import { buildResume, resumeMenu, type BuiltResume, type Steer } from './resume';
 
 /**
@@ -16,6 +17,9 @@ import { buildResume, resumeMenu, type BuiltResume, type Steer } from './resume'
  * so the CV a referral message links to is the one he generated and refined,
  * not a second build that ignores the refinement.
  */
+
+/** The longest message that a user can send to "Refine with Claude". */
+export const CV_MESSAGE_MAX = 2000;
 
 export type ChatTurn = { role: 'you' | 'claude'; text: string; at: string };
 
@@ -49,9 +53,13 @@ const postingText = (job: Job) => `${job.role}\n${job.description}`;
 /** Until part 5 adds templates for each user, RESUME_PDF, RESUME_TEX and the Drive settings in .env are the admin's. A member gets no résumé. */
 export const NO_RESUME = 'No résumé is set up for your account yet.';
 
-export async function buildCv(app: Application, job: Job) {
+/** The PDF goes to the folder of the user. With `compile: false` the build does not start the LaTeX engine; only the worker compiles. */
+export async function buildCv(app: Application, job: Job, opts: { compile?: boolean } = {}) {
   if (!(await isAdmin(app.userId))) return null;
-  return buildResume(await claimsFor(app.userId), postingText(job), app.id, readSteer(app));
+  return buildResume(await claimsFor(app.userId), postingText(job), app.id, readSteer(app), {
+    outDir: userDir(app.userId, 'resumes'),
+    compile: opts.compile,
+  });
 }
 
 export type Published = { resume: BuiltResume | null; driveUrl: string | null; driveReason: string | null };

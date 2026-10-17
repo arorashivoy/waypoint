@@ -23,8 +23,6 @@ import '@/lib/tasks/handlers';
 import * as refine from '@/app/api/jobs/[id]/resume/refine/route';
 import { ctx, makeUser, request } from './helpers/http';
 
-const GENERIC = { error: 'Something went wrong. The server log has the details.' };
-
 async function newJob() {
   return db.job.create({
     data: { externalId: `jobs-${randomBytes(6).toString('hex')}`, source: 'Test', role: 'Engineer', company: 'Acme', city: 'Berlin', cc: 'DE', url: 'https://x.test' },
@@ -65,43 +63,38 @@ describe('job routes with an unknown job ID', () => {
   });
 });
 
-describe('job routes send user errors and hide faults', () => {
-  it('a CvError is 400 with its own message', async () => {
+describe('the cv task sends user errors and retries faults', () => {
+  async function runRefine() {
     const job = await newJob();
-    const { cookie } = await makeUser();
+    const { cookie, user } = await makeUser();
+    const res = await refine.POST(request(`/api/jobs/${job.id}/resume/refine`, { method: 'POST', cookie, body: { message: 'x' } }), ctx({ id: job.id }));
+    const { taskId } = await res.json();
+    await runOnce(undefined, { userId: user.id });
+    return db.task.findUniqueOrThrow({ where: { id: taskId } });
+  }
+
+  it('a CvError fails the task at once with its own message', async () => {
     vi.mocked(refineCv).mockRejectedValueOnce(new CvError('Write what to change.'));
-    const res = await refine.POST(request(`/api/jobs/${job.id}/resume/refine`, { method: 'POST', cookie, body: { message: '' } }), ctx({ id: job.id }));
-    expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: 'Write what to change.' });
+    expect(await runRefine()).toMatchObject({ status: 'failed', lastError: 'Write what to change.' });
   });
 
-  it('no Claude credential is 409 with the Settings message', async () => {
-    const job = await newJob();
-    const { cookie } = await makeUser();
+  it('no Claude credential fails the task at once with the Settings message', async () => {
     vi.mocked(refineCv).mockRejectedValueOnce(new NoCredentialError());
-    const res = await refine.POST(request(`/api/jobs/${job.id}/resume/refine`, { method: 'POST', cookie, body: { message: 'x' } }), ctx({ id: job.id }));
-    expect(res.status).toBe(409);
-    expect(await res.json()).toEqual({ error: 'Add an API key in Settings to use Claude.' });
+    expect(await runRefine()).toMatchObject({ status: 'failed', lastError: 'Add an API key in Settings to use Claude.' });
   });
 
-  it('a fault in refine is a 500 without the raw text', async () => {
-    const job = await newJob();
-    const { cookie } = await makeUser();
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('a fault in refine is retried', async () => {
     vi.mocked(refineCv).mockRejectedValueOnce(new Error('ENOENT /home/shivoy/secret.tex'));
-    const res = await refine.POST(request(`/api/jobs/${job.id}/resume/refine`, { method: 'POST', cookie, body: { message: 'x' } }), ctx({ id: job.id }));
-    expect(res.status).toBe(500);
-    expect(await res.json()).toEqual(GENERIC);
+    expect((await runRefine()).status).toBe('queued');
   });
 
-  it('a fault in the CV build is a 500 without the raw text', async () => {
+  it('a fault in the CV build is retried', async () => {
     const job = await newJob();
-    const { cookie } = await makeUser();
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { cookie, user } = await makeUser();
     vi.mocked(publishCv).mockRejectedValueOnce(new Error('latexmk failed in /home/shivoy/build'));
-    const res = await jobResume.POST(request(`/api/jobs/${job.id}/resume`, { method: 'POST', cookie }), ctx({ id: job.id }));
-    expect(res.status).toBe(500);
-    expect(await res.json()).toEqual(GENERIC);
+    const { taskId } = await (await jobResume.POST(request(`/api/jobs/${job.id}/resume`, { method: 'POST', cookie }), ctx({ id: job.id }))).json();
+    await runOnce(undefined, { userId: user.id });
+    expect((await db.task.findUniqueOrThrow({ where: { id: taskId } })).status).toBe('queued');
   });
 });
 

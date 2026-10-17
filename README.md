@@ -615,7 +615,7 @@ Copy `.env.example` to `.env`. Everything has a working default except the optio
 | `RESUME_PUBLIC_URL` | *(unset)* | A link a recruiter can open. The referral message offers a link only when this or Drive is set. |
 | `RESUME_ENGINE` | auto | `tectonic`, `pdflatex`, `xelatex` or `lualatex`. |
 | `RESUME_MAX_PROJECTS` | *(unset)* | How many projects the tailored CV carries, picked from `claims.yml`. Unset keeps the base CV's count. |
-| `RESUME_OUT_DIR` / `RESUME_TIMEOUT_MS` | `data/resumes` / `180000` | Where tailored PDFs go; per-compile timeout. |
+| `RESUME_TIMEOUT_MS` | `180000` | Per-compile timeout. Tailored PDFs go to `data/users/<userId>/resumes/`. |
 | `CLAIMS_FILE` | `data/profile/claims.yml` | Path to the claims ledger. |
 | `WAYPOINT_SEED_SAMPLES` | *(unset)* | `1` makes `npm run db:seed` insert placeholder listings and a placeholder profile. Off by default on purpose. |
 

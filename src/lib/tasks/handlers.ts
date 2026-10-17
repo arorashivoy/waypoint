@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { analyseJob } from '@/lib/analysis';
-import { claudeStatus, credentialFor } from '@/lib/claude';
+import { NoCredentialError, claudeStatus, credentialFor } from '@/lib/claude';
 import { fetchAll } from '@/lib/sources';
 import { queueAnalysis } from '@/lib/queue';
-import { claimsFor } from '@/lib/user';
 import { searchQueries } from '@/lib/resume';
-import { TaskDeferred } from '@/lib/tasks/worker';
+import { CV_MESSAGE_MAX, NO_RESUME, CvError, cvView, publishCv, refineCv, resetCv } from '@/lib/cv';
+import { claimsFor, isAdmin } from '@/lib/user';
+import { TaskDeferred, TaskFatal } from '@/lib/tasks/worker';
 import type { TaskKind, TaskRow } from '@/lib/tasks/queue';
 
 type Entry = {
@@ -82,3 +83,36 @@ registerHandler('refresh', z.object({ force: z.boolean() }), async ({ force }, t
 
   return { added, total: jobs.length, report, analysing };
 });
+
+registerHandler(
+  'cv',
+  z.object({
+    jobId: z.string(),
+    action: z.enum(['generate', 'refine', 'reset']),
+    message: z.string().max(CV_MESSAGE_MAX).optional(),
+  }),
+  async ({ jobId, action, message }, task) => {
+    const userId = task.userId;
+    if (!userId) return { skipped: 'no-user' };
+    const job = await db.job.findUnique({ where: { id: jobId } });
+    if (!job) throw new TaskFatal('The job is gone.');
+    const app = await db.application.upsert({
+      where: { userId_jobId: { userId, jobId } },
+      update: {},
+      create: { userId, jobId },
+    });
+    try {
+      if (action === 'refine') return await refineCv(app, job, message ?? '');
+      if (action === 'reset') return await resetCv(app, job);
+      const view = cvView(app, await publishCv(app, job));
+      if (!view.pdfUrl) {
+        throw new TaskFatal((await isAdmin(userId)) ? 'No CV configured. Set RESUME_PDF, and RESUME_TEX to tailor it.' : NO_RESUME);
+      }
+      return view;
+    } catch (e) {
+      // The user must read these two errors. A retry cannot change them.
+      if (e instanceof CvError || e instanceof NoCredentialError) throw new TaskFatal(e.message);
+      throw e;
+    }
+  },
+);

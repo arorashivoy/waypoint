@@ -40,7 +40,6 @@ export type ResumeConfig = {
    *  this is separate from `pdf` and why the message only claims a link when it
    *  is set. */
   publicUrl: string | null;
-  outDir: string;
   maxProjects: number | null;
   timeoutMs: number;
 };
@@ -53,7 +52,6 @@ export function resumeConfig(): ResumeConfig {
     pdf: pdf ? expand(pdf) : null,
     tex: tex ? expand(tex) : null,
     publicUrl: env('RESUME_PUBLIC_URL'),
-    outDir: expand(env('RESUME_OUT_DIR') || 'data/resumes'),
     maxProjects: Number.isFinite(max) && max > 0 ? max : null,
     timeoutMs: Number(env('RESUME_TIMEOUT_MS')) || 60_000,
   };
@@ -692,7 +690,14 @@ export function resumeMenu(doc: ClaimsDoc): ResumeMenu | null {
  * base PDF with a reason attached, because a missing LaTeX package must not
  * take down the referral flow.
  */
-export async function buildResume(doc: ClaimsDoc | null, postingText: string, key: string, steer: Steer = {}): Promise<BuiltResume | null> {
+export async function buildResume(
+  doc: ClaimsDoc | null,
+  postingText: string,
+  key: string,
+  steer: Steer = {},
+  /** `outDir` is the folder of the user for compiled PDFs. With `compile: false` the build only works out the path and does not start the engine. */
+  opts: { outDir: string; compile?: boolean },
+): Promise<BuiltResume | null> {
   const cfg = resumeConfig();
   if (!cfg.pdf && !cfg.tex) return null;
 
@@ -758,7 +763,7 @@ export async function buildResume(doc: ClaimsDoc | null, postingText: string, ke
   // Keyed on the rendered source, so two postings that select the same order
   // share one PDF and an unchanged CV is never rebuilt.
   const hash = createHash('sha1').update(source).update(engine.program).digest('hex').slice(0, 16);
-  const out = join(cfg.outDir, `${key}-${hash}.pdf`);
+  const out = join(opts.outDir, `${key}-${hash}.pdf`);
 
   const order = 'why' in projects ? [] : projects.order;
   const bullets = 'why' in experience ? [] : experience.order;
@@ -780,6 +785,7 @@ export async function buildResume(doc: ClaimsDoc | null, postingText: string, ke
   };
 
   if (existsSync(out) && statSync(out).size > 0) return result;
+  if (opts.compile === false) return result;
 
   try {
     await compileLatex({ source, assetsDir: dirname(cfg.tex), outPdf: out, engine, timeoutMs: cfg.timeoutMs });

@@ -21,6 +21,14 @@ export class TaskDeferred extends Error {
   }
 }
 
+/** A handler throws this for an error the user must read. The task fails at once and has no retry. */
+export class TaskFatal extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TaskFatal';
+  }
+}
+
 const MAX_ERROR_LENGTH = 500;
 const REQUEUE_MS = 60_000;
 const MAINTENANCE_MS = 3_600_000;
@@ -52,6 +60,8 @@ export async function runOnce(now: Date = new Date(), scope?: { userId?: string 
   } catch (err) {
     if (err instanceof TaskDeferred) {
       await deferTask(task.id, err.until);
+    } else if (err instanceof TaskFatal) {
+      await failAtOnce(task.id, err.message);
     } else {
       await failTask(task.id, err instanceof Error ? err.message : String(err));
     }

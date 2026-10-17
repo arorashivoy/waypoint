@@ -1,33 +1,34 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { handle } from '@/lib/auth/http';
+import { handle, HttpError } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
-import { refineCv, resetCv, rethrowForUser } from '@/lib/cv';
+import { CV_MESSAGE_MAX } from '@/lib/cv';
+import { enqueue } from '@/lib/tasks/queue';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;
 
-async function application(userId: string, jobId: string) {
-  const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
-  const app = await db.application.upsert({
-    where: { userId_jobId: { userId, jobId } },
-    update: {},
-    create: { userId, jobId },
+async function start(userId: string, jobId: string, payload: { action: 'refine' | 'reset'; message?: string }) {
+  if (!(await db.job.findUnique({ where: { id: jobId }, select: { id: true } }))) throw new HttpError(404, 'Not found.');
+  const { id } = await enqueue({
+    kind: 'cv',
+    userId,
+    payload: { jobId, ...payload },
+    dedupeKey: `cv:${userId}:${jobId}`,
   });
-  return { job, app };
+  return NextResponse.json({ taskId: id });
 }
 
-/** One "Refine with Claude" turn: Claude picks, the CV rebuilds, Drive updates in place. */
+/** One "Refine with Claude" turn, in the worker. The route returns the task ID. */
 export const POST = handle<{ params: { id: string } }>(async (req, { params }) => {
   const user = await requireUser(req);
   const body = await req.json().catch(() => ({}));
-  const { job, app } = await application(user.id, params.id);
-  return NextResponse.json(await refineCv(app, job, String(body?.message ?? '')).catch(rethrowForUser));
+  const message = String(body?.message ?? '');
+  if (message.length > CV_MESSAGE_MAX) throw new HttpError(400, `Write at most ${CV_MESSAGE_MAX} characters.`);
+  return start(user.id, params.id, { action: 'refine', message });
 });
 
-/** Forgets the conversation and its choices; the CV goes back to the posting's own selection. */
+/** Forgets the conversation and its choices, in the worker. The CV goes back to the selection of the posting. */
 export const DELETE = handle<{ params: { id: string } }>(async (req, { params }) => {
   const user = await requireUser(req);
-  const { job, app } = await application(user.id, params.id);
-  return NextResponse.json(await resetCv(app, job).catch(rethrowForUser));
+  return start(user.id, params.id, { action: 'reset' });
 });
