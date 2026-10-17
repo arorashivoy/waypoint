@@ -39,6 +39,7 @@ model User {
   secrets      UserSecret[]
   usage        LlmUsage[]
   analyses     JobAnalysis[]
+  tasks        Task[]
   invitesMade  Invite[]      @relation("InviteCreator")
   resetLinks   Invite[]      @relation("InviteUser")
 }
@@ -456,4 +457,46 @@ model JobAnalysis {
 
   @@id([userId, jobId])
   @@index([jobId])
+}
+
+// One job for the worker. kind: "refresh" | "analysis" | "cv" | "resume-import" |
+// "github-import" | "maintenance". status: "queued" | "running" | "done" | "failed".
+// payload and result hold JSON text. userId is null only for "maintenance".
+model Task {
+  id        String    @id @default(cuid())
+  kind      String
+  userId    String?
+  payload   String
+  result    String?
+  status    String    @default("queued")
+  runAt     DateTime  @default(now())
+  attempts  Int       @default(0)
+  lastError String?
+  dedupeKey String?
+  startedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, runAt])
+  @@index([userId, kind, status])
+  @@index([dedupeKey, status])
+}
+
+// One row only (id "worker"). The worker writes it each 30 seconds.
+model WorkerHeartbeat {
+  id        String   @id
+  pid       Int
+  beatAt    DateTime
+  startedAt DateTime
+}
+
+// The last fetch of one job board, for the ETag check. status: "ok" | "not-modified" | "failed".
+model FeedFetch {
+  board        String   @id
+  etag         String?
+  lastModified String?
+  fetchedAt    DateTime
+  status       String
+  error        String?
 }
