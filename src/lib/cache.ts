@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { db } from './db';
 import { askJson, extractJson, MODEL, type AskRequest, type CallContext } from './claude';
 
@@ -86,14 +87,33 @@ export async function cacheStats() {
   return { entries, hits: agg._sum.hits || 0 };
 }
 
-/** Keeps the newest `keep` entries by last use. SQLite on one machine, so a
- *  manual call from a script is enough; there is no scheduler to hang this on. */
-export async function pruneCache(keep = 5000) {
-  const survivors = await db.llmCache.findMany({
-    orderBy: { usedAt: 'desc' },
-    take: keep,
-    select: { key: true },
-  });
-  const { count } = await db.llmCache.deleteMany({ where: { key: { notIn: survivors.map((s) => s.key) } } });
-  return count;
+/** The size limit of the cache: 50 MB. */
+export const CACHE_MAX_BYTES = 50 * 1024 * 1024;
+
+const PRUNE_BATCH = 200;
+
+/**
+ * Deletes the rows with the oldest `usedAt` until the sum of `length(value)` is at or under `maxBytes`.
+ * SQLite counts characters. The replies are mostly ASCII, so this is close to bytes.
+ * `kind` is for tests only. If it is set, the sum and the delete use only the rows of that kind.
+ * Returns the count of deleted rows.
+ */
+export async function pruneCacheBySize(maxBytes = CACHE_MAX_BYTES, kind?: string): Promise<number> {
+  const scope = kind === undefined ? Prisma.empty : Prisma.sql`WHERE kind = ${kind}`;
+  const [row] = await db.$queryRaw<{ total: number | bigint | null }[]>`SELECT SUM(length(value)) AS total FROM LlmCache ${scope}`;
+  let total = Number(row?.total ?? 0);
+  let deleted = 0;
+  while (total > maxBytes) {
+    const rows = await db.$queryRaw<{ key: string; size: number | bigint }[]>`
+      SELECT key, length(value) AS size FROM LlmCache ${scope} ORDER BY usedAt ASC, key ASC LIMIT ${PRUNE_BATCH}`;
+    if (!rows.length) break;
+    const keys: string[] = [];
+    for (const r of rows) {
+      if (total <= maxBytes) break;
+      keys.push(r.key);
+      total -= Number(r.size);
+    }
+    deleted += (await db.llmCache.deleteMany({ where: { key: { in: keys } } })).count;
+  }
+  return deleted;
 }

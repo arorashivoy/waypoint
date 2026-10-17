@@ -7,6 +7,7 @@ import { draftsFromRepo } from '@/lib/profile/github-import';
 import { userDir } from '@/lib/user-files';
 import { db } from '@/lib/db';
 import { analyseJob } from '@/lib/analysis';
+import { pruneCacheBySize } from '@/lib/cache';
 import { NoCredentialError, claudeStatus, credentialFor } from '@/lib/claude';
 import { fetchAll } from '@/lib/sources';
 import { queueAnalysis } from '@/lib/queue';
@@ -33,8 +34,8 @@ export function registerHandler<P>(
   handlers.set(kind, { schema, run: (payload, task) => h(payload as P, task) });
 }
 
-// Cache pruning is not built yet. Until it exists, maintenance does nothing.
-registerHandler('maintenance', z.unknown(), async () => ({}));
+// The worker enqueues maintenance each hour. It keeps the model cache under its size limit.
+registerHandler('maintenance', z.unknown(), async () => ({ pruned: await pruneCacheBySize() }));
 
 registerHandler('analysis', z.object({ jobId: z.string(), batch: z.string() }), async ({ jobId }, task) => {
   const userId = task.userId;

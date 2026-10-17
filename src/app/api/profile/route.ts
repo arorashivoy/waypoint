@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireUser } from '@/lib/auth/guard';
 import { handle } from '@/lib/auth/http';
 import { checkDoc, emptyDoc } from '@/lib/profile/doc';
+import { jsonWithEtag } from '@/lib/etag';
 import { loadProfileDoc, profileVersion } from '@/lib/profile/store';
 
 export const dynamic = 'force-dynamic';
@@ -15,5 +15,5 @@ export const GET = handle(async (req) => {
     db.profileDraft.count({ where: { userId: user.id, status: 'pending' } }),
   ]);
   const shown = doc ?? emptyDoc(user.name);
-  return NextResponse.json({ doc: shown, warnings: checkDoc(shown).warnings, version, pendingDrafts });
+  return jsonWithEtag(req, { doc: shown, warnings: checkDoc(shown).warnings, version, pendingDrafts });
 });
