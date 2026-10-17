@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import {
+  MAX_ATTEMPTS,
   RETRY_DELAYS_MS,
   beat,
   claimNext,
@@ -174,6 +175,20 @@ describe('task queue', () => {
     expect(await requeueStale(now, { userId: user.id })).toBe(1);
     expect((await db.task.findUniqueOrThrow({ where: { id: old.id } })).status).toBe('queued');
     expect((await db.task.findUniqueOrThrow({ where: { id: fresh.id } })).status).toBe('running');
+  });
+
+  it('requeueStale fails a stale task that used all its attempts', async () => {
+    const { user } = await makeUser();
+    const now = new Date('2026-01-01T12:00:00Z');
+    const spent = await enqueue({ kind: 'refresh', userId: user.id, payload: {} });
+    const left = await enqueue({ kind: 'refresh', userId: user.id, payload: {} });
+    const old = new Date(now.getTime() - 11 * 60_000);
+    await db.task.update({ where: { id: spent.id }, data: { status: 'running', startedAt: old, attempts: MAX_ATTEMPTS } });
+    await db.task.update({ where: { id: left.id }, data: { status: 'running', startedAt: old, attempts: MAX_ATTEMPTS - 1 } });
+    expect(await requeueStale(now, { userId: user.id })).toBe(1);
+    expect(await db.task.findUniqueOrThrow({ where: { id: spent.id } })).toMatchObject({ status: 'failed', lastError: 'The task stopped too often.' });
+    expect((await db.task.findUniqueOrThrow({ where: { id: left.id } })).status).toBe('queued');
+    expect(MAX_ATTEMPTS).toBe(4);
   });
 
   it('beat and lastBeat', async () => {

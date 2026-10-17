@@ -119,16 +119,26 @@ export async function deferTask(id: string, until: Date): Promise<void> {
   });
 }
 
-/** Puts running tasks that started more than STALE_MS ago back in the queue. The worker never sets `scope`. */
+/** The most attempts of one task: the first run and 3 retries. */
+export const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
+export const STOPPED_TOO_OFTEN = 'The task stopped too often.';
+
+/**
+ * Puts running tasks that started more than STALE_MS ago back in the queue, and returns their count.
+ * A stale task that used all its attempts fails instead, so a task that stops the worker each time
+ * cannot come back forever. The worker never sets `scope`.
+ */
 export async function requeueStale(now: Date = new Date(), scope?: { userId?: string }): Promise<number> {
-  const r = await db.task.updateMany({
-    where: {
-      status: 'running',
-      startedAt: { lt: new Date(now.getTime() - STALE_MS) },
-      ...(scope?.userId ? { userId: scope.userId } : {}),
-    },
-    data: { status: 'queued' },
+  const stale = {
+    status: 'running',
+    startedAt: { lt: new Date(now.getTime() - STALE_MS) },
+    ...(scope?.userId ? { userId: scope.userId } : {}),
+  };
+  await db.task.updateMany({
+    where: { ...stale, attempts: { gte: MAX_ATTEMPTS } },
+    data: { status: 'failed', lastError: STOPPED_TOO_OFTEN },
   });
+  const r = await db.task.updateMany({ where: stale, data: { status: 'queued' } });
   return r.count;
 }
 
