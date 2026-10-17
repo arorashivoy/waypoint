@@ -155,7 +155,8 @@ export async function acceptDrafts(userId: string, ids: string[]): Promise<{ war
   const sources = [...new Set(rows.map((r) => r.source))].join(', ');
   const note = `Accepted ${rows.length} draft${rows.length === 1 ? '' : 's'} from ${sources}`;
   const r = await saveProfile(userId, next, note, async (tx) => {
-    await tx.profileDraft.updateMany({ where: { userId, id: { in: ids }, status: 'pending' }, data: { status: 'accepted' } });
+    const moved = await tx.profileDraft.updateMany({ where: { userId, id: { in: ids }, status: 'pending' }, data: { status: 'accepted' } });
+    if (moved.count !== ids.length) throw new HttpError(409, 'Some drafts changed in another window. Load the drafts again.');
   });
   return { warnings: r.warnings };
 }
