@@ -46,3 +46,50 @@ describe('runTask', () => {
     expect(await caught).toEqual(new Error('The task did not finish in time. It still runs; check again later.'));
   });
 });
+
+describe('runTask and lost polls', () => {
+  /** Each entry is a view, 'net' (fetch rejects) or a number (an HTTP status with an error body). */
+  function flakyFetch(steps: (object | 'net' | number)[]) {
+    let i = 0;
+    const fn = vi.fn(async () => {
+      const s = steps[Math.min(i++, steps.length - 1)];
+      if (s === 'net') throw new TypeError('Failed to fetch');
+      if (typeof s === 'number') return new Response(JSON.stringify({ error: s === 404 ? 'Not found.' : 'Bad gateway.' }), { status: s });
+      return new Response(JSON.stringify(s), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fn);
+    return fn;
+  }
+
+  it('keeps polling through 5 lost polls in a row', async () => {
+    const f = flakyFetch([view('running'), 'net', 'net', 502, 'net', 'net', view('done', { result: { ok: 1 } })]);
+    const p = runTask<{ ok: number }>(async () => ({ taskId: 't1' }));
+    await vi.advanceTimersByTimeAsync(1500 * 7);
+    await expect(p).resolves.toEqual({ ok: 1 });
+    expect(f).toHaveBeenCalledTimes(7);
+  });
+
+  it('a good poll resets the count', async () => {
+    flakyFetch(['net', 'net', 'net', 'net', 'net', view('running'), 'net', 'net', 'net', 'net', 'net', view('done', { result: 2 })]);
+    const p = runTask<number>(async () => ({ taskId: 't1' }));
+    await vi.advanceTimersByTimeAsync(1500 * 12);
+    await expect(p).resolves.toBe(2);
+  });
+
+  it('stops at the 6th lost poll in a row', async () => {
+    flakyFetch(['net']);
+    const caught = runTask(async () => ({ taskId: 't1' })).catch((e: Error) => e);
+    await vi.advanceTimersByTimeAsync(1500 * 7);
+    const e = await caught;
+    expect(e).toBeInstanceOf(TypeError);
+    expect((e as Error).message).toBe('Failed to fetch');
+  });
+
+  it('stops at once on a 404', async () => {
+    const f = flakyFetch([404]);
+    const caught = runTask(async () => ({ taskId: 't1' })).catch((e: Error) => e);
+    await vi.advanceTimersByTimeAsync(1500 * 3);
+    expect(((await caught) as Error).message).toBe('Not found.');
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+});

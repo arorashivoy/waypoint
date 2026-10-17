@@ -262,6 +262,21 @@ describe('the refresh task and the feed cache', () => {
   });
 });
 
+describe('the live count of a refresh', () => {
+  it('counts the stored jobs in the countries of the user, not the jobs of this run', async () => {
+    const cc = `Q${uid()}`;
+    const { user } = await userWith(cc);
+    for (let i = 0; i < 3; i++) {
+      await db.job.create({ data: { externalId: `live-${uid()}`, source: 'Test', role: 'Dev', company: 'Live Co', city: 'X', cc, url: 'https://x.test' } });
+    }
+    // Every board is skipped or fails, so this run fetches no job.
+    fetchMock.mockImplementation(async () => new Response('no', { status: 404, statusText: 'Not Found' }));
+    const task = await runRefresh(user.id, false);
+    expect(task.status).toBe('done');
+    expect(JSON.parse(task.result!)).toMatchObject({ added: 0, total: 3 });
+  });
+});
+
 describe('fetch time limit', () => {
   it('every board fetch has a 30-second signal', async () => {
     const timeout = vi.spyOn(AbortSignal, 'timeout');

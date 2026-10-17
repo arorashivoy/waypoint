@@ -93,7 +93,12 @@ registerHandler('refresh', z.object({ force: z.boolean() }), async ({ force }, t
   // The analysis tasks run in the worker after this task. The client polls /api/state for progress.
   const analysing = await queueAnalysis(userId);
 
-  return { added, total: jobs.length, report, analysing };
+  // "Live" counts the stored jobs in the countries of this user, as the job list does. A board that was
+  // fetched less than 6 hours ago is skipped, so the jobs of this run alone can be 0.
+  const mine = (await db.countryPref.findMany({ where: { userId, on: true }, select: { cc: true } })).map((p) => p.cc);
+  const total = await db.job.count({ where: { cc: { in: mine } } });
+
+  return { added, total, report, analysing };
 });
 
 registerHandler(

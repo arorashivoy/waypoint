@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, openSync, readSync, closeSync, renameSync, rmSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, openSync, readSync, closeSync, renameSync, rmSync } from 'node:fs';
 import { readdir, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -31,6 +31,14 @@ export function databasePath(url = process.env.DATABASE_URL ?? ''): string {
   return isAbsolute(raw) ? raw : resolve(process.cwd(), 'prisma', raw);
 }
 
+/**
+ * A backup holds the password hashes, the secrets and the files of every user. Only the owner may read it.
+ * `mkdirSync` with a mode does not change a folder that exists, so the mode is set after each write.
+ */
+function ownerOnly(path: string, mode: 0o600 | 0o700): void {
+  chmodSync(path, mode);
+}
+
 function dateOf(now: Date): string {
   return now.toISOString().slice(0, 10);
 }
@@ -46,10 +54,12 @@ export async function backupNow(
   // VACUUM INTO needs the path inside the SQL text. Refuse anything but plain characters.
   if (!SAFE_PATH.test(dbFile)) throw new Error('The backup path has a character that is not allowed.');
   mkdirSync(dir, { recursive: true, mode: 0o700 });
+  ownerOnly(dir, 0o700);
 
   rmSync(dbFile, { force: true });
   try {
     await client.$executeRawUnsafe(`VACUUM INTO '${dbFile}'`);
+    ownerOnly(dbFile, 0o600);
   } catch (e) {
     rmSync(dbFile, { force: true });
     throw e;
@@ -73,6 +83,7 @@ export async function backupNow(
       },
       ['.'],
     );
+    ownerOnly(usersFile, 0o600);
   } catch (e) {
     rmSync(usersFile, { force: true });
     throw e;
@@ -194,8 +205,9 @@ function isSqlite(file: string): boolean {
 
 /**
  * Puts a backup in place. Stop waypoint-web and waypoint-worker first.
- * The old database goes to <dataDir>/backups/pre-restore-<time>.db.
- * The files of the archive are written over the files in usersDir.
+ * The old database goes to <dataDir>/backups/pre-restore-<time>.db, and the old users folder to
+ * <dataDir>/backups/pre-restore-<time>-users. The archive goes into a new folder that replaces usersDir.
+ * The pre-restore copies are for the owner only (files 0600, folders 0700).
  */
 export async function restoreBackup(opts: {
   dbFile: string;
@@ -236,11 +248,16 @@ export async function restoreBackup(opts: {
     copyFileSync(opts.dbFile, dbTmp);
 
     mkdirSync(backups, { recursive: true, mode: 0o700 });
+    ownerOnly(backups, 0o700);
     if (existsSync(target)) {
       const copy = join(backups, `pre-restore-${stamp}.db`);
       copyFileSync(target, copy);
+      ownerOnly(copy, 0o600);
       // A crash can leave data in the WAL file. Keep it next to the copy.
-      if (existsSync(`${target}-wal`)) copyFileSync(`${target}-wal`, `${copy}-wal`);
+      if (existsSync(`${target}-wal`)) {
+        copyFileSync(`${target}-wal`, `${copy}-wal`);
+        ownerOnly(`${copy}-wal`, 0o600);
+      }
       log.info({ copy }, 'saved the old database');
     }
 
@@ -250,6 +267,7 @@ export async function restoreBackup(opts: {
       if (existsSync(usersDir)) {
         oldUsers = join(backups, `pre-restore-${stamp}-users`);
         renameSync(usersDir, oldUsers);
+        ownerOnly(oldUsers, 0o700);
       }
       try {
         renameSync(newUsers, usersDir);

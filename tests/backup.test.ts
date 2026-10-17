@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, linkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, statSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, linkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
@@ -58,6 +58,18 @@ describe('backupNow', () => {
     } finally {
       await copy.$disconnect();
     }
+  });
+
+  it('writes both files with mode 0600 and the folder with 0700, also into a folder that exists', async () => {
+    const dir = fresh('modes');
+    chmodSync(dir, 0o755);
+    const users = fresh('umodes');
+    writeFileSync(join(users, 'a.txt'), 'x');
+    const made = await backupNow({ dir, usersDir: users, now: NOW }, client);
+    const mode = (p: string) => statSync(p).mode & 0o777;
+    expect(mode(made.db)).toBe(0o600);
+    expect(mode(made.users)).toBe(0o600);
+    expect(mode(dir)).toBe(0o700);
   });
 
   it('replaces a backup of the same date', async () => {
@@ -266,6 +278,12 @@ describe('restoreBackup', () => {
     expect(readFileSync(s.target).equals(readFileSync(s.made.db))).toBe(true);
     expect(existsSync(`${s.target}-wal`)).toBe(false);
     expect(existsSync(`${s.target}-shm`)).toBe(false);
+    const mode = (p: string) => statSync(p).mode & 0o777;
+    expect(mode(join(s.dataDir, 'backups', copies[0]))).toBe(0o600);
+    expect(mode(join(s.dataDir, 'backups', `${copies[0]}-wal`))).toBe(0o600);
+    expect(mode(join(s.dataDir, 'backups'))).toBe(0o700);
+    const oldUsers = readdirSync(join(s.dataDir, 'backups')).find((f) => /^pre-restore-.*-users$/.test(f))!;
+    expect(mode(join(s.dataDir, 'backups', oldUsers))).toBe(0o700);
   });
 
   it('removes a user folder that the archive lacks and keeps it in the pre-restore copy', async () => {
