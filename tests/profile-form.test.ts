@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { checkYaml, type ClaimsDoc, type PositionTarget } from '@/lib/profile/doc';
+import { checkDoc, checkYaml, type ClaimsDoc, type PositionTarget } from '@/lib/profile/doc';
 import { errorsFor, fromForm, targetOptions, toForm } from '@/components/profile/fields';
 
 const sample = (): ClaimsDoc => checkYaml(readFileSync('tests/fixtures/claims-sample.yml', 'utf8')).doc!;
@@ -21,6 +21,31 @@ describe('profile form logic', () => {
       { id: 'ledger', match: 'rebuilt the ledger service' },
       { id: 'shipped-the-payments-api-in-go', match: 'Shipped the payments API in Go', text: 'Shipped the payments API in Go' },
     ]);
+  });
+
+  it('keeps the ID and the match of an edited bullet line and puts the new text in text', () => {
+    const p = sample().targets.positions[0];
+    const form = { ...toForm('position', p), bullets: 'rebuilt the ledger service in Rust' };
+    const back = fromForm('position', form, p, none) as PositionTarget;
+    expect(back.bullets).toEqual([{ id: 'ledger', match: 'rebuilt the ledger service', text: 'rebuilt the ledger service in Rust' }]);
+  });
+
+  it('drops the bullet of a removed line', () => {
+    const p = sample().targets.positions[0];
+    const back = fromForm('position', { ...toForm('position', p), bullets: '' }, p, none) as PositionTarget;
+    expect(back.bullets).toEqual([]);
+  });
+
+  it('keeps a claim with evidence on a bullet valid after the bullet text is edited', () => {
+    const doc = sample();
+    const p = doc.targets.positions[0];
+    doc.claims[0].evidence = [{ target: `position:${p.id}/ledger`, depth: 'used' }];
+    expect(checkDoc(doc).errors).toEqual([]);
+    const edited = fromForm('position', { ...toForm('position', p), bullets: 'rebuilt the ledger service in Rust' }, p, none) as PositionTarget;
+    doc.targets.positions[0] = edited;
+    const c = checkDoc(doc);
+    expect(c.errors).toEqual([]);
+    expect(c.doc).toBeTruthy();
   });
 
   it('makes an ID from the title for a new item', () => {

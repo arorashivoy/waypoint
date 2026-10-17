@@ -84,11 +84,25 @@ export function fromForm(kind: ItemKind, form: FormState, previous: Item | null,
 
   if (kind === 'position') {
     // A line that is the text (or the match) of an old bullet keeps that bullet and its ID.
+    // A changed line keeps the ID and the match of the old bullet at the same place in the list.
     const old = (previous as PositionTarget | null)?.bullets ?? [];
+    const texts = out.bullets as string[];
     const taken = new Set(old.map((b) => b.id));
-    out.bullets = (out.bullets as string[]).map((text) => {
-      const same = old.find((b) => (b.text ?? b.match) === text);
-      return same ?? { id: slugify(text.slice(0, 40), taken, 'bullet'), match: text.slice(0, 80), text };
+    const used = new Set<string>();
+    const same = texts.map((text) => {
+      const hit = old.find((b) => !used.has(b.id) && (b.text ?? b.match) === text);
+      if (hit) used.add(hit.id);
+      return hit;
+    });
+    out.bullets = texts.map((text, i) => {
+      const kept = same[i];
+      if (kept) return kept;
+      const at = old[i];
+      if (at && !used.has(at.id)) {
+        used.add(at.id);
+        return { id: at.id, match: at.match, text };
+      }
+      return { id: slugify(text.slice(0, 40), taken, 'bullet'), match: text.slice(0, 80), text };
     });
   }
   if (kind === 'claim') {
