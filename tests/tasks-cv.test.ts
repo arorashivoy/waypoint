@@ -195,6 +195,14 @@ describe('a second CV request while a task is open', () => {
     expect((await jobResume.POST(request(`/api/jobs/${job.id}/resume`, { method: 'POST', cookie }), ctx({ id: job.id }))).status).toBe(409);
   });
 
+  it('two requests at the same moment with different messages: one task, one 409', async () => {
+    const { cookie } = await makeUser();
+    const job = await newJob();
+    const go = (message: string) => refine.POST(request(`/api/jobs/${job.id}/resume/refine`, { method: 'POST', cookie, body: { message } }), ctx({ id: job.id }));
+    const [a, b] = await Promise.all([go('one'), go('two')]);
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+  });
+
   it('an empty refine message gives 400', async () => {
     const { cookie } = await makeUser();
     const job = await newJob();
