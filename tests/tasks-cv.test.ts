@@ -20,6 +20,8 @@ import '@/lib/tasks/handlers';
 import * as jobResume from '@/app/api/jobs/[id]/resume/route';
 import * as refine from '@/app/api/jobs/[id]/resume/refine/route';
 import * as resumeFile from '@/app/api/resume/[id]/route';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { ctx, makeUser, request } from './helpers/http';
 
 async function newJob() {
@@ -140,9 +142,63 @@ describe('the PDF folder', () => {
     const a = await makeUser('admin');
     const job = await newJob();
     const app = await db.application.create({ data: { userId: a.user.id, jobId: job.id } });
-    vi.mocked(buildResume).mockResolvedValueOnce({ path: join(usersRoot(), a.user.id, 'resumes', 'none.pdf'), tailored: true } as never);
-    const res = await resumeFile.GET(request(`/api/resume/${app.id}`, { cookie: a.cookie }), ctx({ id: app.id }));
-    expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ error: 'The CV is not built yet. Build it first.' });
+    vi.stubEnv('RESUME_PDF', '');
+    try {
+      vi.mocked(buildResume).mockResolvedValueOnce({ path: join(usersRoot(), a.user.id, 'resumes', 'none.pdf'), tailored: true } as never);
+      const res = await resumeFile.GET(request(`/api/resume/${app.id}`, { cookie: a.cookie }), ctx({ id: app.id }));
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({ error: 'The CV is not built yet. Build it first.' });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
+describe('the PDF route after a failed compile', () => {
+  it('serves the base PDF when the tailored file is missing', async () => {
+    const a = await makeUser('admin');
+    const job = await newJob();
+    const app = await db.application.create({ data: { userId: a.user.id, jobId: job.id } });
+    const base = join(mkdtempSync(join(tmpdir(), 'cvbase-')), 'base.pdf');
+    writeFileSync(base, '%PDF-base');
+    vi.stubEnv('RESUME_PDF', base);
+    try {
+      vi.mocked(buildResume).mockResolvedValueOnce({ path: join(usersRoot(), a.user.id, 'resumes', 'none.pdf'), tailored: true } as never);
+      const res = await resumeFile.GET(request(`/api/resume/${app.id}`, { cookie: a.cookie }), ctx({ id: app.id }));
+      expect(res.status).toBe(200);
+      expect(res.headers.get('X-Waypoint-Tailored')).toBe('false');
+      expect(Buffer.from(await res.arrayBuffer()).toString()).toBe('%PDF-base');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
+describe('a second CV request while a task is open', () => {
+  it('the same refine message returns the open task', async () => {
+    const { cookie } = await makeUser();
+    const job = await newJob();
+    const go = (message: string) => refine.POST(request(`/api/jobs/${job.id}/resume/refine`, { method: 'POST', cookie, body: { message } }), ctx({ id: job.id }));
+    const first = (await (await go('one')).json()).taskId;
+    expect((await (await go('one')).json()).taskId).toBe(first);
+  });
+
+  it('another message, a reset or a build gives 409', async () => {
+    const { cookie } = await makeUser();
+    const job = await newJob();
+    const url = `/api/jobs/${job.id}/resume/refine`;
+    await refine.POST(request(url, { method: 'POST', cookie, body: { message: 'one' } }), ctx({ id: job.id }));
+    const other = await refine.POST(request(url, { method: 'POST', cookie, body: { message: 'two' } }), ctx({ id: job.id }));
+    expect(other.status).toBe(409);
+    expect(await other.json()).toEqual({ error: 'A CV task for this job is still running. Try again when it ends.' });
+    expect((await refine.DELETE(request(url, { method: 'DELETE', cookie }), ctx({ id: job.id }))).status).toBe(409);
+    expect((await jobResume.POST(request(`/api/jobs/${job.id}/resume`, { method: 'POST', cookie }), ctx({ id: job.id }))).status).toBe(409);
+  });
+
+  it('an empty refine message gives 400', async () => {
+    const { cookie } = await makeUser();
+    const job = await newJob();
+    const res = await refine.POST(request(`/api/jobs/${job.id}/resume/refine`, { method: 'POST', cookie, body: { message: '   ' } }), ctx({ id: job.id }));
+    expect(res.status).toBe(400);
   });
 });
