@@ -19,19 +19,22 @@ import { RETRY_DELAYS_MS, type TaskKind, type TaskRow } from '@/lib/tasks/queue'
 
 type Entry = {
   schema: z.ZodType<unknown>;
-  run: (payload: unknown, task: TaskRow) => Promise<unknown>;
+  run: (payload: unknown, task: TaskRow, signal: AbortSignal) => Promise<unknown>;
 };
 
 /** The handler of each kind of task. Later tasks add their handlers here. */
 export const handlers = new Map<TaskKind, Entry>();
 
-/** The worker checks the payload with `schema` before it calls `h`. The return value of `h` becomes `Task.result`. */
+/**
+ * The worker checks the payload with `schema` before it calls `h`. The return value of `h` becomes `Task.result`.
+ * The signal aborts when the attempt reaches its time limit. The worker then fails the attempt and does not wait for `h`.
+ */
 export function registerHandler<P>(
   kind: TaskKind,
   schema: z.ZodType<P>,
-  h: (payload: P, task: TaskRow) => Promise<unknown>,
+  h: (payload: P, task: TaskRow, signal: AbortSignal) => Promise<unknown>,
 ): void {
-  handlers.set(kind, { schema, run: (payload, task) => h(payload as P, task) });
+  handlers.set(kind, { schema, run: (payload, task, signal) => h(payload as P, task, signal) });
 }
 
 // The worker enqueues maintenance each hour. It keeps the model cache under its size limit.

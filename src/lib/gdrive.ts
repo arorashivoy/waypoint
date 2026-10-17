@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
+import { fetchSignal } from '@/lib/fetch-timeout';
 
 /**
  * Uploads a tailored CV to Google Drive and returns a link a recruiter can open.
@@ -44,6 +45,7 @@ async function accessToken(cfg: DriveConfig): Promise<string> {
   if (token && token.expires > Date.now() + 60_000) return token.value;
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
+    signal: fetchSignal(),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: cfg.clientId,
@@ -93,6 +95,7 @@ export async function uploadResume(pdfPath: string, company: string, role: strin
   const at = await accessToken(cfg);
   const res = await fetch(UPLOAD_URL, {
     method: 'POST',
+    signal: fetchSignal(),
     headers: { Authorization: `Bearer ${at}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
     body: new Uint8Array(Buffer.concat([head, new Uint8Array(bytes), tail])),
   });
@@ -101,6 +104,7 @@ export async function uploadResume(pdfPath: string, company: string, role: strin
 
   const perm = await fetch(`${FILES_URL}/${file.id}/permissions`, {
     method: 'POST',
+    signal: fetchSignal(),
     headers: { Authorization: `Bearer ${at}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ role: 'reader', type: 'anyone' }),
   });
@@ -124,6 +128,7 @@ export async function replaceResume(fileId: string, pdfPath: string): Promise<{ 
   const at = await accessToken(cfg);
   const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media&fields=id,webViewLink`, {
     method: 'PATCH',
+    signal: fetchSignal(),
     headers: { Authorization: `Bearer ${at}`, 'Content-Type': 'application/pdf' },
     body: new Uint8Array(readFileSync(pdfPath)),
   });

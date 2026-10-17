@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { enqueue, lastBeat, type TaskRow } from '@/lib/tasks/queue';
-import { TaskDeferred, runOnce, startWorker } from '@/lib/tasks/worker';
+import { TaskDeferred, limitFor, runOnce, startWorker } from '@/lib/tasks/worker';
 import { registerHandler } from '@/lib/tasks/handlers';
 import { makeUser } from './helpers/http';
 
@@ -14,9 +14,9 @@ import { makeUser } from './helpers/http';
 const KIND = 'test-kind' as never;
 const UNKNOWN = 'test-unknown' as never;
 
-type Fn = (payload: { n: number }, task: TaskRow) => Promise<unknown>;
+type Fn = (payload: { n: number }, task: TaskRow, signal: AbortSignal) => Promise<unknown>;
 let current: Fn = async () => ({});
-registerHandler(KIND, z.object({ n: z.number() }), (p, t) => current(p, t));
+registerHandler(KIND, z.object({ n: z.number() }), (p, t, s) => current(p, t, s));
 
 async function setup(payload: unknown = { n: 1 }, kind: never = KIND) {
   const { user } = await makeUser();
@@ -57,6 +57,28 @@ describe('worker', () => {
     expect(r.status).toBe('queued');
     expect(r.runAt.getTime()).toBe(until.getTime());
     expect(r.attempts).toBe(1);
+  });
+
+  it('a hung handler fails the attempt at the time limit, and its signal aborts', async () => {
+    const t = await setup();
+    let signal: AbortSignal | null = null;
+    current = (_p, _t, s) => {
+      signal = s;
+      return new Promise(() => {}); // never ends
+    };
+    const started = Date.now();
+    expect(await runOnce(new Date(), t.scope, { limitMs: 50 })).toBe('ran');
+    expect(Date.now() - started).toBeLessThan(5000);
+    expect(signal!.aborted).toBe(true);
+    const r = await row(t.id);
+    expect(r.status).toBe('queued');
+    expect(r.lastError).toBe('The task took longer than 0.05 seconds.');
+  });
+
+  it('the time limit is 5 minutes, and 3 minutes for a CV build', () => {
+    expect(limitFor('analysis')).toBe(300_000);
+    expect(limitFor('refresh')).toBe(300_000);
+    expect(limitFor('cv')).toBe(180_000);
   });
 
   it('a task of an unknown kind fails at once', async () => {

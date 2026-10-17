@@ -60,7 +60,7 @@ describe('pruneCacheBySize', () => {
 
 describe('maintenance handler', () => {
   it('returns the count of pruned rows', async () => {
-    const out = (await handlers.get('maintenance')!.run({}, {} as never)) as { pruned: number };
+    const out = (await handlers.get('maintenance')!.run({}, {} as never, new AbortController().signal)) as { pruned: number };
     expect(typeof out.pruned).toBe('number');
   });
 });

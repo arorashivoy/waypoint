@@ -4,6 +4,7 @@ import { ccFromLocation, cityFromLocation, decodeEntities, fieldFromText, levelF
 import { COUNTRIES, VISA_ROUTE } from '../countries';
 import { fetchBoard, type Commit, FeedSkip, recordFailure, withFeedStatus } from './feed-fetch';
 import { log } from '@/lib/log';
+import { fetchSignal } from '@/lib/fetch-timeout';
 
 export type RawJob = {
   externalId: string;
@@ -61,7 +62,7 @@ async function getJson(url: string, feed?: Feed): Promise<any> {
     if (r.status === 'not-modified') throw new FeedSkip('not-modified');
     return r.json;
   }
-  const res = await fetch(url, { headers: UA, cache: 'no-store' });
+  const res = await fetch(url, { headers: UA, cache: 'no-store', signal: fetchSignal() });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
 }
@@ -260,6 +261,7 @@ async function workday(e: { company: string; token: string }, ccs: string[]): Pr
       headers: { ...UA, 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify(body),
       cache: 'no-store',
+      signal: fetchSignal(),
     });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     return res.json();
@@ -329,9 +331,9 @@ async function workday(e: { company: string; token: string }, ccs: string[]): Pr
  */
 async function microsoft(e: { company: string }, ccs: string[]): Promise<RawJob[]> {
   const origin = 'https://apply.careers.microsoft.com';
-  const page = await fetch(`${origin}/careers?domain=microsoft.com`, { headers: UA, cache: 'no-store' });
+  const page = await fetch(`${origin}/careers?domain=microsoft.com`, { headers: UA, cache: 'no-store', signal: fetchSignal() });
   const cookie = page.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
-  const get = (url: string) => fetch(url, { headers: { ...UA, cookie, accept: 'application/json' }, cache: 'no-store' }).then((r) => {
+  const get = (url: string) => fetch(url, { headers: { ...UA, cookie, accept: 'application/json' }, cache: 'no-store', signal: fetchSignal() }).then((r) => {
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     return r.json();
   });
@@ -430,7 +432,7 @@ async function apple(e: { company: string }, ccs: string[]): Promise<RawJob[]> {
     const slug = APPLE_SLUG[cc];
     if (!slug) continue;
     for (let page = 1; page <= 8; page++) {
-      const res = await fetch(`https://jobs.apple.com/en-us/search?location=${slug}&page=${page}`, { headers: UA, cache: 'no-store' });
+      const res = await fetch(`https://jobs.apple.com/en-us/search?location=${slug}&page=${page}`, { headers: UA, cache: 'no-store', signal: fetchSignal() });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const { total, results } = appleResults(await res.text());
       for (const j of results) {
@@ -468,7 +470,7 @@ async function apple(e: { company: string }, ccs: string[]): Promise<RawJob[]> {
 const GOOGLE_TECH = new Set(['SOFTWARE_ENGINEERING', 'HARDWARE_ENGINEERING', 'TECHNICAL_INFRASTRUCTURE', 'NETWORK_ENGINEERING', 'DATA_CENTER_OPERATIONS']);
 
 async function google(e: { company: string }, ccs: string[]): Promise<RawJob[]> {
-  const res = await fetch('https://www.google.com/about/careers/applications/jobs/feed.xml', { headers: UA, cache: 'no-store' });
+  const res = await fetch('https://www.google.com/about/careers/applications/jobs/feed.xml', { headers: UA, cache: 'no-store', signal: fetchSignal() });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   const xml = await res.text();
   const tag = (s: string, name: string) => decodeEntities(s.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`))?.[1] || '');

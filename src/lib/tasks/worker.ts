@@ -30,6 +30,14 @@ export class TaskFatal extends Error {
   }
 }
 
+/**
+ * The time limit of one attempt. A hung handler must not hold the one queue. Each limit is below STALE_MS,
+ * so requeueStale never takes a task that still runs. A CV build has a shorter limit: the user waits for it.
+ */
+export const TASK_LIMIT_MS = 300_000;
+const LIMIT_MS: Partial<Record<string, number>> = { cv: 180_000 };
+export const limitFor = (kind: string): number => LIMIT_MS[kind] ?? TASK_LIMIT_MS;
+
 const MAX_ERROR_LENGTH = 500;
 const REQUEUE_MS = 60_000;
 const MAINTENANCE_MS = 3_600_000;
@@ -39,10 +47,31 @@ async function failAtOnce(id: string, error: string): Promise<void> {
 }
 
 /**
- * Runs the next due task, if there is one.
- * `scope` is for tests only. The worker never sets it.
+ * Runs `run` with a time limit. At the limit, the signal aborts and the promise rejects.
+ * The handler can go on in the background, but the worker does not wait for it.
  */
-export async function runOnce(now: Date = new Date(), scope?: { userId?: string }): Promise<'ran' | 'idle'> {
+async function withLimit(run: (signal: AbortSignal) => Promise<unknown>, limitMs: number): Promise<unknown> {
+  const ac = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      const err = new Error(`The task took longer than ${limitMs / 1000} seconds.`);
+      ac.abort(err);
+      reject(err);
+    }, limitMs);
+  });
+  try {
+    return await Promise.race([run(ac.signal), limit]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Runs the next due task, if there is one.
+ * `scope` and `limitMs` are for tests only. The worker never sets them.
+ */
+export async function runOnce(now: Date = new Date(), scope?: { userId?: string }, opts: { limitMs?: number } = {}): Promise<'ran' | 'idle'> {
   const task = await claimNext(now, scope);
   if (!task) return 'idle';
   const entry = handlers.get(task.kind as never);
@@ -56,7 +85,7 @@ export async function runOnce(now: Date = new Date(), scope?: { userId?: string 
     return 'ran';
   }
   try {
-    const result = await entry.run(parsed.data, task);
+    const result = await withLimit((signal) => entry.run(parsed.data, task, signal), opts.limitMs ?? limitFor(task.kind));
     await completeTask(task.id, result);
   } catch (err) {
     if (err instanceof TaskDeferred) {

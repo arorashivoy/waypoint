@@ -261,3 +261,19 @@ describe('the refresh task and the feed cache', () => {
     expect(await db.job.findUnique({ where: nl })).not.toBeNull();
   });
 });
+
+describe('fetch time limit', () => {
+  it('every board fetch has a 30-second signal', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    WATCH.companies = [
+      { company: 'Lever Co', ats: 'lever', token: `t${uid()}` },
+      { company: 'Workday Co', ats: 'workday', token: `ten|wd1|site${uid()}` },
+    ];
+    fetchMock.mockImplementation(async () => json([]));
+    await fetchAll(['ZZ'], [], { force: true });
+    expect(fetchMock).toHaveBeenCalled();
+    for (const [, init] of fetchMock.mock.calls) expect((init as RequestInit).signal).toBeInstanceOf(AbortSignal);
+    expect(timeout).toHaveBeenCalledWith(30_000);
+    timeout.mockRestore();
+  });
+});

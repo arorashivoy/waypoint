@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { fetchSignal } from '@/lib/fetch-timeout';
 
 /** A board fetched less than this long ago is skipped, unless the user forces it. */
 export const FEED_FRESH_MS = 6 * 3600_000;
@@ -54,7 +55,7 @@ export async function fetchBoard(
   if (prev?.lastModified) headers.set('if-modified-since', prev.lastModified);
 
   try {
-    const res = await fetch(url, { ...init, headers });
+    const res = await fetch(url, { ...init, headers, signal: init.signal ?? fetchSignal() });
     if (res.status === 304) {
       const commit: Commit = async () => {
         await db.feedFetch.update({ where: { board }, data: { status: 'not-modified', error: null, fetchedAt: now } });
