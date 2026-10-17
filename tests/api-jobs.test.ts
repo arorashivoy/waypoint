@@ -80,12 +80,12 @@ describe('the cv task sends user errors and retries faults', () => {
 
   it('a CvError fails the task at once with its own message', async () => {
     vi.mocked(refineCv).mockRejectedValueOnce(new CvError('Write what to change.'));
-    expect(await runRefine()).toMatchObject({ status: 'failed', lastError: 'Write what to change.' });
+    expect(await runRefine()).toMatchObject({ status: 'failed', lastError: '[user] Write what to change.' });
   });
 
   it('no Claude credential fails the task at once with the Settings message', async () => {
     vi.mocked(refineCv).mockRejectedValueOnce(new NoCredentialError());
-    expect(await runRefine()).toMatchObject({ status: 'failed', lastError: 'Add an API key in Settings to use Claude.' });
+    expect(await runRefine()).toMatchObject({ status: 'failed', lastError: '[user] Add an API key in Settings to use Claude.' });
   });
 
   it('a fault in refine is retried', async () => {

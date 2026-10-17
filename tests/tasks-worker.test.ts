@@ -9,7 +9,8 @@ vi.mock('@/lib/tasks/queue', async (orig) => {
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { completeTask, enqueue, failTask, lastBeat, type TaskRow } from '@/lib/tasks/queue';
-import { TaskDeferred, limitFor, runOnce, startWorker } from '@/lib/tasks/worker';
+import { TaskDeferred, TaskFatal, limitFor, runOnce, startWorker } from '@/lib/tasks/worker';
+import { log } from '@/lib/log';
 import { registerHandler } from '@/lib/tasks/handlers';
 import { makeUser } from './helpers/http';
 
@@ -79,6 +80,45 @@ describe('worker', () => {
     const r = await row(t.id);
     expect(r.status).toBe('queued');
     expect(r.lastError).toHaveLength(500);
+  });
+
+  it('each failed attempt goes to the log with the kind, the task ID and the error', async () => {
+    const t = await setup();
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+    try {
+      const boom = new Error('boom');
+      current = async () => {
+        throw boom;
+      };
+      await runOnce(new Date(), t.scope);
+      expect(warn).toHaveBeenCalledWith(expect.objectContaining({ kind: 'test-kind', taskId: t.id, err: boom }), 'task attempt failed');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('a TaskFatal is stored with the user marker, logged, and fails at once', async () => {
+    const t = await setup();
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+    try {
+      current = async () => {
+        throw new TaskFatal('The job is gone.');
+      };
+      await runOnce(new Date(), t.scope);
+      expect(await row(t.id)).toMatchObject({ status: 'failed', lastError: '[user] The job is gone.' });
+      expect(warn).toHaveBeenCalledWith(expect.objectContaining({ kind: 'test-kind', taskId: t.id }), 'task failed for good');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('a thrown value whose String() throws still fails the attempt', async () => {
+    const t = await setup();
+    current = async () => {
+      throw Object.create(null);
+    };
+    await runOnce(new Date(), t.scope);
+    expect(await row(t.id)).toMatchObject({ status: 'queued', lastError: 'The task threw a value with no text.' });
   });
 
   it('TaskDeferred goes to deferTask', async () => {

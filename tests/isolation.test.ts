@@ -239,7 +239,7 @@ describe('user B cannot reach the rows of user A', () => {
     const { taskId } = await res.json();
     await runOnce(undefined, { userId: b.user.id });
     // B reaches the Claude call, which has no credential (stubbed), so the task stops there before any write.
-    expect(await db.task.findUniqueOrThrow({ where: { id: taskId } })).toMatchObject({ status: 'failed', lastError: 'Add an API key in Settings to use Claude.' });
+    expect(await db.task.findUniqueOrThrow({ where: { id: taskId } })).toMatchObject({ status: 'failed', lastError: '[user] Add an API key in Settings to use Claude.' });
     expect(await db.application.count({ where: { userId: b.user.id, jobId: job.id } })).toBe(1);
     const after = await db.application.findUniqueOrThrow({ where: { id: app.id } });
     expect(after.cvChat).toContain('secret chat of A');

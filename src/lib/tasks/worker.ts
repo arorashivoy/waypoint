@@ -8,6 +8,7 @@ import {
   enqueue,
   failTask,
   requeueStale,
+  USER_ERROR,
 } from '@/lib/tasks/queue';
 import { log } from '@/lib/log';
 
@@ -41,6 +42,16 @@ export const limitFor = (kind: string): number => LIMIT_MS[kind] ?? TASK_LIMIT_M
 const MAX_ERROR_LENGTH = 500;
 const REQUEUE_MS = 60_000;
 const MAINTENANCE_MS = 3_600_000;
+
+/** The text of any thrown value. `String()` can throw, for example on an object with no prototype. */
+function errorText(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  try {
+    return String(err);
+  } catch {
+    return 'The task threw a value with no text.';
+  }
+}
 
 async function failAtOnce(id: string, error: string): Promise<void> {
   await db.task.update({ where: { id }, data: { status: 'failed', lastError: error.slice(0, MAX_ERROR_LENGTH) } });
@@ -88,12 +99,17 @@ export async function runOnce(now: Date = new Date(), scope?: { userId?: string 
   try {
     result = await withLimit((signal) => entry.run(parsed.data, task, signal), opts.limitMs ?? limitFor(task.kind));
   } catch (err) {
+    const at = { kind: task.kind, taskId: task.id, attempt: task.attempts };
     if (err instanceof TaskDeferred) {
+      log.info({ ...at, until: err.until }, 'task deferred');
       await deferTask(task.id, err.until);
     } else if (err instanceof TaskFatal) {
-      await failAtOnce(task.id, err.message);
+      log.warn({ ...at, err }, 'task failed for good');
+      // The marker tells taskView that the user may read this text.
+      await failAtOnce(task.id, USER_ERROR + err.message);
     } else {
-      await failTask(task.id, err instanceof Error ? err.message : String(err));
+      log.warn({ ...at, err }, 'task attempt failed');
+      await failTask(task.id, errorText(err));
     }
     return 'ran';
   }

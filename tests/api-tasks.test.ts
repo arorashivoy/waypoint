@@ -45,13 +45,25 @@ describe('GET /api/tasks/[id]', () => {
     expect(body.result).toBeNull();
   });
 
-  it('shows the error only when the task failed', async () => {
+  it('shows an error only when the task failed', async () => {
     const { user, cookie } = await makeUser();
     const { id } = await enqueue({ kind: 'cv', userId: user.id, payload: null });
-    await db.task.update({ where: { id }, data: { status: 'queued', lastError: 'will retry' } });
+    await db.task.update({ where: { id }, data: { status: 'queued', lastError: '[user] will retry' } });
     expect((await (await get(id, cookie)).json()).error).toBeNull();
     await db.task.update({ where: { id }, data: { status: 'failed' } });
     expect((await (await get(id, cookie)).json()).error).toBe('will retry');
+  });
+
+  it('shows the text of a user error, and a fixed text for any other error', async () => {
+    const { user, cookie } = await makeUser();
+    const { id } = await enqueue({ kind: 'cv', userId: user.id, payload: null });
+    const raw = 'Invalid `prisma.task.update()` invocation in /home/shivoy/waypoint/src/lib/x.ts';
+    await db.task.update({ where: { id }, data: { status: 'failed', lastError: raw } });
+    expect((await (await get(id, cookie)).json()).error).toBe('The task failed. Try again later.');
+    await db.task.update({ where: { id }, data: { lastError: null } });
+    expect((await (await get(id, cookie)).json()).error).toBe('The task failed. Try again later.');
+    await db.task.update({ where: { id }, data: { lastError: '[user] The job is gone.' } });
+    expect((await (await get(id, cookie)).json()).error).toBe('The job is gone.');
   });
 
   it('another user gets 404', async () => {

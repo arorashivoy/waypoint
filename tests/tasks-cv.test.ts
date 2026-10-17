@@ -74,7 +74,7 @@ describe('the cv handler', () => {
     const { taskId } = await (await jobResume.POST(request(`/api/jobs/${job.id}/resume`, { method: 'POST', cookie }), ctx({ id: job.id }))).json();
     await runOnce(undefined, { userId: user.id });
     const row = await taskOf(taskId);
-    expect(row).toMatchObject({ status: 'failed', lastError: NO_RESUME });
+    expect(row).toMatchObject({ status: 'failed', lastError: `[user] ${NO_RESUME}` });
   });
 
   it('a user-facing error from refine is final; a fault is retried', async () => {
@@ -84,7 +84,7 @@ describe('the cv handler', () => {
       (await (await refine.POST(request(`/api/jobs/${job.id}/resume/refine`, { method: 'POST', cookie, body: { message: 'x' } }), ctx({ id: job.id }))).json()).taskId as string;
     vi.mocked(refineCv).mockRejectedValueOnce(new CvError('Type what to change first.'));
     const a = await taskOf(await start().then(async (id) => (await runOnce(undefined, { userId: user.id }), id)));
-    expect(a).toMatchObject({ status: 'failed', lastError: 'Type what to change first.' });
+    expect(a).toMatchObject({ status: 'failed', lastError: '[user] Type what to change first.' });
     vi.mocked(refineCv).mockRejectedValueOnce(new Error('boom'));
     const b = await taskOf(await start().then(async (id) => (await runOnce(undefined, { userId: user.id }), id)));
     expect(b.status).toBe('queued');

@@ -1,4 +1,5 @@
 import type { Task } from '@prisma/client';
+import { USER_ERROR } from '@/lib/tasks/queue';
 
 /** What the client sees of a task. */
 export type TaskView = {
@@ -12,6 +13,13 @@ export type TaskView = {
 };
 
 const UNREADABLE = 'The result of this task could not be read.';
+/** What the client reads for an error that is not for the user. The raw text stays in the row and in the worker log. */
+export const TASK_FAILED = 'The task failed. Try again later.';
+
+/** The text of a TaskFatal (it has the marker), else the fixed text. */
+function errorForUser(lastError: string | null): string {
+  return lastError?.startsWith(USER_ERROR) ? lastError.slice(USER_ERROR.length) : TASK_FAILED;
+}
 
 /** Parses the stored result. `ok: false` means the text is not JSON. A null column is a valid empty result. */
 function parseResult(text: string | null): { ok: true; value: unknown } | { ok: false } {
@@ -34,7 +42,7 @@ export function taskView(row: Task): TaskView {
   return {
     ...base,
     status: row.status,
-    error: row.status === 'failed' ? row.lastError : null,
+    error: row.status === 'failed' ? errorForUser(row.lastError) : null,
     result: parsed.value,
   };
 }

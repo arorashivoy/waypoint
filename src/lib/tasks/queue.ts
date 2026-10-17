@@ -15,6 +15,12 @@ export const STALE_MS = 600_000;
 /** The kinds that a user starts with a button and waits for. claimNext takes them before the other kinds. */
 export const INTERACTIVE_KINDS: readonly TaskKind[] = ['cv', 'resume-import', 'github-import', 'refresh'];
 
+/**
+ * `lastError` starts with this marker when the text is for the user (a TaskFatal message).
+ * Any other `lastError` is raw text for the admin and the log, and the client gets a fixed text.
+ */
+export const USER_ERROR = '[user] ';
+
 const MAX_CLAIM_TRIES = 5;
 const MAX_ERROR_LENGTH = 500;
 
