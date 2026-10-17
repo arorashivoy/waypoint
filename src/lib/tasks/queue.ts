@@ -119,12 +119,13 @@ export async function deferTask(id: string, until: Date): Promise<void> {
   });
 }
 
-/** Puts running tasks that started more than STALE_MS ago back in the queue. */
-export async function requeueStale(now: Date = new Date()): Promise<number> {
+/** Puts running tasks that started more than STALE_MS ago back in the queue. The worker never sets `scope`. */
+export async function requeueStale(now: Date = new Date(), scope?: { userId?: string }): Promise<number> {
   const r = await db.task.updateMany({
     where: {
       status: 'running',
       startedAt: { lt: new Date(now.getTime() - STALE_MS) },
+      ...(scope?.userId ? { userId: scope.userId } : {}),
     },
     data: { status: 'queued' },
   });

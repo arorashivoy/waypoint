@@ -18,7 +18,6 @@ import { makeUser } from './helpers/http';
 describe('task queue', () => {
   it('enqueue creates a queued task', async () => {
     const { user } = await makeUser();
-    const scope = { userId: user.id };
     const r = await enqueue({
       kind: 'refresh',
       userId: user.id,
@@ -32,12 +31,11 @@ describe('task queue', () => {
 
   it('enqueue returns the open task with the same dedupeKey', async () => {
     const { user } = await makeUser();
-    const scope = { userId: user.id };
     const input = {
       kind: 'cv' as const,
       userId: user.id,
       payload: {},
-      dedupeKey: 'cv:u1:j1',
+      dedupeKey: `cv:${user.id}:j1`,
     };
     const a = await enqueue(input);
     const b = await enqueue(input);
@@ -173,7 +171,7 @@ describe('task queue', () => {
         startedAt: new Date(now.getTime() - 9 * 60_000),
       },
     });
-    expect(await requeueStale(now)).toBeGreaterThanOrEqual(1);
+    expect(await requeueStale(now, { userId: user.id })).toBe(1);
     expect((await db.task.findUniqueOrThrow({ where: { id: old.id } })).status).toBe('queued');
     expect((await db.task.findUniqueOrThrow({ where: { id: fresh.id } })).status).toBe('running');
   });
