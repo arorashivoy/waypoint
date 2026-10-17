@@ -50,11 +50,14 @@ function parse(row: Task): TaskRow {
   return { ...row, payload: JSON.parse(row.payload) as unknown };
 }
 
-/** Takes the next due task and marks it running. Two callers never get the same task. */
-export async function claimNext(now: Date = new Date()): Promise<TaskRow | null> {
+/**
+ * Takes the next due task and marks it running. Two callers never get the same task.
+ * The worker never sets `scope`. Tests use it to claim only the tasks of one user.
+ */
+export async function claimNext(now: Date = new Date(), scope?: { userId?: string }): Promise<TaskRow | null> {
   for (let i = 0; i < MAX_CLAIM_TRIES; i++) {
     const next = await db.task.findFirst({
-      where: { status: 'queued', runAt: { lte: now } },
+      where: { status: 'queued', runAt: { lte: now }, ...(scope?.userId ? { userId: scope.userId } : {}) },
       orderBy: [{ runAt: 'asc' }, { createdAt: 'asc' }],
       select: { id: true },
     });
