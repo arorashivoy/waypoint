@@ -101,6 +101,22 @@ describe('task queue', () => {
     expect((await claimNext(now, scope))!.id).toBe(late.id);
   });
 
+  it('claimNext takes the interactive kinds before analysis and maintenance', async () => {
+    const { user } = await makeUser();
+    const scope = { userId: user.id };
+    const now = new Date('2026-01-01T00:00:00Z');
+    const at = (s: number) => new Date(now.getTime() - s * 1000);
+    const analysis = await enqueue({ kind: 'analysis', userId: user.id, payload: {}, runAt: at(50) });
+    const maintenance = await enqueue({ kind: 'maintenance', userId: user.id, payload: {}, runAt: at(40) });
+    const cv = await enqueue({ kind: 'cv', userId: user.id, payload: {}, runAt: at(5) });
+    const refresh = await enqueue({ kind: 'refresh', userId: user.id, payload: {}, runAt: at(4) });
+    const resume = await enqueue({ kind: 'resume-import', userId: user.id, payload: {}, runAt: at(3) });
+    const github = await enqueue({ kind: 'github-import', userId: user.id, payload: {}, runAt: at(2) });
+    const order = [];
+    for (let i = 0; i < 6; i++) order.push((await claimNext(now, scope))!.id);
+    expect(order).toEqual([cv.id, refresh.id, resume.id, github.id, analysis.id, maintenance.id]);
+  });
+
   it('failTask retries after 1, 5 and 30 minutes, then fails', async () => {
     const { user } = await makeUser();
     const scope = { userId: user.id };

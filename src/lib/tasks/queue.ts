@@ -12,6 +12,9 @@ export const RETRY_DELAYS_MS = [60_000, 300_000, 1_800_000] as const;
 /** A running task older than this is old: the worker probably died. */
 export const STALE_MS = 600_000;
 
+/** The kinds that a user starts with a button and waits for. claimNext takes them before the other kinds. */
+export const INTERACTIVE_KINDS: readonly TaskKind[] = ['cv', 'resume-import', 'github-import', 'refresh'];
+
 const MAX_CLAIM_TRIES = 5;
 const MAX_ERROR_LENGTH = 500;
 
@@ -52,15 +55,17 @@ function parse(row: Task): TaskRow {
 
 /**
  * Takes the next due task and marks it running. Two callers never get the same task.
+ * The interactive kinds go before analysis and maintenance.
  * The worker never sets `scope`. Tests use it to claim only the tasks of one user.
  */
 export async function claimNext(now: Date = new Date(), scope?: { userId?: string }): Promise<TaskRow | null> {
+  const due = { status: 'queued', runAt: { lte: now }, ...(scope?.userId ? { userId: scope.userId } : {}) };
+  const order = [{ runAt: 'asc' as const }, { createdAt: 'asc' as const }];
   for (let i = 0; i < MAX_CLAIM_TRIES; i++) {
-    const next = await db.task.findFirst({
-      where: { status: 'queued', runAt: { lte: now }, ...(scope?.userId ? { userId: scope.userId } : {}) },
-      orderBy: [{ runAt: 'asc' }, { createdAt: 'asc' }],
-      select: { id: true },
-    });
+    // A task that a user waits for goes first. Then analysis and maintenance, oldest first.
+    const next =
+      (await db.task.findFirst({ where: { ...due, kind: { in: [...INTERACTIVE_KINDS] } }, orderBy: order, select: { id: true } })) ??
+      (await db.task.findFirst({ where: due, orderBy: order, select: { id: true } }));
     if (!next) return null;
     const won = await db.task.updateMany({
       where: { id: next.id, status: 'queued' },
