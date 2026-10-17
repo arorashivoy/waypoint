@@ -48,11 +48,13 @@ registerHandler('analysis', z.object({ jobId: z.string(), batch: z.string() }), 
 registerHandler('refresh', z.object({ force: z.boolean() }), async ({ force }, task) => {
   const userId = task.userId;
   if (!userId) return { skipped: 'no-user' };
-  const prefs = await db.countryPref.findMany({ where: { userId, on: true } });
-  const ccs = prefs.map((p) => p.cc);
+  // The feed cache is global and a board returns every country. So the refresh keeps the
+  // countries of all active users, not only the countries of the user who started it.
+  const prefs = await db.countryPref.findMany({ where: { on: true, user: { disabledAt: null } }, select: { cc: true } });
+  const ccs = [...new Set(prefs.map((p) => p.cc))];
   if (!ccs.length) return { added: 0, total: 0, report: [], analysing: null, note: 'Every country is paused.' };
 
-  const { jobs, report } = await fetchAll(ccs, searchQueries(await claimsFor(userId)), { force });
+  const { jobs, report, commit } = await fetchAll(ccs, searchQueries(await claimsFor(userId)), { force });
 
   const known = new Set(
     (await db.job.findMany({ where: { externalId: { in: jobs.map((j) => j.externalId) } }, select: { externalId: true } }))
@@ -68,6 +70,8 @@ registerHandler('refresh', z.object({ force: z.boolean() }), async ({ force }, t
     });
   }
   const added = jobs.filter((j) => !known.has(j.externalId)).length;
+  // The jobs are stored. Only now the boards get the new etag and date.
+  await commit();
 
   // The analysis tasks run in the worker after this task. The client polls /api/state for progress.
   const analysing = await queueAnalysis(userId);

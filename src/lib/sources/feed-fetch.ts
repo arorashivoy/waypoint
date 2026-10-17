@@ -29,17 +29,22 @@ export async function recordFailure(board: string, err: unknown, now: Date = new
   });
 }
 
+/** Writes the success data of a fetch. The caller runs it after the jobs are stored. */
+export type Commit = () => Promise<void>;
+
 /**
  * Fetches the JSON of one board. A board fetched in the last 6 hours is skipped.
  * The request sends `If-None-Match` and `If-Modified-Since` from the stored values.
- * A failed request records `failed` and throws. The stored etag stays.
+ * A failed request records `failed` at once and throws. The stored etag stays.
+ * A good reply changes nothing yet. The caller runs `commit` after it stores the jobs,
+ * so a failed store leaves the old etag and date, and the next refresh fetches again.
  */
 export async function fetchBoard(
   board: string,
   url: string,
   init: RequestInit,
   opts: { force: boolean; now?: Date },
-): Promise<{ status: 'ok'; json: any } | { status: 'skipped' | 'not-modified' }> {
+): Promise<{ status: 'ok'; json: any; commit: Commit } | { status: 'not-modified'; commit: Commit } | { status: 'skipped' }> {
   const now = opts.now ?? new Date();
   if (!opts.force && (await isFresh(board, now))) return { status: 'skipped' };
 
@@ -51,19 +56,23 @@ export async function fetchBoard(
   try {
     const res = await fetch(url, { ...init, headers });
     if (res.status === 304) {
-      await db.feedFetch.update({ where: { board }, data: { status: 'not-modified', error: null, fetchedAt: now } });
-      return { status: 'not-modified' };
+      const commit: Commit = async () => {
+        await db.feedFetch.update({ where: { board }, data: { status: 'not-modified', error: null, fetchedAt: now } });
+      };
+      return { status: 'not-modified', commit };
     }
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     const json = await res.json();
     const etag = res.headers.get('etag');
     const lastModified = res.headers.get('last-modified');
-    await db.feedFetch.upsert({
-      where: { board },
-      update: { status: 'ok', error: null, fetchedAt: now, etag, lastModified },
-      create: { board, status: 'ok', fetchedAt: now, etag, lastModified },
-    });
-    return { status: 'ok', json };
+    const commit: Commit = async () => {
+      await db.feedFetch.upsert({
+        where: { board },
+        update: { status: 'ok', error: null, fetchedAt: now, etag, lastModified },
+        create: { board, status: 'ok', fetchedAt: now, etag, lastModified },
+      });
+    };
+    return { status: 'ok', json, commit };
   } catch (e) {
     await recordFailure(board, e, now);
     throw e;
@@ -74,17 +83,23 @@ export async function fetchBoard(
  * For a board with several requests or a POST. It gets the 6-hour skip and the
  * status, but no conditional headers.
  */
-export async function withFeedStatus<T>(board: string, opts: { force: boolean; now?: Date }, run: () => Promise<T>): Promise<T> {
+export async function withFeedStatus<T>(
+  board: string,
+  opts: { force: boolean; now?: Date },
+  run: () => Promise<T>,
+): Promise<{ value: T; commit: Commit }> {
   const now = opts.now ?? new Date();
   if (!opts.force && (await isFresh(board, now))) throw new FeedSkip('skipped');
   try {
-    const out = await run();
-    await db.feedFetch.upsert({
-      where: { board },
-      update: { status: 'ok', error: null, fetchedAt: now },
-      create: { board, status: 'ok', fetchedAt: now },
-    });
-    return out;
+    const value = await run();
+    const commit: Commit = async () => {
+      await db.feedFetch.upsert({
+        where: { board },
+        update: { status: 'ok', error: null, fetchedAt: now },
+        create: { board, status: 'ok', fetchedAt: now },
+      });
+    };
+    return { value, commit };
   } catch (e) {
     await recordFailure(board, e, now);
     throw e;

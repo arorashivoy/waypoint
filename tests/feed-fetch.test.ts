@@ -13,6 +13,9 @@ import { db } from '@/lib/db';
 import { fetchAll } from '@/lib/sources';
 import { FEED_FRESH_MS, fetchBoard } from '@/lib/sources/feed-fetch';
 import * as feedsRoute from '@/app/api/feeds/route';
+import { runOnce } from '@/lib/tasks/worker';
+import { enqueue } from '@/lib/tasks/queue';
+import '@/lib/tasks/handlers';
 import { makeUser, request } from './helpers/http';
 
 const uid = () => randomBytes(5).toString('hex');
@@ -44,7 +47,7 @@ describe('fetchBoard', () => {
     await db.feedFetch.create({ data: { board, status: 'ok', fetchedAt: hoursAgo(7) } });
     fetchMock.mockResolvedValue(json({ a: 1 }));
     const r = await fetchBoard(board, 'https://feed.test/a', {}, { force: false });
-    expect(r).toEqual({ status: 'ok', json: { a: 1 } });
+    expect(r).toMatchObject({ status: 'ok', json: { a: 1 } });
     expect(FEED_FRESH_MS).toBe(6 * 3600_000);
   });
 
@@ -60,7 +63,8 @@ describe('fetchBoard', () => {
   it('the second request sends If-None-Match and If-Modified-Since', async () => {
     const board = `ff-cond-${uid()}`;
     fetchMock.mockResolvedValueOnce(json({ a: 1 }, { etag: '"v1"', 'last-modified': 'Wed, 01 Oct 2026 10:00:00 GMT' }));
-    await fetchBoard(board, 'https://feed.test/a', { headers: { 'user-agent': 'x' } }, { force: true });
+    const first = await fetchBoard(board, 'https://feed.test/a', { headers: { 'user-agent': 'x' } }, { force: true });
+    if (first.status === 'ok') await first.commit();
     expect(new Headers(fetchMock.mock.calls[0][1].headers).has('if-none-match')).toBe(false);
 
     fetchMock.mockResolvedValueOnce(json({ a: 2 }));
@@ -80,7 +84,9 @@ describe('fetchBoard', () => {
     await db.feedFetch.create({ data: { board, status: 'ok', fetchedAt: old, etag: '"v1"' } });
     fetchMock.mockResolvedValue(new Response(null, { status: 304 }));
     const r = await fetchBoard(board, 'https://feed.test/a', {}, { force: false });
-    expect(r).toEqual({ status: 'not-modified' });
+    expect(r.status).toBe('not-modified');
+    expect(await db.feedFetch.findUniqueOrThrow({ where: { board } })).toMatchObject({ status: 'ok', fetchedAt: old });
+    if (r.status === 'not-modified') await r.commit();
     const row = await db.feedFetch.findUniqueOrThrow({ where: { board } });
     expect(row.status).toBe('not-modified');
     expect(row.fetchedAt.getTime()).toBeGreaterThan(old.getTime());
@@ -117,7 +123,8 @@ describe('fetchAll with cached boards', () => {
     fetchMock.mockImplementation(async (url: string) =>
       url.includes(bad) ? new Response('x', { status: 500, statusText: 'Boom' }) : json([{ id: '1', text: 'Dev', hostedUrl: 'https://x.test/1', categories: { location: 'Berlin, Germany' } }]),
     );
-    const { report } = await fetchAll(['ZZ'], [], { force: true });
+    const { report, commit } = await fetchAll(['ZZ'], [], { force: true });
+    await commit();
     const rowOf = (c: string) => report.find((r) => r.company === c)!;
     expect(rowOf('Good Co')).toMatchObject({ got: 1 });
     expect(rowOf('Bad Co')).toMatchObject({ got: 0 });
@@ -148,7 +155,8 @@ describe('fetchAll with cached boards', () => {
     WATCH.companies = [{ company: 'Career Co', ats: 'smartrecruiters', token }];
     await db.feedFetch.create({ data: { board: `smartrecruiters:${token}`, status: 'ok', fetchedAt: hoursAgo(10), etag: '"v1"' } });
     fetchMock.mockResolvedValue(json({ content: [], totalFound: 0 }));
-    await fetchAll(['ZZ'], [], { force: false });
+    const first = await fetchAll(['ZZ'], [], { force: false });
+    await first.commit();
     expect(fetchMock).toHaveBeenCalled();
     for (const c of fetchMock.mock.calls) expect(new Headers(c[1]?.headers).has('if-none-match')).toBe(false);
     const row = await db.feedFetch.findUniqueOrThrow({ where: { board: `smartrecruiters:${token}` } });
@@ -171,5 +179,85 @@ describe('GET /api/feeds', () => {
     expect(rows.find((r) => r.board === failed)).toMatchObject({ status: 'failed', error: 'Boom' });
     expect(rows.find((r) => r.board === ok)).toBeUndefined();
     expect(rows.every((r) => r.status === 'failed')).toBe(true);
+  });
+
+  it('hides the search query of an Adzuna board and joins the rows of one country', async () => {
+    const { cookie } = await makeUser();
+    const secret = `secretquery${uid()}`;
+    const cc = `Q${uid().slice(0, 3).toUpperCase()}`;
+    await db.feedFetch.create({ data: { board: `adzuna:${cc}:${secret} one`, status: 'failed', fetchedAt: hoursAgo(3), error: 'older' } });
+    await db.feedFetch.create({ data: { board: `adzuna:${cc}:${secret} two`, status: 'failed', fetchedAt: hoursAgo(1), error: 'newer' } });
+    const res = await feedsRoute.GET(request('/api/feeds', { cookie }), { params: {} });
+    const text = JSON.stringify(await res.clone().json());
+    expect(text).not.toContain(secret);
+    const rows = (await res.json()) as { board: string; error: string }[];
+    const mine = rows.filter((r) => r.board === `adzuna:${cc}`);
+    expect(mine).toHaveLength(1);
+    expect(mine[0].error).toBe('newer');
+  });
+});
+
+/** A user with only the given countries on. */
+async function userWith(...ccs: string[]) {
+  const u = await makeUser();
+  await db.countryPref.updateMany({ where: { userId: u.user.id }, data: { on: false } });
+  for (const [rank, cc] of ccs.entries()) {
+    await db.countryPref.upsert({ where: { userId_cc: { userId: u.user.id, cc } }, update: { on: true }, create: { userId: u.user.id, cc, rank, on: true } });
+  }
+  return u;
+}
+const runRefresh = async (userId: string, force: boolean) => {
+  const { id } = await enqueue({ kind: 'refresh', userId, payload: { force } });
+  await runOnce(undefined, { userId });
+  return db.task.findUniqueOrThrow({ where: { id } });
+};
+
+describe('the refresh task and the feed cache', () => {
+  it('a failed store leaves the old etag and date, and the next refresh fetches again', async () => {
+    const token = `store${uid()}`;
+    const board = `lever:${token}`;
+    WATCH.companies = [{ company: 'Store Co', ats: 'lever', token }];
+    const { user } = await userWith('DE');
+    const old = hoursAgo(10);
+    await db.feedFetch.create({ data: { board, status: 'ok', fetchedAt: old, etag: '"old"' } });
+    const reply = () => json([{ id: `i${token}`, text: 'Dev', hostedUrl: 'https://x.test/1', categories: { location: 'Berlin, Germany' } }], { etag: '"new"' });
+    fetchMock.mockImplementation(async () => reply());
+
+    const spy = vi.spyOn(db.job, 'upsert').mockRejectedValueOnce(new Error('disk full'));
+    await runRefresh(user.id, false);
+    spy.mockRestore();
+    const row = await db.feedFetch.findUniqueOrThrow({ where: { board } });
+    expect(row).toMatchObject({ etag: '"old"', status: 'ok' });
+    expect(row.fetchedAt.getTime()).toBe(old.getTime());
+
+    fetchMock.mockClear();
+    const task = await runRefresh(user.id, false);
+    expect(task.status).toBe('done');
+    const call = fetchMock.mock.calls.find((c) => String(c[0]).includes(token))!;
+    expect(new Headers(call[1].headers).get('if-none-match')).toBe('"old"');
+    expect(await db.job.findUnique({ where: { externalId: `lever:${token}:i${token}` } })).not.toBeNull();
+    expect((await db.feedFetch.findUniqueOrThrow({ where: { board } })).etag).toBe('"new"');
+  });
+
+  it('a refresh of user A stores the jobs of the countries of user B', async () => {
+    const token = `multi${uid()}`;
+    WATCH.companies = [{ company: 'Multi Co', ats: 'lever', token }];
+    const a = await userWith('DE');
+    const b = await userWith('NL');
+    fetchMock.mockImplementation(async () =>
+      json([
+        { id: `de${token}`, text: 'Dev DE', hostedUrl: 'https://x.test/de', categories: { location: 'Berlin, Germany' } },
+        { id: `nl${token}`, text: 'Dev NL', hostedUrl: 'https://x.test/nl', categories: { location: 'Amsterdam, Netherlands' } },
+      ]),
+    );
+    await runRefresh(a.user.id, false);
+    const nl = { externalId: `lever:${token}:nl${token}` };
+    expect(await db.job.findUnique({ where: nl })).not.toBeNull();
+
+    fetchMock.mockClear();
+    const second = await runRefresh(b.user.id, false);
+    expect(second.status).toBe('done');
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes(token))).toBe(false);
+    expect(await db.job.findUnique({ where: nl })).not.toBeNull();
   });
 });

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ccFromLocation, cityFromLocation, decodeEntities, fieldFromText, levelFromPosting, modeFromText, resolvePlace, sponsorFromText, stripHtml } from './geo';
 import { COUNTRIES, VISA_ROUTE } from '../countries';
-import { fetchBoard, FeedSkip, recordFailure, withFeedStatus } from './feed-fetch';
+import { fetchBoard, type Commit, FeedSkip, recordFailure, withFeedStatus } from './feed-fetch';
 
 export type RawJob = {
   externalId: string;
@@ -50,12 +50,14 @@ export async function watchlist(): Promise<WatchEntry[]> {
 const UA = { 'user-agent': 'Waypoint/0.1 (personal job search; single user)' };
 
 /** `feed` makes the request a cached board: the 6-hour skip and the conditional headers apply. */
-type Feed = { board: string; force: boolean };
+type Feed = { board: string; force: boolean; commits: Map<string, Commit> };
 
 async function getJson(url: string, feed?: Feed): Promise<any> {
   if (feed) {
     const r = await fetchBoard(feed.board, url, { headers: UA, cache: 'no-store' }, { force: feed.force });
-    if (r.status !== 'ok') throw new FeedSkip(r.status);
+    if (r.status === 'skipped') throw new FeedSkip('skipped');
+    feed.commits.set(feed.board, r.commit);
+    if (r.status === 'not-modified') throw new FeedSkip('not-modified');
     return r.json;
   }
   const res = await fetch(url, { headers: UA, cache: 'no-store' });
@@ -606,11 +608,13 @@ async function adzuna(cc: string, what: string, feed: Feed): Promise<RawJob[]> {
  * search endpoints that robots.txt allows, and aggregator APIs. LinkedIn, Indeed,
  * StepStone, Glassdoor and Meta forbid it, so the UI links out to them.
  */
-export async function fetchAll(activeCcs: string[], queries: string[], opts: { force: boolean }): Promise<{ jobs: RawJob[]; report: FetchReport[] }> {
+export async function fetchAll(activeCcs: string[], queries: string[], opts: { force: boolean }): Promise<{ jobs: RawJob[]; report: FetchReport[]; commit: () => Promise<void> }> {
   const report: FetchReport[] = [];
   const out: RawJob[] = [];
   const list = await watchlist();
   const { force } = opts;
+  // The success data of each board. The caller runs `commit` after it stores the jobs.
+  const commits = new Map<string, Commit>();
 
   const boards = { greenhouse, lever, ashby, workable };
   const careers = { smartrecruiters, workday, microsoft, amazon, apple, google };
@@ -623,20 +627,24 @@ export async function fetchAll(activeCcs: string[], queries: string[], opts: { f
     // A company board is one GET request for JSON, so it sends conditional headers.
     // A careers site makes several requests or a POST, so it gets the skip and the status only.
     const run = e.ats in boards
-      ? () => boards[e.ats as keyof typeof boards](e as Board, { board, force })
-      : () => withFeedStatus(board, { force }, () => careers[e.ats as keyof typeof careers](e as Board, activeCcs));
+      ? () => boards[e.ats as keyof typeof boards](e as Board, { board, force, commits })
+      : async () => {
+          const r = await withFeedStatus(board, { force }, () => careers[e.ats as keyof typeof careers](e as Board, activeCcs));
+          commits.set(board, r.commit);
+          return r.value;
+        };
     tasks.push({ board, label: e.ats, company: e.company, run });
   }
 
-  if (activeCcs.includes('DE')) tasks.push({ board: 'arbeitnow', label: 'Arbeitnow', run: () => arbeitnow({ board: 'arbeitnow', force }) });
+  if (activeCcs.includes('DE')) tasks.push({ board: 'arbeitnow', label: 'Arbeitnow', run: () => arbeitnow({ board: 'arbeitnow', force, commits }) });
   for (const cc of activeCcs) {
     for (const page of [0, 1, 2]) {
       const board = `themuse:${cc}:${page}`;
-      tasks.push({ board, label: `The Muse ${cc}`, run: () => themuse(cc, page, { board, force }) });
+      tasks.push({ board, label: `The Muse ${cc}`, run: () => themuse(cc, page, { board, force, commits }) });
     }
     for (const q of queries) {
       const board = `adzuna:${cc}:${q.toLowerCase()}`;
-      tasks.push({ board, label: `Adzuna ${cc}`, run: () => adzuna(cc, q, { board, force }) });
+      tasks.push({ board, label: `Adzuna ${cc}`, run: () => adzuna(cc, q, { board, force, commits }) });
     }
   }
 
@@ -653,6 +661,7 @@ export async function fetchAll(activeCcs: string[], queries: string[], opts: { f
       // never show up in the server log.
       console.warn(`[refresh] ${t.label}${t.company ? ` · ${t.company}` : ''} failed: ${error}`);
       // A parse error comes after the request, so the board records it here.
+      commits.delete(t.board);
       await recordFailure(t.board, res.reason);
       report.push({ source: t.label, company: t.company, got: 0, kept: 0, error });
       continue;
@@ -684,5 +693,8 @@ export async function fetchAll(activeCcs: string[], queries: string[], opts: { f
     const prev = byKey.get(key);
     if (!prev || rank(j) < rank(prev)) byKey.set(key, j);
   }
-  return { jobs: [...byKey.values()], report };
+  const commit = async () => {
+    for (const c of commits.values()) await c();
+  };
+  return { jobs: [...byKey.values()], report, commit };
 }
