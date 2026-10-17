@@ -56,11 +56,11 @@ describe('systemd units', () => {
 });
 
 describe('scripts', () => {
-  it('deploy.sh runs the steps in the spec order, with the backup before the migration, and restart last', () => {
+  it('deploy.sh runs the steps in order, with the backup before the pull and the migration, and restart last', () => {
     const lines = read('scripts/deploy.sh').split('\n').map((l) => l.trim());
     const steps = [
-      'git pull --ff-only',
       'npm run backup',
+      'git pull --ff-only',
       'systemctl --user stop waypoint-worker waypoint-web',
       'npm ci',
       'npx prisma migrate deploy',
@@ -80,7 +80,7 @@ describe('scripts', () => {
     expect(t).toMatch(/^trap .* ERR$/m);
     expect(t).toMatch(/^unset DATABASE_URL$/m);
     expect(t).toContain('show -p WorkingDirectory --value waypoint-web');
-    expect(t.indexOf('show -p WorkingDirectory')).toBeLessThan(t.indexOf('git pull'));
+    expect(t.indexOf('show -p WorkingDirectory')).toBeLessThan(t.indexOf('npm run backup'));
   });
 
   it('tunnel.sh waits for the health check before the share', () => {

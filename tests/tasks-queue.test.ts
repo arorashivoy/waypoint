@@ -142,7 +142,7 @@ describe('task queue', () => {
     expect(row.lastError).toHaveLength(500);
   });
 
-  it('deferTask keeps attempts', async () => {
+  it('deferTask gives back the attempt that claimNext counted', async () => {
     const { user } = await makeUser();
     const scope = { userId: user.id };
     const { id } = await enqueue({
@@ -155,10 +155,10 @@ describe('task queue', () => {
     await deferTask(id, until);
     const mid = await db.task.findUniqueOrThrow({ where: { id } });
     expect(mid.status).toBe('queued');
-    expect(mid.attempts).toBe(1);
+    expect(mid.attempts).toBe(0);
     expect(mid.runAt.getTime()).toBe(until.getTime());
     const t = await claimNext(until, scope);
-    expect(t!.attempts).toBe(2);
+    expect(t!.attempts).toBe(1);
   });
 
   it('requeueStale puts old running tasks back and leaves new ones', async () => {

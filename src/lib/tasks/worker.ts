@@ -12,7 +12,7 @@ import {
 } from '@/lib/tasks/queue';
 import { log } from '@/lib/log';
 
-/** A handler throws this to run the task again later. The count of attempts stays. */
+/** A handler throws this to run the task again later. The deferral uses no attempt. */
 export class TaskDeferred extends Error {
   constructor(
     public until: Date,

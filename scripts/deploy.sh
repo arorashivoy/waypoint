@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Updates this copy of Waypoint and restarts the services.
-# A failed step stops the script. The services then stay stopped (see the trap).
-# The backup runs before the migration, so a bad migration can be undone.
+# A failed step stops the script (see the trap). A failure in the backup or the pull leaves the
+# services running and changes nothing. A later failure leaves the services stopped.
+# The backup runs first, with the code that wrote the data, so a bad migration can be undone.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -17,10 +18,10 @@ if [ "$(realpath "$UNIT_DIR")" != "$CHECKOUT" ]; then
   echo "The unit waypoint-web belongs to $UNIT_DIR, not to $CHECKOUT. Stop." >&2; exit 1
 fi
 
-trap 'echo "Deploy failed. Check out the last good commit, run npm ci and npm run build, then start the units. Or run npm run restore." >&2' ERR
+trap 'echo "Deploy failed. If the units are stopped, check out the last good commit, run npm ci and npm run build, then start the units. Or run npm run restore." >&2' ERR
 
-git pull --ff-only
 npm run backup
+git pull --ff-only
 systemctl --user stop waypoint-worker waypoint-web
 npm ci
 echo "Database: $(grep -E '^DATABASE_URL=' .env | tail -1 | cut -d= -f2-)"

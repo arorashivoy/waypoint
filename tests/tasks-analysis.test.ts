@@ -100,7 +100,7 @@ describe('analysis through the queue', () => {
     await runOnce(undefined, { userId });
     const row = await db.task.findUniqueOrThrow({ where: { id } });
     expect(row.status).toBe('queued');
-    expect(row.attempts).toBe(1);
+    expect(row.attempts).toBe(0); // a deferral uses no attempt
     expect(row.runAt.toISOString()).toBe(resetsAt);
   });
 

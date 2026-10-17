@@ -122,11 +122,11 @@ export async function failTask(id: string, error: string, now: Date = new Date()
   return 'queued';
 }
 
-/** Puts a task back in the queue until a time. The count of attempts stays. */
+/** Puts a task back in the queue until a time. It gives back the attempt that claimNext counted, so a deferral uses no retry. */
 export async function deferTask(id: string, until: Date): Promise<void> {
   await db.task.update({
     where: { id },
-    data: { status: 'queued', runAt: until },
+    data: { status: 'queued', runAt: until, attempts: { decrement: 1 } },
   });
 }
 

@@ -131,7 +131,7 @@ describe('worker', () => {
     const r = await row(t.id);
     expect(r.status).toBe('queued');
     expect(r.runAt.getTime()).toBe(until.getTime());
-    expect(r.attempts).toBe(1);
+    expect(r.attempts).toBe(0);
   });
 
   it('a hung handler fails the attempt at the time limit, and its signal aborts', async () => {

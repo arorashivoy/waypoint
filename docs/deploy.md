@@ -122,15 +122,16 @@ use `scripts/deploy.sh` for each update (step 10).
 
     The script stops if the installed `waypoint-web` unit points to another checkout. Then it:
 
-    1. pulls the branch with `git pull --ff-only`,
-    2. makes a backup,
+    1. makes a backup, with the code that wrote the data,
+    2. pulls the branch with `git pull --ff-only`,
     3. stops the worker and the web server,
     4. runs `npm ci`, the migration and the build,
     5. starts the units again.
 
-    The app is down for a few minutes. If a step fails, the units stay stopped, and the script prints
-    how to recover. Check out the last good commit, run `npm ci` and `npm run build`, and start the
-    units. Or restore the backup (step 11).
+    The app is down for a few minutes. If the backup or the pull fails, the units keep running and
+    nothing changes. If a later step fails, the units stay stopped, and the script prints how to
+    recover. Check out the last good commit, run `npm ci` and `npm run build`, and start the units.
+    Or restore the backup (step 11).
 
 11. Restore a backup if you must.
 
