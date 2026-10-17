@@ -192,7 +192,7 @@ export async function buildState(userId: string) {
   }
 
   return {
-    analysing: analysisProgress(userId),
+    analysing: await analysisProgress(userId),
     user: {
       name: user.name,
       email: user.email,
