@@ -22,7 +22,12 @@ export const DELETE = handle(async (req) => {
   const password = typeof body.password === 'string' ? body.password : '';
   if (!user.passwordHash || !(await verifyPassword(user.passwordHash, password))) throw new HttpError(400, 'The password is not correct.');
   // deleteMany: a second request in a double submit finds no row and does not fail.
-  await db.user.deleteMany({ where: { id: user.id } });
+  // Each rate-limit key of a user ends with ":<user id>" (for example "resume-import:<id>").
+  // The match on that ending cannot hit the key of another user: an ID is a cuid.
+  await db.$transaction([
+    db.rateLimit.deleteMany({ where: { key: { endsWith: `:${user.id}` } } }),
+    db.user.deleteMany({ where: { id: user.id } }),
+  ]);
   try {
     removeUserDir(user.id);
   } catch (e) {

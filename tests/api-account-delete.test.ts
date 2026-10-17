@@ -97,6 +97,25 @@ describe('DELETE /api/account', () => {
     expect(existsSync(join(usersRoot(), other.user.id, 'imports', 'resume.pdf'))).toBe(true);
   });
 
+  it('deletes the rate-limit rows of the user and keeps the rows of another user', async () => {
+    const u = await makeUser();
+    const other = await makeUser();
+    const now = new Date();
+    const keysOf = (id: string) => [`github-list:${id}`, `github-import:${id}`, `resume-import:${id}`, `password:user:${id}`];
+    for (const id of [u.user.id, other.user.id]) {
+      await db.rateLimit.createMany({ data: keysOf(id).map((key) => ({ key, count: 1, windowStart: now })) });
+    }
+    // A key of another user that holds the ID of this user as text, but not as its last segment.
+    const lookalike = `login:email:${u.user.id}@test.local`;
+    await db.rateLimit.create({ data: { key: lookalike, count: 1, windowStart: now } });
+
+    expect((await del(u, TEST_PASSWORD)).status).toBe(200);
+
+    const left = (await db.rateLimit.findMany({ where: { key: { contains: u.user.id } } })).map((r) => r.key);
+    expect(left).toEqual([lookalike]);
+    expect(await db.rateLimit.count({ where: { key: { in: keysOf(other.user.id) } } })).toBe(4);
+  });
+
   it('still answers ok and clears the cookie when the folder cannot be removed', async () => {
     const u = await makeUser();
     userDir(u.user.id, 'imports');

@@ -83,6 +83,8 @@ run `npm run setup` or re-create `.env`. Instead:
     Tell the user to hard-reload every open tab.
 12. Run the checklist in section 7.
 
+For the first deploy of the `multi-user` branch on an always-on host (units, worker, backups), follow `docs/deploy.md`.
+
 ## 1. Machine prerequisites
 
 | Need | Check | Install |

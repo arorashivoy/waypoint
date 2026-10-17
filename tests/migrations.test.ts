@@ -102,4 +102,21 @@ describe('migration 2_profile', () => {
       expect(await c.$queryRawUnsafe(`PRAGMA foreign_key_check`)).toEqual([]);
     });
   });
+  it('makes a draft without a start date from a position whose startedAt is NULL', async () => {
+    await withDb(async (c) => {
+      await applyMigrations(c, ['0_init', '1_accounts']);
+      await c.$executeRawUnsafe(`INSERT INTO "User" ("id","email","name","createdAt","role") VALUES ('u1','a@x.test','A',1700000000000,'admin')`);
+      await c.$executeRawUnsafe(
+        `INSERT INTO "Position" ("id","userId","title","company","location","startedAt","endedAt","summary") VALUES
+         ('cpos00000002abcd4321','u1','Intern','Beta',NULL,NULL,NULL,NULL)`,
+      );
+      await applyMigrations(c, ['2_profile']);
+
+      const drafts = await c.$queryRawUnsafe<{ status: string; data: string }[]>(`SELECT "status","data" FROM "ProfileDraft" WHERE "type"='position'`);
+      expect(drafts.length).toBe(1);
+      expect(drafts[0].status).toBe('pending');
+      const data = JSON.parse(drafts[0].data);
+      expect(data).toMatchObject({ id: 'linkedin-abcd4321', title: 'Intern', company: 'Beta', start: null });
+    });
+  });
 });

@@ -17,6 +17,7 @@ import { NoCredentialError } from '@/lib/claude';
 import { enqueue } from '@/lib/tasks/queue';
 import { findOnPath } from '@/lib/exec';
 import { db } from '@/lib/db';
+import { hitLimit } from '@/lib/auth/rate-limit';
 import { listDrafts, MAX_PENDING } from '@/lib/profile/drafts';
 import { buildResumeDrafts, resumeImportPrompt, type ResumeReplyData } from '@/lib/profile/resume-import';
 import { quoteCheck } from '@/lib/profile/quotes';
@@ -282,4 +283,18 @@ describe('POST /api/profile/resume-import', () => {
     for (let i = 0; i < 10; i++) expect((await resumeRoute(await pdfUpload(u.cookie, tex, 'cv.tex', ''), ctx())).status).toBe(200);
     expect((await resumeRoute(await pdfUpload(u.cookie, tex, 'cv.tex', ''), ctx())).status).toBe(429);
   }, 30_000);
+});
+
+describe('POST /api/profile/resume-import: the limit for each user', () => {
+  it('refuses the 11th import of one user in 24 hours and still accepts another user', async () => {
+    const a = await makeUser();
+    const b = await makeUser();
+    const DAY = 24 * 60 * 60_000;
+    for (let i = 0; i < 10; i++) expect((await hitLimit(`resume-import:${a.user.id}`, 10, DAY)).ok).toBe(true);
+    const refused = await resumeRoute(await pdfUpload(a.cookie, texUpload(), 'cv.tex', 'application/x-tex'), ctx());
+    expect(refused.status).toBe(429);
+    expect(await db.task.count({ where: { userId: a.user.id } })).toBe(0);
+    const accepted = await resumeRoute(await pdfUpload(b.cookie, texUpload(), 'cv.tex', 'application/x-tex'), ctx());
+    expect(accepted.status).toBe(200);
+  });
 });

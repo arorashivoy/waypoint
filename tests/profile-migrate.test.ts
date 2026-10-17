@@ -4,6 +4,7 @@ import { canonicalDoc, checkYaml } from '@/lib/profile/doc';
 import { listRevisions, loadProfileDoc } from '@/lib/profile/store';
 import { migrateClaimsText } from '@/lib/profile/migrate';
 import * as doc from '@/lib/profile/doc';
+import { claimsFor } from '@/lib/user';
 import { makeUser } from './helpers/http';
 
 const SAMPLE = readFileSync('tests/fixtures/claims-sample.yml', 'utf8');
@@ -15,6 +16,15 @@ describe('migrateClaimsText', () => {
     expect(r).toEqual({ ok: true, counts: { positions: 1, educations: 1, projects: 1, claims: 3 }, warnings: expect.any(Array), replaced: false });
     expect(canonicalDoc((await loadProfileDoc(user.id))!)).toEqual(canonicalDoc(checkYaml(SAMPLE).doc!));
     expect((await listRevisions(user.id))[0].note).toBe('Migrated from claims.yml');
+  });
+
+  it('gives the admin the same document from claimsFor as from loadProfileDoc after the migration', async () => {
+    const { user } = await makeUser('admin');
+    await migrateClaimsText(user.email, SAMPLE);
+    const stored = await loadProfileDoc(user.id);
+    expect(stored).not.toBeNull();
+    expect(await claimsFor(user.id)).toEqual(stored);
+    expect(canonicalDoc((await claimsFor(user.id))!)).toEqual(canonicalDoc(checkYaml(SAMPLE).doc!));
   });
 
   it('refuses a file that fails the strict check', async () => {
