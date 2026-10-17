@@ -13,6 +13,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "setup": "prisma generate && prisma migrate deploy && tsx prisma/seed.ts",
     "worker": "tsx --env-file=.env scripts/worker.ts",
+    "backup": "tsx --env-file=.env scripts/backup.ts",
+    "restore": "tsx --env-file=.env scripts/restore.ts",
     "check:claims": "tsx scripts/check-claims.ts",
     "migrate:claims": "tsx --env-file=.env scripts/migrate-claims.ts",
     "gdrive:auth": "tsx --env-file=.env scripts/gdrive-auth.ts",
@@ -33,6 +35,7 @@
     "pino": "9.5.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "tar": "7.4.3",
     "yaml": "^2.9.1",
     "zod": "4.6.7"
   },

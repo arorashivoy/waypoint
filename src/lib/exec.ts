@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
  * importing child_process.
  */
 
-export type Program = 'claude' | 'pdflatex' | 'xelatex' | 'lualatex' | 'tectonic' | 'pdftotext';
+export type Program = 'claude' | 'pdflatex' | 'xelatex' | 'lualatex' | 'tectonic' | 'pdftotext' | 'rclone' | 'systemctl';
 export const LATEX_ENGINES: readonly Program[] = ['pdflatex', 'xelatex', 'lualatex', 'tectonic'];
 
 export type RunOptions = {
@@ -123,6 +123,28 @@ function checkPdftotext(args: readonly string[], opts: RunOptions): string | nul
   return 'pdftotext takes only -v, or -layout or -bbox-layout <in> <out> with both files inside a work folder in the temp folder';
 }
 
+export const RCLONE_REMOTE = /^[A-Za-z0-9_-]+:[A-Za-z0-9._\/-]*$/;
+const BACKUP_FILE = /^\d{4}-\d{2}-\d{2}(-users\.tar\.gz|\.db)$/;
+const UNITS = ['waypoint-web', 'waypoint-worker'];
+
+// rclone copies one backup file to the remote. Nothing else is allowed.
+function checkRclone(args: readonly string[]): string | null {
+  if (args.length !== 4 || args[0] !== 'copy' || args[1] !== '--no-traverse') {
+    return 'rclone arguments must be copy --no-traverse <file> <remote>';
+  }
+  const file = args[2];
+  if (!isAbsolute(file) || resolve(file) !== file || !BACKUP_FILE.test(basename(file))) {
+    return 'the rclone file must be an absolute path of a backup file';
+  }
+  if (!RCLONE_REMOTE.test(args[3])) return 'the rclone remote must look like name:folder';
+  return null;
+}
+
+function checkSystemctl(args: readonly string[]): string | null {
+  if (args.length === 3 && args[0] === '--user' && args[1] === 'is-active' && UNITS.includes(args[2])) return null;
+  return 'systemctl takes only --user is-active waypoint-web or waypoint-worker';
+}
+
 const CHECKS: Record<Program, (args: readonly string[], opts: RunOptions) => string | null> = {
   claude: checkClaude,
   pdflatex: (a, o) => checkLatex('pdflatex', a, o),
@@ -130,6 +152,8 @@ const CHECKS: Record<Program, (args: readonly string[], opts: RunOptions) => str
   lualatex: (a, o) => checkLatex('lualatex', a, o),
   tectonic: (a, o) => checkLatex('tectonic', a, o),
   pdftotext: checkPdftotext,
+  rclone: (a) => checkRclone(a),
+  systemctl: (a) => checkSystemctl(a),
 };
 
 const BASE_KEYS = ['PATH', 'HOME', 'LANG'];
@@ -141,7 +165,19 @@ const ENV_KEYS: Record<Program, readonly string[]> = {
   lualatex: LATEX_KEYS,
   tectonic: LATEX_KEYS,
   pdftotext: BASE_KEYS,
+  rclone: ['HOME', 'PATH', 'RCLONE_CONFIG'],
+  systemctl: ['HOME', 'PATH', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS'],
 };
+
+/** The environment for a program: the allowed keys that the parent process has. */
+export function programEnv(program: Program): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of ENV_KEYS[program]) {
+    const v = process.env[k];
+    if (v) out[k] = v;
+  }
+  return out;
+}
 
 export function findOnPath(name: string): string | null {
   for (const dir of (process.env.PATH || '').split(delimiter)) {

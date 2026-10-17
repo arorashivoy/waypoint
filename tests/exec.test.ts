@@ -242,3 +242,41 @@ describe('general refusals', () => {
     expect(r.code).toBe(0);
   });
 });
+
+describe('rclone and systemctl templates', () => {
+  const o = (program: string) => ({ ...T(tmpdir()), bin: `/nonexistent-waypoint-dir/${program}` });
+  const file = '/home/u/waypoint/data/backups/2026-10-17.db';
+
+  it('accepts the exact rclone template (stops only at the missing binary)', async () => {
+    await expect(runProgram('rclone', ['copy', '--no-traverse', file, 'gdrive:waypoint'], o('rclone'))).rejects.toThrow(/did not start/);
+  });
+  it('refuses another rclone command, flag, file or remote', async () => {
+    const r = (a: string[]) => runProgram('rclone', a, o('rclone'));
+    await expect(r(['sync', '--no-traverse', file, 'gdrive:w'])).rejects.toThrow(/rclone/);
+    await expect(r(['copy', '--no-traverse', '--config=/x', file, 'gdrive:w'])).rejects.toThrow(/rclone/);
+    await expect(r(['copy', '--no-traverse', '/etc/passwd', 'gdrive:w'])).rejects.toThrow(/backup file/);
+    await expect(r(['copy', '--no-traverse', 'data/backups/2026-10-17.db', 'gdrive:w'])).rejects.toThrow(/backup file/);
+    await expect(r(['copy', '--no-traverse', file, '--bwlimit=1'])).rejects.toThrow(/remote/);
+    await expect(r(['copy', '--no-traverse', file, 'gdrive:a b'])).rejects.toThrow(/remote/);
+  });
+  it('accepts systemctl --user is-active for the two units', async () => {
+    for (const u of ['waypoint-web', 'waypoint-worker']) {
+      await expect(runProgram('systemctl', ['--user', 'is-active', u], o('systemctl'))).rejects.toThrow(/did not start/);
+    }
+  });
+  it('refuses systemctl with any other unit name or argument', async () => {
+    const r = (a: string[]) => runProgram('systemctl', a, o('systemctl'));
+    await expect(r(['--user', 'is-active', 'ssh'])).rejects.toThrow(/systemctl/);
+    await expect(r(['--user', 'stop', 'waypoint-web'])).rejects.toThrow(/systemctl/);
+    await expect(r(['is-active', 'waypoint-web'])).rejects.toThrow(/systemctl/);
+    await expect(r(['--user', 'is-active', 'waypoint-web', 'ssh'])).rejects.toThrow(/systemctl/);
+  });
+  it('refuses an env key outside the list', async () => {
+    await expect(
+      runProgram('systemctl', ['--user', 'is-active', 'waypoint-web'], { ...o('systemctl'), env: { PATH: '/usr/bin', LANG: 'C' } }),
+    ).rejects.toThrow(/environment key LANG is not allowed for systemctl/);
+    await expect(
+      runProgram('rclone', ['copy', '--no-traverse', file, 'g:w'], { ...o('rclone'), env: { PATH: '/usr/bin', RCLONE_CONFIG: '/x', HOME: '/h' } }),
+    ).rejects.toThrow(/did not start/);
+  });
+});
