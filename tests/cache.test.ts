@@ -63,4 +63,11 @@ describe('maintenance handler', () => {
     const out = (await handlers.get('maintenance')!.run({}, {} as never, new AbortController().signal)) as { pruned: number };
     expect(typeof out.pruned).toBe('number');
   });
+
+  it('rescans the pending drafts one time and sets the flag', async () => {
+    const run = async () => (await handlers.get('maintenance')!.run({}, {} as never, new AbortController().signal)) as { rescanned?: number };
+    await run();
+    expect(await db.appState.findUnique({ where: { key: 'rescan-drafts-v1' } })).not.toBeNull();
+    expect((await run()).rescanned).toBeUndefined();
+  });
 });

@@ -55,11 +55,45 @@ export function scanWarnings(data: unknown): string[] {
       const c = checkForInjection(v);
       if (c.suspicious) out.add(`Check this text before you accept it: ${c.why}.`);
     } else if (Array.isArray(v)) v.forEach(walk);
-    else if (v && typeof v === 'object') Object.values(v).forEach(walk);
+    else if (v && typeof v === 'object') {
+      // The keys of an object are text too. A YAML import ("profile" draft) can hide a phrase in a key.
+      for (const [k, x] of Object.entries(v)) {
+        walk(k);
+        walk(x);
+      }
+    }
   };
   walk(data);
   if (capped) out.add('This draft is too large to check fully. Check all of its text before you accept it.');
   return [...out];
+}
+
+/**
+ * Scans the pending drafts that have no warning, one time (the maintenance task runs it).
+ * Older drafts came before the new signals. It changes only the `warnings` field of a pending draft.
+ * `scope.userId` limits the scan to one user (for tests). It returns the count of drafts that got a warning.
+ */
+export async function rescanPendingDrafts(scope: { userId?: string } = {}): Promise<number> {
+  let changed = 0;
+  let cursor: string | undefined;
+  for (;;) {
+    const rows = await db.profileDraft.findMany({
+      where: { status: 'pending', warnings: '[]', ...(scope.userId ? { userId: scope.userId } : {}) },
+      orderBy: { id: 'asc' },
+      take: 200,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: { id: true, data: true },
+    });
+    if (!rows.length) return changed;
+    for (const r of rows) {
+      const warnings = scanWarnings(parseJson<unknown>(r.data, null));
+      if (!warnings.length) continue;
+      // Update only while the draft still has no warning, so an edit made in between is not overwritten.
+      const done = await db.profileDraft.updateMany({ where: { id: r.id, status: 'pending', warnings: '[]' }, data: { warnings: JSON.stringify(warnings) } });
+      changed += done.count;
+    }
+    cursor = rows[rows.length - 1].id;
+  }
 }
 
 const norm = (s: unknown) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();

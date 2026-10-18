@@ -8,6 +8,8 @@ import { userDir } from '@/lib/user-files';
 import { db } from '@/lib/db';
 import { analyseJob } from '@/lib/analysis';
 import { pruneCacheBySize } from '@/lib/cache';
+import { getState, setState } from '@/lib/app-state';
+import { rescanPendingDrafts } from '@/lib/profile/drafts';
 import { NoCredentialError, claudeStatus, credentialFor } from '@/lib/claude';
 import { fetchAll } from '@/lib/sources';
 import { queueAnalysis } from '@/lib/queue';
@@ -38,7 +40,17 @@ export function registerHandler<P>(
 }
 
 // The worker enqueues maintenance each hour. It keeps the model cache under its size limit.
-registerHandler('maintenance', z.unknown(), async () => ({ pruned: await pruneCacheBySize() }));
+// It also scans the old pending drafts one time, with the signals that came after they were made.
+const RESCAN_KEY = 'rescan-drafts-v1';
+registerHandler('maintenance', z.unknown(), async () => {
+  const pruned = await pruneCacheBySize();
+  if ((await getState(RESCAN_KEY, z.object({ at: z.string() }))) === null) {
+    const rescanned = await rescanPendingDrafts();
+    await setState(RESCAN_KEY, { at: new Date().toISOString(), rescanned });
+    return { pruned, rescanned };
+  }
+  return { pruned };
+});
 
 // A refresh queues tasks with a `batch` (for the progress count). The job screen queues one task with no batch.
 // `force` asks for a new analysis even when one exists.
