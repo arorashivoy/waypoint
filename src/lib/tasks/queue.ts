@@ -166,3 +166,24 @@ export async function lastBeat(id = 'worker'): Promise<Date | null> {
   const row = await db.workerHeartbeat.findUnique({ where: { id } });
   return row?.beatAt ?? null;
 }
+
+/** A finished task (done or failed) stays this many days. Then the maintenance task deletes it. */
+export const TASK_KEEP_DAYS = 14;
+const PRUNE_BATCH = 500;
+
+/** Deletes done and failed tasks that ended more than TASK_KEEP_DAYS ago, 500 at a time. Never a queued or running task. Returns the count. */
+export async function pruneTasks(now: Date = new Date(), scope?: { userId?: string }): Promise<number> {
+  const before = new Date(now.getTime() - TASK_KEEP_DAYS * 86_400_000);
+  let total = 0;
+  for (;;) {
+    const rows = await db.task.findMany({
+      where: { status: { in: ['done', 'failed'] }, updatedAt: { lt: before }, ...(scope?.userId ? { userId: scope.userId } : {}) },
+      select: { id: true },
+      take: PRUNE_BATCH,
+    });
+    if (!rows.length) return total;
+    const r = await db.task.deleteMany({ where: { id: { in: rows.map((x) => x.id) }, status: { in: ['done', 'failed'] } } });
+    total += r.count;
+    if (rows.length < PRUNE_BATCH) return total;
+  }
+}

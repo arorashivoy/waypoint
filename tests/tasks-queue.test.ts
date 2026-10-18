@@ -10,6 +10,7 @@ import {
   enqueue,
   failTask,
   lastBeat,
+  pruneTasks,
   requeueStale,
 } from '@/lib/tasks/queue';
 import { makeUser } from './helpers/http';
@@ -223,5 +224,28 @@ describe('task queue', () => {
     await enqueue({ kind: 'cv', userId: user.id, payload: {} });
     await db.user.delete({ where: { id: user.id } });
     expect(await db.task.count({ where: { userId: user.id } })).toBe(0);
+  });
+});
+
+describe('pruneTasks', () => {
+  it('deletes done and failed tasks older than 14 days and keeps the rest', async () => {
+    const { user } = await makeUser();
+    const { user: other } = await makeUser();
+    const now = new Date('2026-11-01T00:00:00Z');
+    const aged = async (userId: string, status: string, days: number) => {
+      const row = await db.task.create({ data: { kind: 'maintenance', userId, payload: 'null', status } });
+      await db.task.update({ where: { id: row.id }, data: { updatedAt: new Date(now.getTime() - days * 86_400_000) } });
+      return row.id;
+    };
+    const oldDone = await aged(user.id, 'done', 15);
+    const oldFailed = await aged(user.id, 'failed', 15);
+    const youngDone = await aged(user.id, 'done', 13);
+    const oldQueued = await aged(user.id, 'queued', 30);
+    const oldRunning = await aged(user.id, 'running', 30);
+    const otherOld = await aged(other.id, 'done', 15);
+
+    expect(await pruneTasks(now, { userId: user.id })).toBe(2);
+    const left = (await db.task.findMany({ where: { id: { in: [oldDone, oldFailed, youngDone, oldQueued, oldRunning, otherOld] } }, select: { id: true } })).map((r) => r.id);
+    expect(left.sort()).toEqual([youngDone, oldQueued, oldRunning, otherOld].sort());
   });
 });

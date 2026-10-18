@@ -21,7 +21,7 @@ import { runOutreach } from '@/lib/outreach';
 import { INCOMING_MAX } from '@/lib/schemas';
 import { claimsFor, isAdmin } from '@/lib/user';
 import { TaskDeferred, TaskFatal } from '@/lib/tasks/worker';
-import { RETRY_DELAYS_MS, type TaskKind, type TaskRow } from '@/lib/tasks/queue';
+import { RETRY_DELAYS_MS, pruneTasks, type TaskKind, type TaskRow } from '@/lib/tasks/queue';
 
 type Entry = {
   schema: z.ZodType<unknown>;
@@ -48,12 +48,13 @@ export function registerHandler<P>(
 const RESCAN_KEY = 'rescan-drafts-v1';
 registerHandler('maintenance', z.unknown(), async () => {
   const pruned = await pruneCacheBySize();
+  const tasksPruned = await pruneTasks();
   if ((await getState(RESCAN_KEY, z.object({ at: z.string() }))) === null) {
     const rescanned = await rescanPendingDrafts();
     await setState(RESCAN_KEY, { at: new Date().toISOString(), rescanned });
-    return { pruned, rescanned };
+    return { pruned, tasksPruned, rescanned };
   }
-  return { pruned };
+  return { pruned, tasksPruned };
 });
 
 // A refresh queues tasks with a `batch` (for the progress count). The job screen queues one task with no batch.
@@ -243,6 +244,9 @@ registerHandler(
     applicationId: z.string().max(64),
     name: z.string().max(120).optional(),
     profileUrl: z.string().max(500).nullable().optional(),
+    // Recorded exception: this is the one payload with text from a third party (the message of a contact, up to INCOMING_MAX).
+    // The reply needs it when the task runs, and a placeholder row would show an empty draft while the task waits.
+    // The maintenance task deletes finished tasks after TASK_KEEP_DAYS.
     incoming: z.string().max(INCOMING_MAX).optional(),
   }),
   async (payload, task) => {
