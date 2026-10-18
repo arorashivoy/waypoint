@@ -1,8 +1,8 @@
 /**
  * A one-page PDF with Helvetica text lines. `size` is the font size in points,
- * `y` the baseline from the bottom of a 792 pt page. `angle` (degrees) turns the line. `color` is the text colour as red, green and blue from 0 to 1. `rects` are filled boxes (same colour scale) that go under the text. Only for tests.
+ * `y` the baseline from the bottom of a 792 pt page. `angle` (degrees) turns the line. `color` is the text colour as red, green and blue from 0 to 1. `rects` are filled boxes (same colour scale) that go under the text. `pageCount` repeats the page. Only for tests.
  */
-export function makePdf(lines: { text: string; size: number; y: number; angle?: number; color?: [number, number, number] }[], rects: { x: number; y: number; w: number; h: number; color: [number, number, number] }[] = []): Buffer {
+export function makePdf(lines: { text: string; size: number; y: number; angle?: number; color?: [number, number, number] }[], rects: { x: number; y: number; w: number; h: number; color: [number, number, number] }[] = [], pageCount = 1): Buffer {
   const esc = (s: string) => s.replace(/[\\()]/g, (c) => `\\${c}`);
   const fills = rects.map((r) => `${r.color.join(' ')} rg ${r.x} ${r.y} ${r.w} ${r.h} re f`);
   const content = [...fills, ...lines.map((l) => {
@@ -13,10 +13,11 @@ export function makePdf(lines: { text: string; size: number; y: number; angle?: 
   })].join('\n');
   const objs = [
     '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    `<< /Type /Pages /Kids [${['3 0 R', ...Array.from({ length: pageCount - 1 }, (_, i) => `${6 + i} 0 R`)].join(' ')}] /Count ${pageCount} >>`,
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
     `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    ...Array.from({ length: pageCount - 1 }, () => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>'),
   ];
   let out = '%PDF-1.4\n';
   const offsets: number[] = [];

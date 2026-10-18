@@ -170,58 +170,27 @@ describe('LaTeX template', () => {
   });
 });
 
-describe('pdftohtml template', () => {
-  const FLAGS = ['-xml', '-i', '-stdout', '-q', '-nodrm'];
-  it.skipIf(!findOnPath('pdftohtml'))('accepts the fixed template with a file in a temp work folder (the check passes, the run fails)', async () => {
-    const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
-    try {
-      const r = await runProgram('pdftohtml', [...FLAGS, `${d}/missing.pdf`], T(d));
-      expect(r.code).not.toBe(0);
-    } finally {
-      rmSync(d, { recursive: true, force: true });
-    }
-  });
-  it('refuses a page range, another flag, a missing flag and a path outside the work folder', async () => {
-    const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
-    try {
-      await expect(runProgram('pdftohtml', [...FLAGS, '-f', '1', `${d}/a.pdf`], T(d))).rejects.toThrow(/pdftohtml/);
-      await expect(runProgram('pdftohtml', [...FLAGS.slice(0, 4), `${d}/a.pdf`], T(d))).rejects.toThrow(/pdftohtml/);
-      await expect(runProgram('pdftohtml', ['-xml', '-i', '-stdout', '-q', '-nodrm', '-c', `${d}/a.pdf`], T(d))).rejects.toThrow(/pdftohtml/);
-      await expect(runProgram('pdftohtml', [...FLAGS, '/etc/passwd'], T(d))).rejects.toThrow(/pdftohtml/);
-      await expect(runProgram('pdftohtml', [...FLAGS, `${d}/../x.pdf`], T(d))).rejects.toThrow(/pdftohtml/);
-    } finally {
-      rmSync(d, { recursive: true, force: true });
-    }
-  });
-  it('refuses an environment key that is not allowed', async () => {
-    const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
-    try {
-      await expect(runProgram('pdftohtml', [...FLAGS, `${d}/a.pdf`], { ...T(d), env: { PATH: '/usr/bin', FOO: 'x' } })).rejects.toThrow(/environment key FOO is not allowed for pdftohtml/);
-    } finally {
-      rmSync(d, { recursive: true, force: true });
-    }
-  });
-});
-
 describe('pdftoppm template', () => {
   it.skipIf(!findOnPath('pdftoppm'))('accepts the fixed template inside a temp work folder (the check passes, the run fails)', async () => {
     const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
     try {
-      const r = await runProgram('pdftoppm', ['-r', '36', '-l', '10', `${d}/missing.pdf`, `${d}/pg`], T(d));
+      const r = await runProgram('pdftoppm', ['-scale-to', '1000', '-l', '10', `${d}/missing.pdf`, `${d}/pg`], T(d));
       expect(r.code).not.toBe(0);
     } finally {
       rmSync(d, { recursive: true, force: true });
     }
   });
-  it('refuses another resolution, another page range, another flag, and paths outside the work folder', async () => {
+  it('refuses another resolution or size, another page range, another flag, and paths outside the work folder', async () => {
     const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
     try {
+      await expect(runProgram('pdftoppm', ['-r', '36', '-l', '10', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
+      await expect(runProgram('pdftoppm', ['-scale-to', '9000', '-l', '10', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
       await expect(runProgram('pdftoppm', ['-r', '300', '-l', '10', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
-      await expect(runProgram('pdftoppm', ['-r', '36', '-l', '99', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
-      await expect(runProgram('pdftoppm', ['-r', '36', '-png', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
-      await expect(runProgram('pdftoppm', ['-r', '36', '-l', '10', `${d}/a.pdf`], T(d))).rejects.toThrow(/pdftoppm/);
-      await expect(runProgram('pdftoppm', ['-r', '36', '-l', '10', '/etc/passwd', `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
-      await expect(runProgram('pdftoppm', ['-r', '36', '-l', '10', `${d}/a.pdf`, `${homedir()}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
+      await expect(runProgram('pdftoppm', ['-scale-to', '1000', '-l', '99', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
+      await expect(runProgram('pdftoppm', ['-scale-to', '1000', '-png', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
+      await expect(runProgram('pdftoppm', ['-scale-to', '1000', '-l', '10', `${d}/a.pdf`], T(d))).rejects.toThrow(/pdftoppm/);
+      await expect(runProgram('pdftoppm', ['-scale-to', '1000', '-l', '10', '/etc/passwd', `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
+      await expect(runProgram('pdftoppm', ['-scale-to', '1000', '-l', '10', `${d}/a.pdf`, `${homedir()}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
     } finally {
       rmSync(d, { recursive: true, force: true });
     }

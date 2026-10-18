@@ -1,83 +1,22 @@
 /**
- * White-text and same-colour-as-background check for PDFs (spec 6.4).
- * `pdftotext` cannot see colour, so this reads `pdftohtml -xml` (font colours
- * and text boxes) and a low-resolution picture from `pdftoppm` (page colours).
- * A text box is hidden when its font colour is close to the colour around it.
- * All reads are bounded.
+ * Hidden-by-colour check for PDFs (spec 6.4). `pdftotext` cannot see colour,
+ * so this looks at a picture of each page from `pdftoppm`. A word is invisible
+ * when no pixel in its box differs from the colour around the box. The check
+ * uses pixels only, so no text of the PDF (font names, for example) is parsed.
  */
 
 export type Rgb = [number, number, number];
-/** A box as fractions (0 to 1) of the page, so two tools with different scales can compare it. */
-export type Region = { page: number; x0: number; y0: number; x1: number; y1: number };
-/** The colour around a region, or null when the picture has no data for it. */
-export type Background = (page: number, region: Region) => Rgb | null;
+/** A box as fractions (0 to 1) of the page, so a picture of any size can use it. */
+export type Region = { x0: number; y0: number; x1: number; y1: number };
 
 export const NO_COLOUR_WARNING = 'Waypoint could not check text colour in this PDF.';
-const MAX_XML = 5 * 1024 * 1024;
-const MAX_XML_ELEMENTS = 50_000;
-/** With no picture, the page is taken as white and "close" is 16. */
-const WHITE_TOLERANCE = 16;
-/** With a picture, "close" is 24 on every channel. */
-const BACKGROUND_TOLERANCE = 24;
+/** "Close" is 24 on every channel. */
+const TOLERANCE = 24;
 const RING = 2;
 const MAX_SAMPLES = 200;
 const MAX_PIXELS = 4_000_000;
-
-const close = (a: Rgb, b: Rgb, tol: number) => a.every((v, i) => Math.abs(v - b[i]) <= tol);
-
-/** The attributes of a tag as a map. A name that repeats: the last value wins. `id` is read first-wins, because pdftohtml writes it before any free text. */
-function attributes(tag: string): Map<string, string> {
-  const out = new Map<string, string>();
-  for (const m of tag.matchAll(/([A-Za-z_:][\w:.-]{0,40})="([^"]{0,200})"/g)) {
-    if (m[1] === 'id' && out.has('id')) continue;
-    out.set(m[1], m[2]);
-  }
-  return out;
-}
-
-function parseColour(v: string | undefined): Rgb | null {
-  const m = /^#([0-9a-fA-F]{6})$/.exec(v ?? '');
-  return m ? ([0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) as Rgb) : null;
-}
-
-/**
- * The regions of `pdftohtml -xml` text whose font colour is close to the colour
- * around the text. `background` gives that colour; without it the page is white.
- * A font with no valid #rrggbb colour is taken as black, the PDF default.
- * Throws when the XML is over 5 MB or has over 50 000 elements.
- */
-export function colourHiddenRegions(xml: string, background?: Background): Region[] {
-  if (xml.length > MAX_XML) throw new Error('The XML is too large.');
-  const fonts = new Map<string, Rgb>();
-  const out: Region[] = [];
-  let page = 0;
-  let pw = 0;
-  let ph = 0;
-  let count = 0;
-  const re = /<fontspec\b([\s\S]{0,2000}?)\/>\s*(?=<|$)|<text\b([^>]{0,500})>([\s\S]{0,20000}?)<\/text>|<page\b([^>]{0,500})>/g;
-  for (const m of xml.matchAll(re)) {
-    if (++count > MAX_XML_ELEMENTS) throw new Error('The XML has too many elements.');
-    if (m[1] !== undefined) {
-      const a = attributes(m[1]);
-      const id = a.get('id');
-      if (id !== undefined) fonts.set(id, parseColour(a.get('color')) ?? [0, 0, 0]);
-    } else if (m[4] !== undefined) {
-      const a = attributes(m[4]);
-      page = Number(a.get('number')) || page + 1;
-      pw = Number(a.get('width')) || 0;
-      ph = Number(a.get('height')) || 0;
-    } else {
-      const a = attributes(m[2]);
-      const [top, left, w, h] = ['top', 'left', 'width', 'height'].map((k) => Number(a.get(k)));
-      const colour = fonts.get(a.get('font') ?? '');
-      if (!colour || !pw || !ph || ![top, left, w, h].every(Number.isFinite) || w <= 0 || h <= 0) continue;
-      const region = { page, x0: left / pw, y0: top / ph, x1: (left + w) / pw, y1: (top + h) / ph };
-      const bg = background?.(page, region) ?? null;
-      if (bg ? close(colour, bg, BACKGROUND_TOLERANCE) : close(colour, [255, 255, 255], WHITE_TOLERANCE)) out.push(region);
-    }
-  }
-  return out;
-}
+/** The largest PPM file that Waypoint reads. A picture of 1000 x 1000 pixels is 3 000 015 bytes. */
+export const MAX_PPM_BYTES = 3 * 1024 * 1024;
 
 export type Raster = { width: number; height: number; data: Buffer };
 
@@ -135,10 +74,26 @@ export function ringColour(img: Raster, r: Region): Rgb | null {
   return ch[0].length ? [median(ch[0]), median(ch[1]), median(ch[2])] : null;
 }
 
-/** A Background from the pictures of the pages (page number to raster). A page with no picture gives null. */
-export function backgroundFrom(pages: ReadonlyMap<number, Raster>): Background {
-  return (page, region) => {
-    const img = pages.get(page);
-    return img ? ringColour(img, region) : null;
-  };
+
+/**
+ * True when no pixel inside the region differs from the median colour of the
+ * 2 pixel ring around it by more than 24 on any channel. Returns null when the
+ * ring has no pixels (the region is the whole picture): the word is not checked.
+ */
+export function isInvisible(img: Raster, r: Region): boolean | null {
+  const bg = ringColour(img, r);
+  if (!bg) return null;
+  const { width: W, height: H, data } = img;
+  const x0 = Math.max(0, Math.floor(r.x0 * W));
+  const y0 = Math.max(0, Math.floor(r.y0 * H));
+  // A box has at least 1 pixel.
+  const x1 = Math.min(W, Math.max(x0 + 1, Math.ceil(r.x1 * W)));
+  const y1 = Math.min(H, Math.max(y0 + 1, Math.ceil(r.y1 * H)));
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const o = (y * W + x) * 3;
+      if (Math.abs(data[o] - bg[0]) > TOLERANCE || Math.abs(data[o + 1] - bg[1]) > TOLERANCE || Math.abs(data[o + 2] - bg[2]) > TOLERANCE) return false;
+    }
+  }
+  return true;
 }

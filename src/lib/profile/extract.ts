@@ -1,9 +1,9 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HttpError } from '../auth/http';
 import { runProgram } from '../exec';
-import { backgroundFrom, colourHiddenRegions, NO_COLOUR_WARNING, parsePpm, type Background, type Raster, type Region } from './pdf-colour';
+import { isInvisible, MAX_PPM_BYTES, NO_COLOUR_WARNING, parsePpm, type Raster } from './pdf-colour';
 
 /**
  * Text from a résumé file, for the import prompt (spec 3.3, step 1), and the
@@ -31,20 +31,20 @@ function isTiny(w: number, h: number, chars: number): boolean {
 
 const decode = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 
-/** A word centre this close (in points) to a hidden text box still counts as inside it. */
-const BOX_MARGIN = 1;
-
 /**
  * The text of `pdftotext -bbox-layout` output, one line per line, without hidden words.
- * A word is hidden when it is tiny, or when its centre is in a hidden region
- * (see colourHiddenRegions), with a margin of 1 pt. The hidden words of a line become one hidden phrase.
+ * A word is hidden when it is tiny, or when no pixel in its box differs from the colour around it
+ * (see isInvisible). `pages` holds the picture of each page (page number to raster).
+ * A word on a page with no picture is kept and `warnings` says that the colour was not checked.
+ * Without `pages`, the colour is not checked and there is no warning. The hidden words of a line become one hidden phrase.
  */
-export function wordsFromBbox(html: string, regions: readonly Region[] = []): Extracted {
+export function wordsFromBbox(html: string, pages?: ReadonlyMap<number, Raster>): Extracted {
   const lines: string[] = [];
   const hidden: string[] = [];
   let page = 0;
   let pw = 0;
   let ph = 0;
+  let unchecked = false;
   for (const line of html.split(/<\/line>/)) {
     for (const p of line.matchAll(/<page width="([\d.]+)" height="([\d.]+)"/g)) {
       page++;
@@ -57,27 +57,30 @@ export function wordsFromBbox(html: string, regions: readonly Region[] = []): Ex
       const word = decode(m[5]);
       const w = Number(m[3]) - Number(m[1]);
       const h = Number(m[4]) - Number(m[2]);
-      const cx = (Number(m[1]) + Number(m[3])) / 2 / (pw || 1);
-      const cy = (Number(m[2]) + Number(m[4])) / 2 / (ph || 1);
-      const mx = BOX_MARGIN / (pw || 1);
-      const my = BOX_MARGIN / (ph || 1);
-      const covered = pw > 0 && ph > 0 && regions.some((r) => r.page === page && cx >= r.x0 - mx && cx <= r.x1 + mx && cy >= r.y0 - my && cy <= r.y1 + my);
-      (isTiny(w, h, [...word].length) || covered ? tiny : shown).push(word);
+      let invisible: boolean | null = false;
+      if (pages) {
+        const img = pages.get(page);
+        invisible = img && pw > 0 && ph > 0 ? isInvisible(img, { x0: Number(m[1]) / pw, y0: Number(m[2]) / ph, x1: Number(m[3]) / pw, y1: Number(m[4]) / ph }) : null;
+        if (invisible === null) unchecked = true;
+      }
+      (isTiny(w, h, [...word].length) || invisible ? tiny : shown).push(word);
     }
     if (shown.length) lines.push(shown.join(' '));
     const phrase = tiny.join(' ').slice(0, 200);
     if (/[A-Za-z]/.test(phrase) && hidden.length < MAX_HIDDEN) hidden.push(phrase);
   }
-  return { text: lines.join('\n').slice(0, MAX_TEXT), hidden };
+  const out: Extracted = { text: lines.join('\n').slice(0, MAX_TEXT), hidden };
+  return unchecked ? { ...out, warnings: [NO_COLOUR_WARNING] } : out;
 }
 
-/** The pictures of the pages that pdftoppm wrote, by page number. A file that is not a good PPM is left out. */
+/** The pictures of the pages that pdftoppm wrote, by page number. A file that is over 3 MB or is not a good PPM is left out. */
 function readPages(work: string, prefix: string): Map<number, Raster> {
   const pages = new Map<number, Raster>();
   for (const f of readdirSync(work)) {
     const m = new RegExp(`^${prefix}-(\\d{1,3})\\.ppm$`).exec(f);
-    const img = m ? parsePpm(readFileSync(join(work, f))) : null;
-    if (m && img) pages.set(Number(m[1]), img);
+    if (!m || statSync(join(work, f)).size > MAX_PPM_BYTES) continue;
+    const img = parsePpm(readFileSync(join(work, f)));
+    if (img) pages.set(Number(m[1]), img);
   }
   return pages;
 }
@@ -91,30 +94,16 @@ export async function extractPdf(buf: Buffer): Promise<Extracted> {
     const r = await runProgram('pdftotext', ['-bbox-layout', input, output], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
     if (r.code !== 0) throw new HttpError(400, 'Waypoint could not read this PDF.');
     const bbox = readFileSync(output, 'utf8');
-    // pdftotext cannot see colour. If a colour step fails, the tiny-text check still runs, and the user gets a warning.
-    let xml: string;
+    // pdftotext cannot see colour. Pictures of the first 10 pages show it. If a picture is missing, the
+    // tiny-text check still runs, and the user gets a warning.
+    let pages = new Map<number, Raster>();
     try {
-      const r2 = await runProgram('pdftohtml', ['-xml', '-i', '-stdout', '-q', '-nodrm', input], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
-      if (r2.code !== 0) throw new Error('pdftohtml failed');
-      xml = r2.stdout;
-      colourHiddenRegions(xml);
+      const r2 = await runProgram('pdftoppm', ['-scale-to', '1000', '-l', '10', input, join(work, 'pg')], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
+      if (r2.code === 0) pages = readPages(work, 'pg');
     } catch (e) {
       if (!(e instanceof Error)) throw e;
-      return { ...wordsFromBbox(bbox), warnings: [NO_COLOUR_WARNING] };
     }
-    // The colour around each text box comes from a small picture of each page. Without it, the page is taken as white.
-    const warnings: string[] = [];
-    let background: Background | undefined;
-    try {
-      const r3 = await runProgram('pdftoppm', ['-r', '36', '-l', '10', input, join(work, 'pg')], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
-      if (r3.code !== 0) throw new Error('pdftoppm failed');
-      background = backgroundFrom(readPages(work, 'pg'));
-    } catch (e) {
-      if (!(e instanceof Error)) throw e;
-      warnings.push(NO_COLOUR_WARNING);
-    }
-    const out = wordsFromBbox(bbox, colourHiddenRegions(xml, background));
-    return warnings.length ? { ...out, warnings } : out;
+    return wordsFromBbox(bbox, pages);
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
