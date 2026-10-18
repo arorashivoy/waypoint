@@ -10,6 +10,7 @@ describe('engineArgs', () => {
     expect(engineArgs('pdflatex', 'tailored', '/w')).toEqual(['-no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', '-output-directory=/w', 'tailored.tex']);
   });
   it('runs tectonic in untrusted mode', () => {
+    expect(engineArgs('lualatex', 'tailored', '/w')).toEqual(['-no-shell-escape', '--safer', '--nosocket', '-interaction=nonstopmode', '-halt-on-error', '-output-directory=/w', 'tailored.tex']);
     expect(engineArgs('tectonic', 'tailored', '/w')).toEqual(['-X', 'compile', '--untrusted', '--outdir', '/w', '--keep-logs', 'tailored.tex']);
   });
 });

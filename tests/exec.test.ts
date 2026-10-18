@@ -133,6 +133,13 @@ describe('LaTeX template', () => {
     const r = await runProgram('pdflatex', good, o);
     expect(r.code).not.toBe(0);
   });
+  it('needs --safer and --nosocket for lualatex, and refuses them for pdflatex', async () => {
+    const lua = { ...o, bin: '/nonexistent-waypoint-dir/lualatex' };
+    await expect(runProgram('lualatex', good, lua)).rejects.toThrow(/shell/);
+    const safe = ['-no-shell-escape', '--safer', '--nosocket', ...good.slice(1)];
+    expect((await runProgram('lualatex', safe, lua)).code).not.toBe(0);
+    await expect(runProgram('pdflatex', safe, o)).rejects.toThrow(/shell/);
+  });
   it('refuses -jobname before the source', async () => {
     await expect(runProgram('pdflatex', ['-jobname', '-no-shell-escape', 'x.tex'], o)).rejects.toThrow(/shell/);
   });

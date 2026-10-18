@@ -4,13 +4,24 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const compile = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('@/lib/gdrive', async (orig) => ({
+  ...(await orig<typeof import('@/lib/gdrive')>()),
+  shareResume: vi.fn(async () => ({ url: 'https://drive.test/f', id: 'd1', reason: null })),
+}));
+vi.mock('@/lib/user', async (orig) => ({
+  ...(await orig<typeof import('@/lib/user')>()),
+  claimsFor: vi.fn(async () => ({ claims: [], targets: { projects: [], positions: [], educations: [] } }) as never),
+}));
 vi.mock('@/lib/latex', async (orig) => ({
   ...(await orig<typeof import('@/lib/latex')>()),
   compileLatex: compile,
   findEngine: vi.fn(() => ({ program: 'pdflatex', bin: '/usr/bin/pdflatex' }) as never),
 }));
 
+import { DRIVE_ADMIN_ONLY, publishCv } from '@/lib/cv';
+import { shareResume } from '@/lib/gdrive';
 import { checkOwnTex, ownTexDir, ownTexPath } from '@/lib/resume/own-tex';
+import { db } from '@/lib/db';
 import { buildResume, resumeConfig } from '@/lib/resume';
 import { getSettings } from '@/lib/settings';
 import * as route from '@/app/api/resume/own-tex/route';
@@ -68,6 +79,30 @@ describe('checkOwnTex', () => {
     ['HTML near white', '\\color[HTML]{F5F0FF}x'],
     ['gray near white', '\\color[gray]{0.97}x'],
     ['defined near white', '\\definecolor{pale}{rgb}{1,1,0.96}\n\\textcolor{pale}{x}'],
+    ['\\directlua', '\\directlua{io.open("/etc/passwd")}'],
+    ['\\luaexec', '\\luaexec{x}'],
+    ['\\luadirect', '\\luadirect{x}'],
+    ['\\latelua', '\\latelua{x}'],
+    ['\\lua_now', '\\ExplSyntaxOn \\lua_now:e { x }'],
+    ['\\lua_shipout', '\\lua_shipout:e { x }'],
+    ['\\tex_directlua', '\\tex_directlua:D{x}'],
+    ['luacode package', '\\usepackage{luacode}'],
+    ['luacode environment', '\\begin{luacode*}x\\end{luacode*}'],
+    ['white!95', '\\color{white!95}x'],
+    ['white!98!black', '\\textcolor{white!98!black}{x}'],
+    ['black!3 (mostly white)', '\\color{black!3}x'],
+    ['cmyk white', '\\color[cmyk]{0,0,0,0}x'],
+    ['Gray 15', '\\color[Gray]{15}x'],
+    ['rgb with spaces', '\\color[rgb]{1 1 1}x'],
+    ['colorlet', '\\colorlet{p}{white}\\textcolor{p}{x}'],
+    ['colorlet mix', '\\colorlet{p}{white!96}\\color{p}x'],
+    ['definecolor named', '\\definecolor{p}{named}{white}\\color{p}x'],
+    ['definecolor cmyk', '\\definecolor{p}{cmyk}{0,0,0,0.02}\\color{p}x'],
+    ['comment before the argument', '\\textcolor%\n{white}{x}'],
+    ['hphantom', '\\hphantom{Secret}'],
+    ['vphantom', '\\vphantom{Secret}'],
+    ['scalebox', '\\scalebox{0.01}{Secret}'],
+    ['resizebox', '\\resizebox{0.05\\textwidth}{!}{Secret}'],
     ['hidden marker iffalse', '\\iffalse secret \\fi'],
     ['hidden marker comment', '\\begin{comment}x\\end{comment}'],
     ['hidden marker tiny font', '\\fontsize{2}{3}\\selectfont x'],
@@ -84,6 +119,8 @@ describe('checkOwnTex', () => {
     expect(checkOwnTex('\\definecolor{pale}{rgb}{1,1,0.96}')).toEqual({ ok: true });
     expect(checkOwnTex('\\color[rgb]{0.95,0.5,1}x')).toEqual({ ok: true });
     expect(checkOwnTex('\\color[HTML]{F5F0A0}x')).toEqual({ ok: true });
+    expect(checkOwnTex('\\color{white!50!black}x \\color{black!80} \\color[cmyk]{0,0,0,1} \\scalebox{0.9}{x} 100\\% \\hspace{1pt}')).toEqual({ ok: true });
+    expect(checkOwnTex('% \\directlua{x}\nHello')).toEqual({ ok: true });
   });
 
   it('refuses a file over 1 MB and checks long input fast', () => {
@@ -155,7 +192,7 @@ describe('resumeConfig and buildResume', () => {
     const a = await makeUser();
     const b = await makeUser();
     await upload(a.cookie, GOOD);
-    expect(await resumeConfig(a.user.id)).toMatchObject({ pdf: null, tex: ownTexPath(a.user.id), assetsDir: ownTexDir(a.user.id) });
+    expect(await resumeConfig(a.user.id)).toMatchObject({ pdf: null, tex: ownTexPath(a.user.id), assetsDir: null });
     expect(await resumeConfig(b.user.id)).toMatchObject({ pdf: null, tex: null, assetsDir: null });
   });
 
@@ -183,11 +220,25 @@ describe('resumeConfig and buildResume', () => {
     expect(compile).toHaveBeenCalledTimes(1);
     const arg = (compile.mock.calls[0] as unknown as [{ source: string; assetsDir: string }])[0];
     expect(arg.source).toContain('Jane Doe');
-    expect(arg.assetsDir).toBe(ownTexDir(m.user.id));
+    expect(arg.assetsDir).toBeNull();
   });
 
   it('gives a member with no source no CV', async () => {
     const m = await makeUser();
     expect(await buildResume(m.user.id, null, 'x', 'app2', {}, { outDir: dir })).toBeNull();
+  });
+});
+
+describe('publishCv', () => {
+  it('never calls Drive for a member, and gives the reason', async () => {
+    const m = await makeUser();
+    await upload(m.cookie, GOOD);
+    const job = await db.job.create({ data: { externalId: `ot-${m.user.id}`, source: 'Test', role: 'Engineer', company: 'Acme', city: 'Berlin', cc: 'DE', url: 'https://x.test' } });
+    const app = await db.application.create({ data: { userId: m.user.id, jobId: job.id } });
+    vi.mocked(shareResume).mockClear();
+    const out = await publishCv(app, job);
+    expect(out.resume?.path).toBeTruthy();
+    expect(shareResume).not.toHaveBeenCalled();
+    expect(out).toMatchObject({ driveUrl: null, driveReason: DRIVE_ADMIN_ONLY });
   });
 });

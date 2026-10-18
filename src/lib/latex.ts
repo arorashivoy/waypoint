@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join } from 'node:path';
-import { baseEnv, findOnPath, LATEX_ENGINES, runProgram, type Program } from './exec';
+import { baseEnv, findOnPath, LATEX_ENGINES, LUA_SAFE, runProgram, type Program } from './exec';
 
 /**
  * LaTeX compiles with no way out of the work folder.
@@ -55,7 +55,7 @@ export function findEngine(forced?: string | null): Engine | null {
 export function engineArgs(program: Program, name: string, outDir: string): string[] {
   return program === 'tectonic'
     ? ['-X', 'compile', '--untrusted', '--outdir', outDir, '--keep-logs', `${name}.tex`]
-    : ['-no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', `-output-directory=${outDir}`, `${name}.tex`];
+    : ['-no-shell-escape', ...(program === 'lualatex' ? LUA_SAFE : []), '-interaction=nonstopmode', '-halt-on-error', `-output-directory=${outDir}`, `${name}.tex`];
 }
 
 export async function compileLatex(opts: { source: string; assetsDir: string | null; outPdf: string; engine: Engine; timeoutMs: number }): Promise<void> {

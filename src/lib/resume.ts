@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'path';
 import type { Claim, ClaimsDoc } from './claims';
 import { FIELD_QUERIES } from './countries';
 import { compileLatex, findEngine } from './latex';
-import { hasOwnTex, ownTexDir, ownTexPath } from './resume/own-tex';
+import { hasOwnTex, ownTexPath } from './resume/own-tex';
 import { getSettings } from './settings';
 import { isAdmin } from './user';
 
@@ -39,7 +39,7 @@ export type ResumeConfig = {
   pdf: string | null;
   /** LaTeX source. Its absence means "no tailoring", not an error. */
   tex: string | null;
-  /** The folder that LaTeX reads class and image files from. Null when there is no source. */
+  /** The folder that LaTeX copies class and image files from. Null for an own .tex: the folder of the user holds old PDFs, and an own .tex cannot use other files. */
   assetsDir: string | null;
   /** A URL a recruiter can actually open. localhost is not one, which is why
    *  this is separate from `pdf` and why the message only claims a link when it
@@ -62,7 +62,7 @@ export async function resumeConfig(userId: string): Promise<ResumeConfig> {
     timeoutMs: Number(env('RESUME_TIMEOUT_MS')) || 60_000,
   };
   if ((await getSettings(userId)).resumeMode === 'own-tex' && hasOwnTex(userId)) {
-    return { pdf: null, tex: ownTexPath(userId), assetsDir: ownTexDir(userId), publicUrl: null, ...common };
+    return { pdf: null, tex: ownTexPath(userId), assetsDir: null, publicUrl: null, ...common };
   }
   if (await isAdmin(userId)) {
     const pdf = env('RESUME_PDF');
@@ -812,7 +812,7 @@ export async function buildResume(
   if (opts.compile === false) return result;
 
   try {
-    await compileLatex({ source, assetsDir: cfg.assetsDir ?? dirname(cfg.tex), outPdf: out, engine, timeoutMs: cfg.timeoutMs });
+    await compileLatex({ source, assetsDir: cfg.assetsDir, outPdf: out, engine, timeoutMs: cfg.timeoutMs });
     return result;
   } catch (e) {
     return bail(`the CV did not compile: ${(e as Error).message.split('\n')[0]}`, skipped);

@@ -54,6 +54,9 @@ export const readChat = (app: Application) => parse<ChatTurn[]>(app.cvChat, []);
 const postingText = (job: Job) => `${job.role}\n${job.description}`;
 
 /** RESUME_PDF, RESUME_TEX and the Drive settings in .env are the admin's. A member gets a CV only from an own .tex file. */
+/** Why a member's CV has no Drive link. */
+export const DRIVE_ADMIN_ONLY = 'Google Drive is for the admin account only. Use the PDF link.';
+
 export const NO_RESUME = 'No résumé is set up for your account yet.';
 
 /** The PDF goes to the folder of the user. With `compile: false` the build does not start the LaTeX engine; only the worker compiles. */
@@ -83,7 +86,11 @@ export async function publishCv(app: Application, job: Job, opts: { compile?: bo
     return { resume: null, driveUrl: null, driveReason: (await isAdmin(app.userId)) ? null : NO_RESUME };
   }
 
-  const shared = await shareResume(resume.path, job.company, job.role, { id: app.cvDriveId, url: app.cvUrl, uploaded: app.cvPath });
+  // Drive is the account of the admin (GDRIVE_* in .env). A member gets the local PDF link only.
+  const admin = await isAdmin(app.userId);
+  const shared = admin
+    ? await shareResume(resume.path, job.company, job.role, { id: app.cvDriveId, url: app.cvUrl, uploaded: app.cvPath })
+    : { id: null, url: null, reason: DRIVE_ADMIN_ONLY };
   if (shared.url) resume.publicUrl = shared.url;
 
   await db.application.update({

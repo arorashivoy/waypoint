@@ -91,6 +91,9 @@ function checkClaude(args: readonly string[], opts: RunOptions): string | null {
   return null;
 }
 
+/** lualatex runs Lua code from the source. --safer turns off io, os.execute and unsafe libraries; --nosocket turns off the network. */
+export const LUA_SAFE = ['--safer', '--nosocket'] as const;
+
 function checkLatex(program: Program, args: readonly string[], opts: RunOptions): string | null {
   const source = args[args.length - 1];
   if (typeof source !== 'string' || !SAFE_SOURCE.test(source)) return 'the LaTeX source must be a plain file name in the work folder';
@@ -98,7 +101,7 @@ function checkLatex(program: Program, args: readonly string[], opts: RunOptions)
   const want =
     program === 'tectonic'
       ? ['-X', 'compile', '--untrusted', '--outdir', out, '--keep-logs', source]
-      : ['-no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', `-output-directory=${out}`, source];
+      : ['-no-shell-escape', ...(program === 'lualatex' ? LUA_SAFE : []), '-interaction=nonstopmode', '-halt-on-error', `-output-directory=${out}`, source];
   if (args.length !== want.length || want.some((w, i) => args[i] !== w)) {
     return `${program} arguments must match the fixed template (shell escape stays off)`;
   }
