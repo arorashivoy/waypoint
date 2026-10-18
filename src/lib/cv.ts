@@ -11,7 +11,7 @@ import { claimsFor, isAdmin } from './user';
 import { userDir } from './user-files';
 import { existsSync } from 'node:fs';
 import { baseResume, buildResume, resumeConfig, resumeMenu, ResumeEngineError, type BuiltResume, type Steer } from './resume';
-import { BASE_NOT_READY, ensureBaseResume, NO_RESUME, queueBaseResume } from './resume/base';
+import { BASE_NOT_READY, baseFailure, ensureBaseResume, NO_RESUME, queueBaseResume } from './resume/base';
 import { hasResumeContent } from './resume/template';
 
 /**
@@ -103,6 +103,8 @@ export async function publishCv(app: Application, job: Job, opts: { compile?: bo
   }
   if (!resume || !resume.path) {
     if (cfg.template && hasResumeContent(await claimsFor(app.userId))) {
+      const failed = await baseFailure(app.userId);
+      if (failed) return { resume: null, driveUrl: null, driveReason: `Waypoint could not build your base résumé: ${failed}` };
       await queueBaseResume(app.userId);
       return { resume: null, driveUrl: null, driveReason: BASE_NOT_READY };
     }

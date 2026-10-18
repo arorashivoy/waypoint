@@ -5,6 +5,10 @@ import { enqueue } from '../tasks/queue';
 import { claimsFor } from '../user';
 import { baseOrder, baseResumePath, hasResumeContent, renderTemplate, templateAssetsDir } from './template';
 import { resumeConfig } from '../resume';
+import { getState, setState } from '../app-state';
+import { db } from '../db';
+import { profileVersion } from '../profile/store';
+import { z } from 'zod';
 
 /**
  * The default base résumé: a user with no own .tex gets a PDF that the built-in template makes
@@ -15,6 +19,26 @@ export const NO_RESUME = 'No résumé is set up for your account yet.';
 
 /** Why the base résumé of a user is not there yet. */
 export const BASE_NOT_READY = 'Your base résumé is being built. Try again in a minute.';
+
+const Failed = z.object({ version: z.number(), reason: z.string() });
+const failedKey = (userId: string) => `base-failed:${userId}`;
+
+/** The reason that the base build of the current profile version failed, or null. A new version clears it. */
+export async function baseFailure(userId: string): Promise<string | null> {
+  const f = await getState(failedKey(userId), Failed);
+  return f && f.version === (await profileVersion(userId)) ? f.reason : null;
+}
+
+/** The first line, with no path, at most 200 characters. */
+function shortReason(text: string): string {
+  return text.split('\n')[0].replace(/(?<![\w.])\/[^\s'"`]+/g, '<path>').slice(0, 200);
+}
+
+async function fail(userId: string, version: number, text: string): Promise<{ why: string }> {
+  const reason = shortReason(text);
+  await setState(failedKey(userId), { version, reason });
+  return { why: reason };
+}
 
 const OLD_BASE = /^base-\d+\.pdf$/;
 
@@ -31,9 +55,17 @@ export async function ensureBaseResume(userId: string): Promise<{ path: string }
   const path = await baseResumePath(userId);
   if (existsSync(path) && statSync(path).size > 0) return { path };
 
+  const known = await baseFailure(userId);
+  if (known) return { why: known };
+  const version = await profileVersion(userId);
   const engine = findEngine('pdflatex') ?? findEngine('xelatex');
-  if (!engine) return { why: 'The server has no pdflatex or xelatex.' };
-  await compileLatex({ source: renderTemplate(doc, {}, baseOrder(doc)), assetsDir: templateAssetsDir(), outPdf: path, engine, timeoutMs: cfg.timeoutMs });
+  if (!engine) return fail(userId, version, 'The server has no pdflatex or xelatex.');
+  try {
+    await compileLatex({ source: renderTemplate(doc, {}, baseOrder(doc)), assetsDir: templateAssetsDir(), outPdf: path, engine, timeoutMs: cfg.timeoutMs });
+  } catch (e) {
+    return fail(userId, version, (e as Error).message);
+  }
+  await db.appState.deleteMany({ where: { key: failedKey(userId) } });
 
   for (const f of readdirSync(dirname(path))) if (OLD_BASE.test(f) && f !== basename(path)) rmSync(`${dirname(path)}/${f}`, { force: true });
   return { path };
@@ -46,6 +78,8 @@ export async function ensureBaseResume(userId: string): Promise<{ path: string }
 export async function queueBaseResume(userId: string): Promise<void> {
   try {
     if (!(await resumeConfig(userId)).template) return;
+    // A failed build of this version is shown to the user. Do not queue it again.
+    if (await baseFailure(userId)) return;
     await enqueue({ kind: 'cv', userId, payload: { action: 'base' }, dedupeKey: `cv-base:${userId}` });
   } catch {
     /* the base résumé is built when the CV code needs it */

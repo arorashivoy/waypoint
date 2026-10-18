@@ -38,18 +38,29 @@ const SPECIAL: Record<string, string> = {
   ']': '{]}',
 };
 
-/** The characters that pdflatex prints with the T1 font and the utf8 input: Latin letters and common punctuation. */
-const UNPRINTABLE = /[^\x20-\x7e -ſ–—‘’“”•…]/g;
+/** The code points that T1 with utf8 cannot print, although they are in the Latin range. Each has a plain form. */
+const PLAIN: Record<string, string> = { 'Ħ': 'H', 'ħ': 'h', 'ĸ': 'k', 'Ŀ': 'L', 'ŀ': 'l', 'ŉ': 'n', 'Ŧ': 'T', 'ŧ': 't', 'ſ': 's' };
+
+/** The characters that pdflatex prints with the T1 font and the utf8 input: ASCII, Latin-1 and Latin Extended-A (a real compile checks all of them), and common punctuation. */
+const SAFE = /^[\x20-\x7e\u00a0-\u017f\u2013\u2014\u2018\u2019\u201c\u201d\u2022\u2026]$/;
+
+/** A character the fonts cannot print becomes a safe form: the table, then the letter without its marks. Otherwise it goes. */
+function printable(ch: string): string {
+  if (SAFE.test(ch) && !(ch in PLAIN)) return ch;
+  if (ch in PLAIN) return PLAIN[ch];
+  const folded = ch.normalize('NFKD').replace(/\p{M}/gu, '');
+  return folded && [...folded].every((c) => SAFE.test(c) && !(c in PLAIN)) ? folded : '';
+}
 
 /**
  * Makes a value safe to put in LaTeX text. A white space run becomes one space, so a newline
  * cannot start a new paragraph. A control character and a character that the fonts cannot
- * print are removed. Each LaTeX special character becomes its text form.
+ * print are replaced or removed. Each LaTeX special character becomes its text form.
  */
 export function escapeLatex(text: string): string {
-  return String(text ?? '')
-    .replace(/\s+/g, ' ')
-    .replace(UNPRINTABLE, '')
+  return [...String(text ?? '').replace(/\s+/g, ' ')]
+    .map(printable)
+    .join('')
     .replace(/[\\{}$&#%_^~<>|[\]]/g, (c) => SPECIAL[c])
     .trim();
 }

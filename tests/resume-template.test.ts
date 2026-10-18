@@ -20,7 +20,8 @@ vi.mock('@/lib/latex', async (orig) => {
 
 import { publishCv, NO_RESUME } from '@/lib/cv';
 import { db } from '@/lib/db';
-import { ensureBaseResume } from '@/lib/resume/base';
+import { baseFailure, ensureBaseResume } from '@/lib/resume/base';
+import { compileLatex } from '@/lib/latex';
 import { checkOwnTex } from '@/lib/resume/own-tex';
 import { baseOrder, bestProjects, escapeLatex, renderTemplate, templateAssetsDir } from '@/lib/resume/template';
 import { buildResume, resumeConfig } from '@/lib/resume';
@@ -89,6 +90,11 @@ describe('escapeLatex', () => {
     ['|', '\\textbar{}'],
   ])('escapes %s', (ch, out) => {
     expect(escapeLatex(`a${ch}b`)).toBe(`a${out}b`);
+  });
+
+  it('replaces the nine code points that T1 cannot print', () => {
+    expect(escapeLatex('ĦħĸĿŀŉŦŧſ')).toBe('HhkLlnTts');
+    expect(escapeLatex('Łódź 🚀')).toBe('Łódź');
   });
 
   it('turns a newline into a space and removes control characters', () => {
@@ -252,6 +258,39 @@ describe('base résumé', () => {
   });
 });
 
+describe('a failed base build', () => {
+  it('is shown, not queued again, and cleared by a new version', async () => {
+    const { user } = await makeUser();
+    const doc = sampleDoc();
+    await saveProfile(user.id, doc, 'First');
+    vi.mocked(compileLatex).mockRejectedValueOnce(new Error('pdflatex failed: ! Bad thing in /etc/secret/x.tex\nsecond line'));
+    const r = await ensureBaseResume(user.id);
+    expect(r).toEqual({ why: 'pdflatex failed: ! Bad thing in <path>' });
+    expect(await baseFailure(user.id)).toBe('pdflatex failed: ! Bad thing in <path>');
+
+    const job = await db.job.create({ data: { externalId: `rt-f-${user.id}`, source: 'Test', role: 'Engineer', company: 'Co', city: 'Berlin', cc: 'XC', url: 'https://x.test' } });
+    const app = await db.application.create({ data: { userId: user.id, jobId: job.id } });
+    await db.task.deleteMany({ where: { userId: user.id } });
+    const shown = await publishCv(app, job, { compile: false });
+    expect(shown.driveReason).toBe('Waypoint could not build your base résumé: pdflatex failed: ! Bad thing in <path>');
+    expect(await db.task.count({ where: { userId: user.id } })).toBe(0);
+
+    // A profile save is a new version: the failure is gone and a base task is queued.
+    await saveProfile(user.id, { ...doc, profile: { ...doc.profile, headline: 'New' } }, 'Second');
+    expect(await baseFailure(user.id)).toBeNull();
+    expect(await db.task.count({ where: { userId: user.id, kind: 'cv' } })).toBe(1);
+    expect(await ensureBaseResume(user.id)).toHaveProperty('path');
+  });
+
+  it('a good build clears the record', async () => {
+    const { user } = await makeUser();
+    await saveProfile(user.id, sampleDoc(), 'First');
+    await db.appState.create({ data: { key: `base-failed:${user.id}`, value: JSON.stringify({ version: 0, reason: 'old' }) } });
+    expect(await ensureBaseResume(user.id)).toHaveProperty('path');
+    expect(await db.appState.count({ where: { key: `base-failed:${user.id}` } })).toBe(0);
+  });
+});
+
 describe('a real compile', () => {
   const have = !!findOnPath('pdflatex');
 
@@ -267,6 +306,22 @@ describe('a real compile', () => {
       const { compileLatex, findEngine } = await import('@/lib/latex');
       const engine = findEngine('pdflatex')!;
       await compileLatex({ source: renderTemplate(doc, {}, baseOrder(doc)), assetsDir: templateAssetsDir(), outPdf: out, engine, timeoutMs: 60_000 });
+    } finally {
+      latex.real = false;
+    }
+    expect(existsSync(out)).toBe(true);
+  }, 90_000);
+
+  it.skipIf(!have)('compiles every code point of U+00A0 to U+017F in one field', async () => {
+    const all = Array.from({ length: 0x17f - 0xa0 + 1 }, (_, i) => String.fromCodePoint(0xa0 + i)).join('');
+    const doc = sampleDoc();
+    doc.targets.projects[1].description = all;
+    doc.profile.headline = all;
+    const out = join(dir, 'real-all', 'base.pdf');
+    latex.real = true;
+    try {
+      const { compileLatex: real, findEngine } = await import('@/lib/latex');
+      await real({ source: renderTemplate(doc, {}, baseOrder(doc)), assetsDir: templateAssetsDir(), outPdf: out, engine: findEngine('pdflatex')!, timeoutMs: 60_000 });
     } finally {
       latex.real = false;
     }
