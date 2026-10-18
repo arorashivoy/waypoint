@@ -14,6 +14,7 @@ import { NoCredentialError, claudeStatus, credentialFor } from '@/lib/claude';
 import { fetchAll } from '@/lib/sources';
 import { queueAnalysis } from '@/lib/queue';
 import { searchQueries } from '@/lib/resume';
+import { ensureBaseResume } from '@/lib/resume/base';
 import { CV_MESSAGE_MAX, NO_RESUME, CvError, cvView, publishCv, refineCv, resetCv } from '@/lib/cv';
 import { claimsFor, isAdmin } from '@/lib/user';
 import { TaskDeferred, TaskFatal } from '@/lib/tasks/worker';
@@ -113,16 +114,22 @@ registerHandler('refresh', z.object({ force: z.boolean() }), async ({ force }, t
   return { added, total, report, analysing };
 });
 
+// The action `base` builds the base résumé of the template after a profile save. It has no job.
 registerHandler(
   'cv',
   z.object({
-    jobId: z.string(),
-    action: z.enum(['generate', 'refine', 'reset']),
+    jobId: z.string().optional(),
+    action: z.enum(['generate', 'refine', 'reset', 'base']),
     message: z.string().max(CV_MESSAGE_MAX).optional(),
   }),
   async ({ jobId, action, message }, task) => {
     const userId = task.userId;
     if (!userId) return { skipped: 'no-user' };
+    if (action === 'base') {
+      const built = await ensureBaseResume(userId);
+      return 'why' in built ? { skipped: built.why } : { built: true };
+    }
+    if (!jobId) throw new TaskFatal('The task has no job.');
     const job = await db.job.findUnique({ where: { id: jobId } });
     if (!job) throw new TaskFatal('The job is gone.');
     const app = await db.application.upsert({

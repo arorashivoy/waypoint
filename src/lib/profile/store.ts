@@ -232,6 +232,8 @@ export async function saveProfile(userId: string, next: ClaimsDoc, note: string,
       },
       { timeout: 20_000 },
     );
+    // The base résumé of the template follows the profile. The import is late: resume.ts reads this module.
+    await (await import('../resume/base')).queueBaseResume(userId);
     return { warnings: check.warnings, version };
   } finally {
     forgetProfile(userId);

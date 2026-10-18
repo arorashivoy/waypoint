@@ -26,6 +26,7 @@ vi.mock('@/lib/latex', async (orig) => ({
 import { DRIVE_ADMIN_ONLY, publishCv } from '@/lib/cv';
 import { shareResume } from '@/lib/gdrive';
 import { checkOwnTex, ownTexDir, ownTexPath } from '@/lib/resume/own-tex';
+import { templateAssetsDir } from '@/lib/resume/template';
 import { db } from '@/lib/db';
 import { buildResume, resumeConfig } from '@/lib/resume';
 import { getSettings } from '@/lib/settings';
@@ -204,8 +205,8 @@ describe('resumeConfig and buildResume', () => {
     const a = await makeUser();
     const b = await makeUser();
     await upload(a.cookie, GOOD);
-    expect(await resumeConfig(a.user.id)).toMatchObject({ pdf: null, tex: ownTexPath(a.user.id), assetsDir: null });
-    expect(await resumeConfig(b.user.id)).toMatchObject({ pdf: null, tex: null, assetsDir: null });
+    expect(await resumeConfig(a.user.id)).toMatchObject({ pdf: null, tex: ownTexPath(a.user.id), assetsDir: templateAssetsDir() });
+    expect(await resumeConfig(b.user.id)).toMatchObject({ pdf: null, tex: null, template: true });
   });
 
   it('keeps RESUME_TEX and RESUME_PDF for the admin only', async () => {
@@ -232,7 +233,8 @@ describe('resumeConfig and buildResume', () => {
     expect(compile).toHaveBeenCalledTimes(1);
     const arg = (compile.mock.calls[0] as unknown as [{ source: string; assetsDir: string }])[0];
     expect(arg.source).toContain('Jane Doe');
-    expect(arg.assetsDir).toBeNull();
+    // The folder holds resume.cls only, so an own source may use \documentclass{resume}.
+    expect(arg.assetsDir).toBe(templateAssetsDir());
   });
 
   it('gives a member with no source no CV', async () => {

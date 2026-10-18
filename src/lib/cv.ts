@@ -10,7 +10,9 @@ import { PROMPT_VERSIONS, REFINE_SYSTEM, refinePrompt } from './prompts';
 import { claimsFor, isAdmin } from './user';
 import { userDir } from './user-files';
 import { existsSync } from 'node:fs';
-import { buildResume, resumeConfig, resumeMenu, ResumeEngineError, type BuiltResume, type Steer } from './resume';
+import { baseResume, buildResume, resumeConfig, resumeMenu, ResumeEngineError, type BuiltResume, type Steer } from './resume';
+import { BASE_NOT_READY, ensureBaseResume, NO_RESUME, queueBaseResume } from './resume/base';
+import { hasResumeContent } from './resume/template';
 
 /**
  * One job's CV as a thing the user can hold: built from the posting plus any
@@ -57,7 +59,7 @@ const postingText = (job: Job) => `${job.role}\n${job.description}`;
 /** Why a member's CV has no Drive link. */
 export const DRIVE_ADMIN_ONLY = 'Google Drive is for the admin account only. Use the PDF link.';
 
-export const NO_RESUME = 'No résumé is set up for your account yet.';
+export { NO_RESUME };
 
 /** The PDF goes to the folder of the user. With `compile: false` the build does not start the LaTeX engine; only the worker compiles. */
 export async function buildCv(app: Application, job: Job, opts: { compile?: boolean } = {}) {
@@ -83,11 +85,27 @@ export const BASE_CV_REASON = 'The tailored CV is not built yet, so the message 
  */
 export async function publishCv(app: Application, job: Job, opts: { compile?: boolean } = {}): Promise<Published> {
   let resume = await buildCv(app, job, { compile: opts.compile });
+  const cfg = await resumeConfig(app.userId);
+  // The base résumé of the template. The worker builds it when it is missing; a web request only asks for it.
+  const baseOf = async (): Promise<string | null> => {
+    if (cfg.pdf && existsSync(cfg.pdf)) return cfg.pdf;
+    if (!cfg.template || opts.compile === false) return null;
+    const built = await ensureBaseResume(app.userId);
+    return 'path' in built ? built.path : null;
+  };
   if (resume?.path && opts.compile === false && !existsSync(resume.path)) {
-    const base = (await resumeConfig(app.userId)).pdf;
-    resume = base && existsSync(base) ? { ...resume, path: base, tailored: false, lead: null, reason: BASE_CV_REASON } : null;
+    const base = await baseOf();
+    resume = base ? { ...resume, path: base, tailored: false, lead: null, reason: BASE_CV_REASON } : null;
+  }
+  if (!resume?.path && cfg.template) {
+    const base = await baseOf();
+    if (base) resume = baseResume(base, 'The tailored CV did not build, so this is the base CV.');
   }
   if (!resume || !resume.path) {
+    if (cfg.template && hasResumeContent(await claimsFor(app.userId))) {
+      await queueBaseResume(app.userId);
+      return { resume: null, driveUrl: null, driveReason: BASE_NOT_READY };
+    }
     return { resume: null, driveUrl: null, driveReason: (await isAdmin(app.userId)) ? null : NO_RESUME };
   }
 

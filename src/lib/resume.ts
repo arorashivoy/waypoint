@@ -5,7 +5,10 @@ import { dirname, join, resolve } from 'path';
 import type { Claim, ClaimsDoc } from './claims';
 import { FIELD_QUERIES } from './countries';
 import { compileLatex, findEngine } from './latex';
+import { DEPTH_WEIGHT } from './resume/depth';
 import { hasOwnTex, ownTexPath } from './resume/own-tex';
+import { baseOrder, baseResumePath, hasResumeContent, renderTemplate, tailorOrder, templateAssetsDir } from './resume/template';
+import { db } from './db';
 import { getSettings } from './settings';
 import { isAdmin } from './user';
 
@@ -46,10 +49,12 @@ export type ResumeConfig = {
   pdf: string | null;
   /** LaTeX source. Its absence means "no tailoring", not an error. */
   tex: string | null;
-  /** The folder that LaTeX copies class and image files from. Null for an own .tex: the folder of the user holds old PDFs, and an own .tex cannot use other files. */
+  /** The folder that LaTeX copies class and image files from. For an own .tex and for the template it holds `resume.cls` only: the folder of the user holds old PDFs, and an own .tex cannot use other files. */
   assetsDir: string | null;
   /** True for the .tex that a user uploaded. It never compiles with lualatex. */
   own: boolean;
+  /** True when the built-in template makes the résumé. `pdf` is then the base résumé, when it is built. It never compiles with lualatex. */
+  template: boolean;
   /** A URL a recruiter can actually open. localhost is not one, which is why
    *  this is separate from `pdf` and why the message only claims a link when it
    *  is set. */
@@ -61,8 +66,8 @@ export type ResumeConfig = {
 /**
  * The résumé files of one user.
  * - A user with an own .tex (and the mode `own-tex`) gets that file. Its folder holds only that file.
- * - The admin, with no own .tex, gets RESUME_PDF and RESUME_TEX from the environment, as before.
- * - Any other user gets no source, so the "no CV" path runs.
+ * - The admin, who has never chosen a mode (no settings row, or the default mode), gets RESUME_PDF and RESUME_TEX from the environment, as before.
+ * - Any other user, and an admin who removed the own .tex, gets the built-in template. `pdf` is its base résumé when it is built.
  */
 export async function resumeConfig(userId: string): Promise<ResumeConfig> {
   const max = Number(env('RESUME_MAX_PROJECTS'));
@@ -71,22 +76,28 @@ export async function resumeConfig(userId: string): Promise<ResumeConfig> {
     timeoutMs: Number(env('RESUME_TIMEOUT_MS')) || 60_000,
   };
   if ((await getSettings(userId)).resumeMode === 'own-tex' && hasOwnTex(userId)) {
-    return { pdf: null, tex: ownTexPath(userId), assetsDir: null, own: true, publicUrl: null, ...common };
+    return { pdf: null, tex: ownTexPath(userId), assetsDir: templateAssetsDir(), own: true, template: false, publicUrl: null, ...common };
   }
-  if (await isAdmin(userId)) {
-    const pdf = env('RESUME_PDF');
-    const tex = env('RESUME_TEX');
-    const texPath = tex ? expand(tex) : null;
-    return {
-      pdf: pdf ? expand(pdf) : null,
-      tex: texPath,
-      assetsDir: texPath ? dirname(texPath) : null,
-      own: false,
-      publicUrl: env('RESUME_PUBLIC_URL'),
-      ...common,
-    };
+  const pdf = env('RESUME_PDF');
+  const tex = env('RESUME_TEX');
+  if ((pdf || tex) && (await isAdmin(userId))) {
+    // A row with `template` means that the admin chose it. A row with `own-tex` and no file is the default of the admin.
+    const row = await db.userSettings.findUnique({ where: { userId }, select: { resumeMode: true } });
+    if (!row || row.resumeMode === 'own-tex') {
+      const texPath = tex ? expand(tex) : null;
+      return {
+        pdf: pdf ? expand(pdf) : null,
+        tex: texPath,
+        assetsDir: texPath ? dirname(texPath) : null,
+        own: false,
+        template: false,
+        publicUrl: env('RESUME_PUBLIC_URL'),
+        ...common,
+      };
+    }
   }
-  return { pdf: null, tex: null, assetsDir: null, own: false, publicUrl: null, ...common };
+  const base = await baseResumePath(userId);
+  return { pdf: existsSync(base) ? base : null, tex: null, assetsDir: templateAssetsDir(), own: false, template: true, publicUrl: null, ...common };
 }
 
 const norm = (s: string) =>
@@ -100,7 +111,6 @@ function mentions(haystack: string, term: string): boolean {
   return new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9])`).test(haystack);
 }
 
-const DEPTH_WEIGHT: Record<string, number> = { mentioned: 0.5, used: 0.8, built: 1 };
 
 export type EvidencePick = {
   target: string;
@@ -698,6 +708,16 @@ export type ResumeMenu = {
  *  claims.yml. Null when there is no LaTeX source to rewrite. */
 export async function resumeMenu(doc: ClaimsDoc, userId: string): Promise<ResumeMenu | null> {
   const cfg = await resumeConfig(userId);
+  if (cfg.template) {
+    // The template can show any project, bullet and skill. The base résumé shows the best projects.
+    if (!hasResumeContent(doc)) return null;
+    const onCv = new Set(baseOrder(doc).projects);
+    return {
+      projects: doc.targets.projects.map((p) => ({ id: p.id, title: p.title, onCv: onCv.has(p.id), usable: true })),
+      bullets: doc.targets.positions.flatMap((p) => (p.bullets ?? []).map((b) => ({ id: `${p.id}/${b.id}`, position: `${p.title}, ${p.company}`, match: b.match }))),
+      skills: doc.claims.filter((c) => c.kind === 'skill' || c.kind === 'language').map((c) => ({ slug: c.slug, label: c.label, evidenced: c.evidence.some((e) => e.depth !== 'mentioned') })),
+    };
+  }
   if (!cfg.tex || !existsSync(cfg.tex)) return null;
   const cv = mapCvProjects(readFileSync(cfg.tex, 'utf8'), doc);
   const onCv = new Set('why' in cv ? [] : cv.rows.map((r) => r.id));
@@ -717,6 +737,26 @@ export async function resumeMenu(doc: ClaimsDoc, userId: string): Promise<Resume
   };
 }
 
+/** The base CV as a result: not tailored, with the reason when there is one. */
+export function baseResume(path: string, reason: string | null = null, publicUrl: string | null = null): BuiltResume {
+  return {
+    path,
+    tailored: false,
+    lead: null,
+    order: [],
+    experience: [],
+    added: [],
+    dropped: [],
+    skillsAdded: [],
+    skillsDropped: [],
+    skillsLead: [],
+    matched: [],
+    skipped: [],
+    publicUrl,
+    reason,
+  };
+}
+
 /**
  * The CV to send for one posting. Never throws: every failure downgrades to the
  * base PDF with a reason attached, because a missing LaTeX package must not
@@ -732,40 +772,27 @@ export async function buildResume(
   opts: { outDir: string; compile?: boolean },
 ): Promise<BuiltResume | null> {
   const cfg = await resumeConfig(userId);
-  if (!cfg.pdf && !cfg.tex) return null;
+  if (!cfg.pdf && !cfg.tex && !cfg.template) return null;
 
-  const base: BuiltResume = {
-    path: cfg.pdf || '',
-    tailored: false,
-    lead: null,
-    order: [],
-    experience: [],
-    added: [],
-    dropped: [],
-    skillsAdded: [],
-    skillsDropped: [],
-    skillsLead: [],
-    matched: [],
-    skipped: [],
-    publicUrl: cfg.publicUrl,
-    reason: null,
-  };
+  const base = baseResume(cfg.pdf || '', null, cfg.publicUrl);
 
   const bail = (reason: string, skipped: string[] = []) =>
     cfg.pdf && existsSync(cfg.pdf) ? { ...base, reason, skipped } : null;
 
   if (!doc) return bail('no claims.yml, so there is nothing to choose between');
-  if (!cfg.tex) return bail('RESUME_TEX is not set, so there is no source to rewrite');
-  if (!existsSync(cfg.tex)) return bail(`RESUME_TEX points at ${cfg.tex}, which does not exist`);
+  if (cfg.template && !hasResumeContent(doc)) return null;
+  if (!cfg.template && !cfg.tex) return bail('RESUME_TEX is not set, so there is no source to rewrite');
+  if (cfg.tex && !existsSync(cfg.tex)) return bail(`RESUME_TEX points at ${cfg.tex}, which does not exist`);
 
   const posting = rankEvidence(doc, postingText);
   const ranked = steered(posting, steer);
   const weights = steer.skills?.length ? new Map(steer.skills.map((s) => [s, 1])) : claimWeights(doc, postingText);
 
-  // The template on disk is never written to. Every transform is a pure string
+  // The file on disk is never written to. Every transform is a pure string
   // rewrite over a copy, and the build happens in a scratch directory — the
   // CV he maintains by hand stays exactly as he left it.
-  const template = readFileSync(cfg.tex, 'utf8');
+  // With the built-in template, the "file" is the base résumé, and the posting only changes its order.
+  const template = cfg.tex ? readFileSync(cfg.tex, 'utf8') : renderTemplate(doc, {}, baseOrder(doc));
 
   const skipped: string[] = [];
   /** Runs one transform over the document so far, recording why it did not
@@ -779,21 +806,41 @@ export async function buildResume(
     return t.tex;
   };
 
-  // A steered project list is also the count: "drop the hackathon" means one
-  // entry fewer, not the next-best project taking its slot.
-  const projects = tailorTex(template, doc, ranked, steer.projects?.length || cfg.maxProjects);
-  const afterProjects = step('projects', template, projects);
-  const experience = tailorExperience(afterProjects, doc, ranked);
-  const afterExperience = step('experience', afterProjects, experience);
-  const skills = tailorSkills(afterExperience, doc, weights);
-  const source = step('skills', afterExperience, skills);
+  let source: string;
+  let projects: Tailoring;
+  let experience: Tailoring;
+  let skills: Tailoring;
+  if (cfg.template) {
+    const was = baseOrder(doc);
+    const now = tailorOrder(doc, ranked, weights, steer, cfg.maxProjects);
+    source = renderTemplate(doc, steer, now);
+    const title = (id: string) => doc.targets.projects.find((p) => p.id === id)?.title ?? id;
+    const label = (slug: string) => doc.claims.find((c) => c.slug === slug)?.label ?? slug;
+    projects = { tex: source, order: now.projects.map(title), dropped: was.projects.filter((id) => !now.projects.includes(id)).map(title), added: now.projects.filter((id) => !was.projects.includes(id)).map(title), notes: [] };
+    // The bullets of the first job whose top bullet scored for this posting.
+    const lead = doc.targets.positions.find((p) => (p.bullets ?? []).some((b) => (ranked.find((r) => r.target === `position:${p.id}/${b.id}`)?.score ?? 0) > 0));
+    const mine = new Set((lead?.bullets ?? []).map((b) => `${lead!.id}/${b.id}`));
+    experience = { tex: source, order: now.bullets.filter((id) => mine.has(id)).map((id) => lead!.bullets!.find((b) => `${lead!.id}/${b.id}` === id)!.match), dropped: [], added: [], notes: [] };
+    skills = { tex: source, order: now.skills.filter((slug) => (weights.get(slug) || 0) > 0).map(label), dropped: [], added: [], notes: [] };
+  } else {
+    // A steered project list is also the count: "drop the hackathon" means one
+    // entry fewer, not the next-best project taking its slot.
+    projects = tailorTex(template, doc, ranked, steer.projects?.length || cfg.maxProjects);
+    const afterProjects = step('projects', template, projects);
+    experience = tailorExperience(afterProjects, doc, ranked);
+    const afterExperience = step('experience', afterProjects, experience);
+    skills = tailorSkills(afterExperience, doc, weights);
+    source = step('skills', afterExperience, skills);
+  }
 
   // Without a base PDF (an own .tex), an unchanged source is still compiled: it is the only CV there is.
   if (source === template && cfg.pdf) return bail('the CV already leads with the most relevant work for this posting', skipped);
 
   // The file of a user never compiles with lualatex, even when RESUME_ENGINE names it: Lua code can read any file.
-  const engine = cfg.own ? findEngine('pdflatex') ?? findEngine('xelatex') : findEngine(env('RESUME_ENGINE'));
-  if (cfg.own && !engine) throw new ResumeEngineError();
+  // The template follows the same rule.
+  const restricted = cfg.own || cfg.template;
+  const engine = restricted ? findEngine('pdflatex') ?? findEngine('xelatex') : findEngine(env('RESUME_ENGINE'));
+  if (restricted && !engine) throw new ResumeEngineError();
   if (!engine) return bail('no LaTeX engine found. Install pdflatex (texlive), or set RESUME_ENGINE to an engine on the list');
 
   // Keyed on the rendered source, so two postings that select the same order
