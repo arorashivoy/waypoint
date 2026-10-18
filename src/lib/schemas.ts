@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** The most characters of a message from a contact that Waypoint reads. */
+export const INCOMING_MAX = 8000;
+
 /**
  * The shapes of the model replies that the app uses today.
  *

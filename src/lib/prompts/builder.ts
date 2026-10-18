@@ -151,10 +151,10 @@ export type PromptName = 'job-check' | 'referral' | 'note' | 'refine' | 'reply' 
  */
 export const PROMPT_VERSIONS: Record<PromptName, string> = {
   'job-check': 'job-check-2',
-  referral: 'v2',
-  note: 'v2',
+  referral: 'v3',
+  note: 'v3',
   refine: 'v3',
-  reply: 'v1',
+  reply: 'v2',
   'resume-import': 'v1',
   'github-import': 'v1',
   'resume-suggest': 'resume-suggest-1',

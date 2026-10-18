@@ -449,7 +449,7 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
     setBusy('send');
     try {
       type Referral = { copy: string; open: string | null; name: string; resume: { tailored: boolean; lead: string | null; publicUrl: string | null; reason: string | null; shareReason: string | null } | null };
-      const { res, copied, opened } = await draftCopyOpen(post<Referral>('/api/outreach', { jobId: id, action: 'referral' }));
+      const { res, copied, opened } = await draftCopyOpen(runTask<Referral>(() => post('/api/outreach', { jobId: id, action: 'referral' })));
       setJob({ ...job, isSent: true, referral: { copy: res.copy, open: res.open, name: res.name } });
       setBlocked(!opened);
       // The referral built and uploaded the CV, so the generator above now has a file to show.
@@ -471,7 +471,7 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
   const findAlumni = async () => {
     setBusy('alumni');
     try {
-      const { res, copied, opened } = await draftCopyOpen(post<{ copy: string; open: string; name: string }>('/api/outreach', { jobId: id, action: 'alumni' }));
+      const { res, copied, opened } = await draftCopyOpen(runTask<{ copy: string; open: string; name: string }>(() => post('/api/outreach', { jobId: id, action: 'alumni' })));
       setJob({ ...job, isSent: true, referral: { copy: res.copy, open: res.open, name: res.name, alumni: true } });
       setBlocked(!opened);
       await refresh();

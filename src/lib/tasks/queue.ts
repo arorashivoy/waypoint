@@ -1,7 +1,7 @@
 import type { Task } from '@prisma/client';
 import { db } from '@/lib/db';
 
-export type TaskKind = 'refresh' | 'analysis' | 'cv' | 'resume-import' | 'github-import' | 'maintenance';
+export type TaskKind = 'refresh' | 'analysis' | 'cv' | 'resume-import' | 'github-import' | 'maintenance' | 'outreach';
 export type TaskStatus = 'queued' | 'running' | 'done' | 'failed';
 
 /** A Task row with the payload parsed. A later task checks the payload of each kind with zod. */
@@ -13,7 +13,7 @@ export const RETRY_DELAYS_MS = [60_000, 300_000, 1_800_000] as const;
 export const STALE_MS = 600_000;
 
 /** The kinds that a user starts with a button and waits for. claimNext takes them before the other kinds. */
-export const INTERACTIVE_KINDS: readonly TaskKind[] = ['cv', 'resume-import', 'github-import', 'refresh'];
+export const INTERACTIVE_KINDS: readonly TaskKind[] = ['cv', 'resume-import', 'github-import', 'refresh', 'outreach'];
 
 /**
  * `lastError` starts with this marker when the text is for the user (a TaskFatal message).

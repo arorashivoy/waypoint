@@ -82,10 +82,10 @@ describe('prompt builder', () => {
     const all = [
       jobCheckPrompt(job),
       jobCheckSystem('Claims (slug · label · depth · proof):\nrust · EVIL_CLAIM · built · EVIL_PROOF\nVisa status: EVIL_VISA'),
-      referralPrompt(who, job, 'EVIL_NAME'),
-      alumniPrompt(who, job, 'EVIL_SCHOOL', 100),
+      referralPrompt(who, job, 'EVIL_NAME', ['EVIL_FIELD']),
+      alumniPrompt(who, job, 'EVIL_SCHOOL', 100, ['EVIL_FIELD']),
       refinePrompt({ projects: [], bullets: [], skills: [] }, { projects: ['EVIL_CUR'], bullets: [], skills: [] }, job, [{ role: 'claude', text: 'EVIL_CHAT' }, { role: 'you', text: 'EVIL_YOU' }], 'EVIL_REQ'),
-      replyPrompt(who, job, 'EVIL_NAME', 'EVIL_MSG'),
+      replyPrompt(who, job, 'EVIL_NAME', 'EVIL_MSG', { ccs: ['EVIL_CC'], visaStatus: 'EVIL_VISA' }),
       resumeImportPrompt('EVIL_TEXT'),
       suggestPrompt([{ id: 'p/b', position: 'EVIL_POS', text: 'EVIL_TEXT' }], [{ slug: 's', label: 'EVIL_LABEL', proofs: ['EVIL_PROOF'] }], { role: 'EVIL_ROLE', company: 'EVIL_CO', description: 'EVIL_DESC' }),
       githubPrompt({ name: 'EVIL_REPO', description: null, topics: [] } as never, [], 'EVIL_README'),

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { runTask } from './tasks';
 import { copyAndOpen, draftCopyOpen, patch, post } from './api';
 
 /**
@@ -22,7 +23,7 @@ export default function PendingScreen({ state, refresh, setToast }: { state: any
     setBusy(a.id);
     try {
       const { res, copied, opened } = await draftCopyOpen(
-        post<{ copy: string; open: string | null; name: string }>('/api/outreach', { jobId: a.jobId, action: 'accepted', name: accepted.name, profileUrl: accepted.url }),
+        runTask<{ copy: string; open: string | null; name: string }>(() => post('/api/outreach', { jobId: a.jobId, action: 'accepted', name: accepted.name, profileUrl: accepted.url })),
       );
       setAccepting(null);
       await refresh();
@@ -57,7 +58,7 @@ export default function PendingScreen({ state, refresh, setToast }: { state: any
   const submitReply = async (a: any) => {
     setBusy(a.id);
     try {
-      const res = await post<{ certain: boolean }>('/api/outreach', { jobId: a.jobId, action: 'replied', incoming });
+      const res = await runTask<{ certain: boolean }>(() => post('/api/outreach', { jobId: a.jobId, action: 'replied', incoming }));
       setReplying(null);
       setIncoming('');
       await refresh();

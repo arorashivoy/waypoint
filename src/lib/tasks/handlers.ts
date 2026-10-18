@@ -17,6 +17,8 @@ import { searchQueries } from '@/lib/resume';
 import { ensureBaseResume } from '@/lib/resume/base';
 import { suggestWording, wordingView } from '@/lib/resume/suggest';
 import { CV_MESSAGE_MAX, NO_RESUME, CvError, cvView, publishCv, refineCv, resetCv } from '@/lib/cv';
+import { runOutreach } from '@/lib/outreach';
+import { INCOMING_MAX } from '@/lib/schemas';
 import { claimsFor, isAdmin } from '@/lib/user';
 import { TaskDeferred, TaskFatal } from '@/lib/tasks/worker';
 import { RETRY_DELAYS_MS, type TaskKind, type TaskRow } from '@/lib/tasks/queue';
@@ -232,3 +234,25 @@ registerHandler('github-import', z.object({ username: z.string().max(100), repo:
     throw importFatal(e) ?? e;
   }
 });
+
+// The three outreach actions that call Claude. The ID is the application of this user. The result is the JSON for the client.
+registerHandler(
+  'outreach',
+  z.object({
+    action: z.enum(['referral', 'note', 'reply']),
+    applicationId: z.string().max(64),
+    name: z.string().max(120).optional(),
+    profileUrl: z.string().max(500).nullable().optional(),
+    incoming: z.string().max(INCOMING_MAX).optional(),
+  }),
+  async (payload, task) => {
+    const userId = task.userId;
+    if (!userId) return { skipped: 'no-user' };
+    try {
+      return await runOutreach(userId, payload);
+    } catch (e) {
+      if (e instanceof NoCredentialError) throw new TaskFatal(e.message);
+      throw e;
+    }
+  },
+);
