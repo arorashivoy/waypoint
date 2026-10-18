@@ -6,7 +6,7 @@ import { askJsonCached } from '../cache';
 import { checkForInjection } from '../injection';
 import { GUARD_TEXT, PROMPT_VERSIONS, prompt, untrusted, type BuiltPrompt } from '../prompts';
 import { sniffResume } from '../uploads';
-import { slugify } from './doc';
+import { DEPTHS, slugify } from './doc';
 import { createDrafts, MAX_PENDING, type NewDraft } from './drafts';
 import { extractPdf, extractTex } from './extract';
 import { parseItem } from './item-schemas';
@@ -57,13 +57,17 @@ Rules:
 const str = z.preprocess((v) => (typeof v === 'number' ? String(v) : v), z.string());
 const opt = str.nullish();
 const line = z.object({ text: opt, quote: opt });
+/** A list in a reply: null counts as an empty list. */
+const list = <T extends z.ZodTypeAny>(item: T) => z.array(item).nullish().transform((v) => v ?? []);
+// One evidence item is checked alone, so one bad item cannot fail its claim.
+const evidenceItem = z.object({ ref: opt, depth: opt });
 
 export const ResumeReply = z.object({
   headline: z.object({ text: opt, quote: opt }).nullish(),
-  positions: z.array(z.object({ title: opt, company: opt, location: opt, start: opt, end: opt, quote: opt, bullets: z.array(line).default([]) })).default([]),
-  educations: z.array(z.object({ school: opt, degree: opt, field: opt, years: opt, quote: opt })).default([]),
-  projects: z.array(z.object({ title: opt, description: opt, quote: opt, bullets: z.array(line).default([]) })).default([]),
-  skills: z.array(z.object({ label: opt, kind: opt, quote: opt, evidence: z.array(z.object({ ref: opt, depth: opt })).default([]) })).default([]),
+  positions: list(z.object({ title: opt, company: opt, location: opt, start: opt, end: opt, quote: opt, bullets: list(line) })),
+  educations: list(z.object({ school: opt, degree: opt, field: opt, years: opt, quote: opt })),
+  projects: list(z.object({ title: opt, description: opt, quote: opt, bullets: list(line) })),
+  skills: list(z.object({ label: opt, kind: opt, quote: opt, evidence: list(z.unknown()) })),
 });
 export type ResumeReplyData = z.infer<typeof ResumeReply>;
 
@@ -173,9 +177,16 @@ export function buildResumeDrafts(rawReply: ResumeReplyData, text: string, name:
   for (const s of cap(reply.skills, CAPS.skills)) {
     attempt(() => {
       if (!s.label?.trim() || !keep(s.quote)) return;
-      const evidence = s.evidence.flatMap((e) => {
-        const target = refs.get((e.ref ?? '').trim().toLowerCase());
-        return target ? [{ target, depth: e.depth }] : [];
+      // A bad evidence item (not an object, or an unknown depth) is dropped alone. The claim stays.
+      const evidence = s.evidence.flatMap((raw) => {
+        const parsed = evidenceItem.safeParse(raw);
+        const depth = parsed.success ? (parsed.data.depth ?? 'used') : null;
+        if (!parsed.success || depth === null || !(DEPTHS as readonly string[]).includes(depth)) {
+          dropped++;
+          return [];
+        }
+        const target = refs.get((parsed.data.ref ?? '').trim().toLowerCase());
+        return target ? [{ target, depth }] : [];
       });
       add('claim', { slug: slugify(s.label, taken.claim, 'skill'), kind: s.kind, label: s.label.trim(), aliases: [], links: [], evidence, mentions: [{ surface: 'resume', listed: true }] });
     });
@@ -222,6 +233,7 @@ export async function draftsFromResume(userId: string, kind: ResumeKind, buf: Bu
   const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } });
 
   const warnings: string[] = [];
+  warnings.push(...(ex.warnings ?? []));
   if (ex.hidden.length) warnings.push(`The file has hidden text, and Waypoint did not read it: "${ex.hidden.slice(0, 3).join('", "').slice(0, 300)}".`);
   const scan = checkForInjection(ex.text);
   if (scan.suspicious) warnings.push(`The résumé text has a warning sign: ${scan.why}. Check each draft.`);

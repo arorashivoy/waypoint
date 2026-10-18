@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
  * importing child_process.
  */
 
-export type Program = 'claude' | 'pdflatex' | 'xelatex' | 'lualatex' | 'tectonic' | 'pdftotext' | 'rclone' | 'systemctl';
+export type Program = 'claude' | 'pdflatex' | 'xelatex' | 'lualatex' | 'tectonic' | 'pdftotext' | 'pdftohtml' | 'rclone' | 'systemctl';
 export const LATEX_ENGINES: readonly Program[] = ['pdflatex', 'xelatex', 'lualatex', 'tectonic'];
 
 export type RunOptions = {
@@ -126,6 +126,17 @@ function checkPdftotext(args: readonly string[], opts: RunOptions): string | nul
   return 'pdftotext takes only -v, or -layout or -bbox-layout <in> <out> with both files inside a work folder in the temp folder';
 }
 
+const PDFTOHTML_FLAGS = ['-xml', '-i', '-stdout', '-q', '-nodrm'];
+
+// pdftohtml reports the font colours. It writes the XML to stdout, so the only free argument is the input file.
+function checkPdftohtml(args: readonly string[], opts: RunOptions): string | null {
+  if (args.length === PDFTOHTML_FLAGS.length + 1 && PDFTOHTML_FLAGS.every((f, i) => args[i] === f)) {
+    const cwd = resolve(opts.cwd);
+    if (inside(cwd, resolve(tmpdir())) && inside(resolve(args[args.length - 1]), cwd)) return null;
+  }
+  return 'pdftohtml takes only -xml -i -stdout -q -nodrm <in> with the file inside a work folder in the temp folder';
+}
+
 export const RCLONE_REMOTE = /^[A-Za-z0-9][A-Za-z0-9_-]*:[A-Za-z0-9._\/-]*$/;
 const BACKUP_FILE = /^\d{4}-\d{2}-\d{2}(-users\.tar\.gz|\.db)$/;
 const UNITS = ['waypoint-web', 'waypoint-worker'];
@@ -155,6 +166,7 @@ const CHECKS: Record<Program, (args: readonly string[], opts: RunOptions) => str
   lualatex: (a, o) => checkLatex('lualatex', a, o),
   tectonic: (a, o) => checkLatex('tectonic', a, o),
   pdftotext: checkPdftotext,
+  pdftohtml: checkPdftohtml,
   rclone: (a) => checkRclone(a),
   systemctl: (a) => checkSystemctl(a),
 };
@@ -168,6 +180,7 @@ const ENV_KEYS: Record<Program, readonly string[]> = {
   lualatex: LATEX_KEYS,
   tectonic: LATEX_KEYS,
   pdftotext: BASE_KEYS,
+  pdftohtml: BASE_KEYS,
   rclone: ['HOME', 'PATH', 'RCLONE_CONFIG'],
   systemctl: ['HOME', 'PATH', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS'],
 };

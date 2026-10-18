@@ -10,7 +10,8 @@ import { runProgram } from '../exec';
  * a warning on each draft.
  */
 
-export type Extracted = { text: string; hidden: string[] };
+/** `warnings` holds checks that did not run. They are not hidden text. */
+export type Extracted = { text: string; hidden: string[]; warnings?: string[] };
 export const MAX_TEXT = 60_000;
 /** A word box under 3.7 pt high is a font under 4 pt. */
 const TINY_HEIGHT = 3.7;
@@ -29,8 +30,52 @@ function isTiny(w: number, h: number, chars: number): boolean {
 
 const decode = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 
-/** The text of `pdftotext -bbox-layout` output, one line per line, without tiny words. The tiny words of a line become one hidden phrase. */
-export function wordsFromBbox(html: string): Extracted {
+const MAX_XML = 5 * 1024 * 1024;
+const MAX_XML_ELEMENTS = 50_000;
+/** A colour is white when every channel is within 16 of 255. */
+const WHITE_FROM = 255 - 16;
+export const NO_COLOUR_WARNING = 'Waypoint could not check text colour in this PDF.';
+
+const normWord = (w: string) => w.normalize('NFKC').toLowerCase();
+const decodeXml = (s: string) =>
+  decode(s.replace(/&#x([0-9a-f]{1,6});/gi, (_, h) => safeChar(parseInt(h, 16))).replace(/&#(\d{1,7});/g, (_, d) => safeChar(Number(d))));
+function safeChar(n: number): string {
+  return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '';
+}
+
+/**
+ * The words of `pdftohtml -xml` output with white text (every colour channel
+ * within 16 of #ffffff; the page is taken as white). The words are normalised
+ * (NFKC, lower case). Throws when the XML is over 5 MB or has over 50 000 elements.
+ */
+export function colourHiddenWords(xml: string): Set<string> {
+  if (xml.length > MAX_XML) throw new Error('The XML is too large.');
+  const colours = new Map<string, boolean>();
+  const words = new Set<string>();
+  let count = 0;
+  for (const m of xml.matchAll(/<fontspec\b([^>]*)>|<text\b([^>]*)>([\s\S]*?)<\/text>/g)) {
+    if (++count > MAX_XML_ELEMENTS) throw new Error('The XML has too many elements.');
+    if (m[1] !== undefined) {
+      const id = /\bid="([^"]*)"/.exec(m[1])?.[1];
+      const c = /\bcolor="#([0-9a-fA-F]{6})"/.exec(m[1])?.[1];
+      if (id === undefined) continue;
+      const v = c ? [0, 2, 4].map((i) => parseInt(c.slice(i, i + 2), 16)) : [0];
+      colours.set(id, v.length === 3 && v.every((x) => x >= WHITE_FROM));
+      continue;
+    }
+    const font = /\bfont="([^"]*)"/.exec(m[2])?.[1];
+    if (font === undefined || !colours.get(font)) continue;
+    for (const w of decodeXml(m[3].replace(/<[^>]*>/g, '')).split(/\s+/)) if (w) words.add(normWord(w));
+  }
+  return words;
+}
+
+/**
+ * The text of `pdftotext -bbox-layout` output, one line per line, without hidden words.
+ * A word is hidden when it is tiny, or when it is in `white` (see colourHiddenWords).
+ * The hidden words of a line become one hidden phrase.
+ */
+export function wordsFromBbox(html: string, white?: ReadonlySet<string>): Extracted {
   const lines: string[] = [];
   const hidden: string[] = [];
   for (const line of html.split(/<\/line>/)) {
@@ -40,7 +85,7 @@ export function wordsFromBbox(html: string): Extracted {
       const word = decode(m[5]);
       const w = Number(m[3]) - Number(m[1]);
       const h = Number(m[4]) - Number(m[2]);
-      (isTiny(w, h, [...word].length) ? tiny : shown).push(word);
+      (isTiny(w, h, [...word].length) || white?.has(normWord(word)) ? tiny : shown).push(word);
     }
     if (shown.length) lines.push(shown.join(' '));
     const phrase = tiny.join(' ').slice(0, 200);
@@ -57,7 +102,16 @@ export async function extractPdf(buf: Buffer): Promise<Extracted> {
     writeFileSync(input, buf);
     const r = await runProgram('pdftotext', ['-bbox-layout', input, output], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
     if (r.code !== 0) throw new HttpError(400, 'Waypoint could not read this PDF.');
-    return wordsFromBbox(readFileSync(output, 'utf8'));
+    const bbox = readFileSync(output, 'utf8');
+    // pdftotext cannot see colour. If pdftohtml fails, the tiny-text check still runs, and the user gets a warning.
+    try {
+      const r2 = await runProgram('pdftohtml', ['-xml', '-i', '-stdout', '-q', '-nodrm', input], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
+      if (r2.code !== 0) throw new Error('pdftohtml failed');
+      return wordsFromBbox(bbox, colourHiddenWords(r2.stdout));
+    } catch (e) {
+      if (!(e instanceof Error)) throw e;
+      return { ...wordsFromBbox(bbox), warnings: [NO_COLOUR_WARNING] };
+    }
   } finally {
     rmSync(work, { recursive: true, force: true });
   }

@@ -19,7 +19,7 @@ import { findOnPath } from '@/lib/exec';
 import { db } from '@/lib/db';
 import { hitLimit } from '@/lib/auth/rate-limit';
 import { listDrafts, MAX_PENDING } from '@/lib/profile/drafts';
-import { buildResumeDrafts, resumeImportPrompt, type ResumeReplyData } from '@/lib/profile/resume-import';
+import { buildResumeDrafts, resumeImportPrompt, ResumeReply, type ResumeReplyData } from '@/lib/profile/resume-import';
 import { quoteCheck } from '@/lib/profile/quotes';
 import { usersRoot } from '@/lib/user-files';
 import { runOnce } from '@/lib/tasks/worker';
@@ -113,8 +113,31 @@ describe('buildResumeDrafts', () => {
     r.positions.push({ title: null as never, company: 'Acme GmbH', location: null, start: null, end: null, quote: 'Developer, Acme GmbH, Berlin', bullets: [] });
     const { items, dropped } = buildResumeDrafts(r, TEXT, 'Jane Doe');
     expect(dropped).toBe(4); // the invented bullet, the tool, the expert depth, the null title
-    expect(items.filter((i) => i.type === 'claim').length).toBe(1);
+    // The expert depth drops only its evidence item. The PostgreSQL claim stays.
+    expect(items.filter((i) => i.type === 'claim').map((i) => (i.data as { label: string }).label)).toEqual(['Java', 'PostgreSQL']);
+    expect((items.find((i) => i.type === 'claim' && (i.data as { label: string }).label === 'PostgreSQL')!.data as { evidence: unknown[] }).evidence).toEqual([]);
     expect(items.filter((i) => i.type === 'position').length).toBe(1);
+  });
+
+  it('accepts null lists as empty lists', () => {
+    const parsed = ResumeReply.parse({ headline: null, positions: null, educations: null, projects: null, skills: [{ label: 'Java', kind: 'language', quote: 'Skills: Java', evidence: null }] });
+    expect(parsed.positions).toEqual([]);
+    expect(parsed.educations).toEqual([]);
+    expect(parsed.projects).toEqual([]);
+    expect(parsed.skills[0].evidence).toEqual([]);
+    const { items } = buildResumeDrafts(parsed, TEXT, 'Jane Doe');
+    expect(items.map((i) => i.type)).toEqual(['claim']);
+  });
+
+  it('keeps the claim and the good evidence when one evidence item is bad', () => {
+    const parsed = ResumeReply.parse({
+      positions: [{ title: 'Developer', company: 'Acme GmbH', quote: 'Developer, Acme GmbH, Berlin', bullets: null }],
+      skills: [{ label: 'Java', kind: 'language', quote: 'Skills: Java', evidence: [{ ref: 'p1', depth: 'expert' }, 'junk', { ref: 'p1', depth: 'built' }] }],
+    });
+    const { items, dropped } = buildResumeDrafts(parsed, TEXT, 'Jane Doe');
+    const claim = items.find((i) => i.type === 'claim')!.data as { evidence: { target: string; depth: string }[] };
+    expect(claim.evidence).toEqual([{ target: 'position:acme-gmbh-developer', depth: 'built' }]);
+    expect(dropped).toBe(2);
   });
 
   it('sets a month that is not YYYY or YYYY-MM to null', () => {
