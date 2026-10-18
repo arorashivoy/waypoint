@@ -20,13 +20,16 @@ export const NO_RESUME = 'No résumé is set up for your account yet.';
 /** Why the base résumé of a user is not there yet. */
 export const BASE_NOT_READY = 'Your base résumé is being built. Try again in a minute.';
 
-const Failed = z.object({ version: z.number(), reason: z.string() });
+const Failed = z.object({ version: z.number(), reason: z.string(), at: z.number() });
 const failedKey = (userId: string) => `base-failed:${userId}`;
 
-/** The reason that the base build of the current profile version failed, or null. A new version clears it. */
+/** A failure older than this may pass: a timeout under load or a TeX install later can fix it. */
+export const FAILURE_TTL_MS = 30 * 60_000;
+
+/** The reason that the base build of the current profile version failed in the last 30 minutes, or null. A new version clears it. */
 export async function baseFailure(userId: string): Promise<string | null> {
   const f = await getState(failedKey(userId), Failed);
-  return f && f.version === (await profileVersion(userId)) ? f.reason : null;
+  return f && Date.now() - f.at < FAILURE_TTL_MS && f.version === (await profileVersion(userId)) ? f.reason : null;
 }
 
 /** The first line, with no path, at most 200 characters. */
@@ -36,7 +39,7 @@ function shortReason(text: string): string {
 
 async function fail(userId: string, version: number, text: string): Promise<{ why: string }> {
   const reason = shortReason(text);
-  await setState(failedKey(userId), { version, reason });
+  await setState(failedKey(userId), { version, reason, at: Date.now() });
   return { why: reason };
 }
 

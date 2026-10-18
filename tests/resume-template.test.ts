@@ -282,10 +282,34 @@ describe('a failed base build', () => {
     expect(await ensureBaseResume(user.id)).toHaveProperty('path');
   });
 
+  it('blocks a new build for 30 minutes, then lets one pass', async () => {
+    const { user } = await makeUser();
+    await saveProfile(user.id, sampleDoc(), 'First');
+    const now = Date.now();
+    const at = (minutes: number) => db.appState.upsert({ where: { key: `base-failed:${user.id}` }, create: { key: `base-failed:${user.id}`, value: '' }, update: {} }).then(() =>
+      db.appState.update({ where: { key: `base-failed:${user.id}` }, data: { value: JSON.stringify({ version: 1, reason: 'timeout', at: now - minutes * 60_000 }) } }));
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    try {
+      await at(29);
+      expect(await ensureBaseResume(user.id)).toEqual({ why: 'timeout' });
+      await db.task.deleteMany({ where: { userId: user.id } });
+      await (await import('@/lib/resume/base')).queueBaseResume(user.id);
+      expect(await db.task.count({ where: { userId: user.id } })).toBe(0);
+
+      await at(31);
+      expect(await baseFailure(user.id)).toBeNull();
+      await (await import('@/lib/resume/base')).queueBaseResume(user.id);
+      expect(await db.task.count({ where: { userId: user.id } })).toBe(1);
+      expect(await ensureBaseResume(user.id)).toHaveProperty('path');
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('a good build clears the record', async () => {
     const { user } = await makeUser();
     await saveProfile(user.id, sampleDoc(), 'First');
-    await db.appState.create({ data: { key: `base-failed:${user.id}`, value: JSON.stringify({ version: 0, reason: 'old' }) } });
+    await db.appState.create({ data: { key: `base-failed:${user.id}`, value: JSON.stringify({ version: 0, reason: 'old', at: Date.now() }) } });
     expect(await ensureBaseResume(user.id)).toHaveProperty('path');
     expect(await db.appState.count({ where: { key: `base-failed:${user.id}` } })).toBe(0);
   });
