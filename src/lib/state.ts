@@ -80,6 +80,8 @@ export async function buildState(userId: string) {
         isSent: !!app && app.status !== 'draft',
         isApplied: app?.status === 'applied',
         analysed: analysis.by === 'claude',
+        // The list needs only this flag. The detail route sends the full check.
+        hasBlocker: analysis.blockers.length > 0,
       };
   });
 

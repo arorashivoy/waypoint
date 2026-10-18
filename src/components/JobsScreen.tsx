@@ -5,6 +5,7 @@ import { runTask } from './tasks';
 import { api, copyAndOpen, copyText, del, draftCopyOpen, patch, post } from './api';
 import { FILTER_GROUPS, POSTED_WINDOWS } from '@/lib/countries';
 import type { Screen } from './Waypoint';
+import { BLOCKER_LABEL, STATUS_LABEL, legitimacyLine } from '@/lib/jobcheck-text';
 
 type Props = {
   state: any;
@@ -190,6 +191,7 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
             <button key={j.id} className="job-card" data-on={!phone && j.id === activeId} onClick={() => openJob(j.id)}>
               <div className="row" style={{ gap: 8, width: '100%' }}>
                 <span className="mono grow" style={{ fontSize: 12, color: 'var(--muted)' }}>{j.place} · {j.mode}</span>
+                {j.hasBlocker && <span className="tag" title="The posting has a blocker" style={{ color: 'var(--danger)' }}>Blocker</span>}
                 <span className="mono" style={{ fontSize: 12, color: 'var(--positive)', fontWeight: 500 }}>{j.matchLabel}</span>
               </div>
               <span className="role">{j.role}</span>
@@ -320,6 +322,65 @@ type Cv = {
   reason?: string | null;
   chat: ChatTurn[];
 };
+
+const wrapText = { minWidth: 0, overflowWrap: 'anywhere' } as const;
+
+/** The job check: summary, blockers, flags, the top requirements and the parts of the score. */
+function JobCheck({ job }: { job: any }) {
+  const [all, setAll] = useState(false);
+  const [parts, setParts] = useState(false);
+  const reqs: any[] = job.requirements || [];
+  const musts = reqs.filter((r) => r.importance === 'must');
+  const top = (musts.length ? musts : reqs).slice(0, 3);
+  const shown = all ? reqs : top;
+  const flags = legitimacyLine(job.legitimacy || []);
+  return (
+    <div className="stack" style={{ gap: 12 }}>
+      {job.summary && <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, ...wrapText }}>{job.summary}</p>}
+      {job.blockers?.length > 0 && (
+        <div role="alert" className="stack" style={{ gap: 6, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--danger)', color: 'var(--danger)', fontSize: 14, lineHeight: 1.45 }}>
+          <strong>This posting has {job.blockers.length === 1 ? 'a blocker' : 'blockers'}.</strong>
+          {job.blockers.map((b: any, i: number) => (
+            <span key={i} style={wrapText}>
+              {BLOCKER_LABEL[b.type] ?? b.type}: “{b.quote}”
+            </span>
+          ))}
+        </div>
+      )}
+      {flags && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45, color: 'var(--warn-ink)', ...wrapText }}>{flags}</p>}
+      <div className="two-col-tight">
+        {shown.map((r: any, i: number) => (
+          <div key={i} className="req" data-ok={r.status === 'met'} style={{ flexWrap: 'wrap' }}>
+            <span className="grow" style={wrapText}>{r.text}</span>
+            <span className="mono mark">{STATUS_LABEL[r.status as keyof typeof STATUS_LABEL] ?? r.status}</span>
+            {r.evidence?.length > 0 && <span style={{ flexBasis: '100%', fontSize: 13, color: 'var(--muted)', ...wrapText }}>Evidence: {r.evidence.join(', ')}</span>}
+          </div>
+        ))}
+      </div>
+      {reqs.length > top.length && (
+        <button className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setAll(!all)}>
+          {all ? 'Show fewer' : `Show all (${reqs.length})`}
+        </button>
+      )}
+      <div className="stack" style={{ gap: 6 }}>
+        <button className="btn" style={{ alignSelf: 'flex-start' }} aria-expanded={parts} onClick={() => setParts(!parts)}>
+          How this score was made
+        </button>
+        {parts && (
+          <div className="stack" style={{ gap: 4, fontSize: 14 }}>
+            {job.by !== 'claude' && <span style={{ color: 'var(--muted)' }}>Estimated without Claude</span>}
+            {(job.parts || []).map((p: any, i: number) => (
+              <div key={i} className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
+                <span className="grow" style={wrapText}>{p.label}</span>
+                <span className="mono">{p.points > 0 ? '+' : ''}{p.points}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string; state: any; refresh: () => Promise<any>; setToast: (s: string) => void; onBack?: () => void; phone: boolean }) {
   const [job, setJob] = useState<any>(null);
@@ -471,14 +532,7 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
           <h3 className="label grow" style={{ margin: 0 }}>What the description asks for</h3>
           <GenerateCv {...cvProps} />
         </div>
-        <div className="two-col-tight">
-          {job.reqs.map((r: any, i: number) => (
-            <div key={i} className="req" data-ok={r.ok}>
-              <span className="grow">{r.t}</span>
-              <span className="mono mark">{r.ok ? 'ON PROFILE' : 'NOT ON PROFILE'}</span>
-            </div>
-          ))}
-        </div>
+        <JobCheck job={job} />
         <CvStatus busy={cvBusy} error={cvError} />
         {cv && (
           <div className="stack" style={{ gap: 12, padding: 14, borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)' }}>

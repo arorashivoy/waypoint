@@ -8,6 +8,7 @@ import { credentialFor } from '@/lib/claude';
 import { queueJobAnalysis } from '@/lib/queue';
 import { alumniSearch, isAlumniRequest } from '@/lib/match';
 import { readChat } from '@/lib/cv';
+import { claimsFor } from '@/lib/user';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +38,8 @@ async function detail(jobId: string, userId: string, analysing: string | null) {
 
   const referral = await db.outreachEvent.findFirst({ where: { applicationId: app.id, kind: 'request' }, orderBy: { createdAt: 'desc' } });
   const { school } = await profileSummary(userId);
+  // The claim labels, so the screen shows "Java" and not the slug "java".
+  const labels = new Map(((await claimsFor(userId))?.claims ?? []).map((c) => [c.slug, c.label]));
 
   return {
     id: fresh.id,
@@ -48,8 +51,8 @@ async function detail(jobId: string, userId: string, analysing: string | null) {
     url: fresh.url,
     sourceList: fresh.source,
     ...view.analysis,
-    // The screen still reads the old shape of a requirement and the CV hints until Task 5.
-    reqs: view.analysis.requirements.map((r) => ({ t: r.text, ok: r.status === 'met' })),
+    // The evidence is a list of claim labels. The slugs stay on the server.
+    requirements: view.analysis.requirements.map((r) => ({ ...r, evidence: r.evidence.map((s) => labels.get(s) ?? s) })),
     must: view.hints.must,
     projects: view.hints.projects.map((p, i) => ({ ...p, rank: String(i + 1) })),
     routes: view.routes,
