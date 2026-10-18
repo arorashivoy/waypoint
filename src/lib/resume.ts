@@ -5,6 +5,9 @@ import { dirname, join, resolve } from 'path';
 import type { Claim, ClaimsDoc } from './claims';
 import { FIELD_QUERIES } from './countries';
 import { compileLatex, findEngine } from './latex';
+import { hasOwnTex, ownTexDir, ownTexPath } from './resume/own-tex';
+import { getSettings } from './settings';
+import { isAdmin } from './user';
 
 /**
  * Per-job CVs.
@@ -36,6 +39,8 @@ export type ResumeConfig = {
   pdf: string | null;
   /** LaTeX source. Its absence means "no tailoring", not an error. */
   tex: string | null;
+  /** The folder that LaTeX reads class and image files from. Null when there is no source. */
+  assetsDir: string | null;
   /** A URL a recruiter can actually open. localhost is not one, which is why
    *  this is separate from `pdf` and why the message only claims a link when it
    *  is set. */
@@ -44,17 +49,34 @@ export type ResumeConfig = {
   timeoutMs: number;
 };
 
-export function resumeConfig(): ResumeConfig {
-  const pdf = env('RESUME_PDF');
-  const tex = env('RESUME_TEX');
+/**
+ * The résumé files of one user.
+ * - A user with an own .tex (and the mode `own-tex`) gets that file. Its folder holds only that file.
+ * - The admin, with no own .tex, gets RESUME_PDF and RESUME_TEX from the environment, as before.
+ * - Any other user gets no source, so the "no CV" path runs.
+ */
+export async function resumeConfig(userId: string): Promise<ResumeConfig> {
   const max = Number(env('RESUME_MAX_PROJECTS'));
-  return {
-    pdf: pdf ? expand(pdf) : null,
-    tex: tex ? expand(tex) : null,
-    publicUrl: env('RESUME_PUBLIC_URL'),
+  const common = {
     maxProjects: Number.isFinite(max) && max > 0 ? max : null,
     timeoutMs: Number(env('RESUME_TIMEOUT_MS')) || 60_000,
   };
+  if ((await getSettings(userId)).resumeMode === 'own-tex' && hasOwnTex(userId)) {
+    return { pdf: null, tex: ownTexPath(userId), assetsDir: ownTexDir(userId), publicUrl: null, ...common };
+  }
+  if (await isAdmin(userId)) {
+    const pdf = env('RESUME_PDF');
+    const tex = env('RESUME_TEX');
+    const texPath = tex ? expand(tex) : null;
+    return {
+      pdf: pdf ? expand(pdf) : null,
+      tex: texPath,
+      assetsDir: texPath ? dirname(texPath) : null,
+      publicUrl: env('RESUME_PUBLIC_URL'),
+      ...common,
+    };
+  }
+  return { pdf: null, tex: null, assetsDir: null, publicUrl: null, ...common };
 }
 
 const norm = (s: string) =>
@@ -664,8 +686,8 @@ export type ResumeMenu = {
 
 /** Everything a refinement may choose between, read from the base CV and
  *  claims.yml. Null when there is no LaTeX source to rewrite. */
-export function resumeMenu(doc: ClaimsDoc): ResumeMenu | null {
-  const cfg = resumeConfig();
+export async function resumeMenu(doc: ClaimsDoc, userId: string): Promise<ResumeMenu | null> {
+  const cfg = await resumeConfig(userId);
   if (!cfg.tex || !existsSync(cfg.tex)) return null;
   const cv = mapCvProjects(readFileSync(cfg.tex, 'utf8'), doc);
   const onCv = new Set('why' in cv ? [] : cv.rows.map((r) => r.id));
@@ -691,6 +713,7 @@ export function resumeMenu(doc: ClaimsDoc): ResumeMenu | null {
  * take down the referral flow.
  */
 export async function buildResume(
+  userId: string,
   doc: ClaimsDoc | null,
   postingText: string,
   key: string,
@@ -698,7 +721,7 @@ export async function buildResume(
   /** `outDir` is the folder of the user for compiled PDFs. With `compile: false` the build only works out the path and does not start the engine. */
   opts: { outDir: string; compile?: boolean },
 ): Promise<BuiltResume | null> {
-  const cfg = resumeConfig();
+  const cfg = await resumeConfig(userId);
   if (!cfg.pdf && !cfg.tex) return null;
 
   const base: BuiltResume = {
@@ -755,7 +778,8 @@ export async function buildResume(
   const skills = tailorSkills(afterExperience, doc, weights);
   const source = step('skills', afterExperience, skills);
 
-  if (source === template) return bail('the CV already leads with the most relevant work for this posting', skipped);
+  // Without a base PDF (an own .tex), an unchanged source is still compiled: it is the only CV there is.
+  if (source === template && cfg.pdf) return bail('the CV already leads with the most relevant work for this posting', skipped);
 
   const engine = findEngine(env('RESUME_ENGINE'));
   if (!engine) return bail('no LaTeX engine found. Install pdflatex (texlive), or set RESUME_ENGINE to an engine on the list');
@@ -771,7 +795,7 @@ export async function buildResume(
   const result: BuiltResume = {
     ...base,
     path: out,
-    tailored: true,
+    tailored: source !== template,
     lead: order[0] || bullets[0] || null,
     order,
     experience: bullets,
@@ -788,7 +812,7 @@ export async function buildResume(
   if (opts.compile === false) return result;
 
   try {
-    await compileLatex({ source, assetsDir: dirname(cfg.tex), outPdf: out, engine, timeoutMs: cfg.timeoutMs });
+    await compileLatex({ source, assetsDir: cfg.assetsDir ?? dirname(cfg.tex), outPdf: out, engine, timeoutMs: cfg.timeoutMs });
     return result;
   } catch (e) {
     return bail(`the CV did not compile: ${(e as Error).message.split('\n')[0]}`, skipped);

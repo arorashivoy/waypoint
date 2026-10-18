@@ -53,13 +53,12 @@ export const readChat = (app: Application) => parse<ChatTurn[]>(app.cvChat, []);
 
 const postingText = (job: Job) => `${job.role}\n${job.description}`;
 
-/** Until part 5 adds templates for each user, RESUME_PDF, RESUME_TEX and the Drive settings in .env are the admin's. A member gets no résumé. */
+/** RESUME_PDF, RESUME_TEX and the Drive settings in .env are the admin's. A member gets a CV only from an own .tex file. */
 export const NO_RESUME = 'No résumé is set up for your account yet.';
 
 /** The PDF goes to the folder of the user. With `compile: false` the build does not start the LaTeX engine; only the worker compiles. */
 export async function buildCv(app: Application, job: Job, opts: { compile?: boolean } = {}) {
-  if (!(await isAdmin(app.userId))) return null;
-  return buildResume(await claimsFor(app.userId), postingText(job), app.id, readSteer(app), {
+  return buildResume(app.userId, await claimsFor(app.userId), postingText(job), app.id, readSteer(app), {
     outDir: userDir(app.userId, 'resumes'),
     compile: opts.compile,
   });
@@ -77,7 +76,7 @@ export const BASE_CV_REASON = 'The tailored CV is not built yet, so the message 
 export async function publishCv(app: Application, job: Job, opts: { compile?: boolean } = {}): Promise<Published> {
   let resume = await buildCv(app, job, { compile: opts.compile });
   if (resume?.path && opts.compile === false && !existsSync(resume.path)) {
-    const base = resumeConfig().pdf;
+    const base = (await resumeConfig(app.userId)).pdf;
     resume = base && existsSync(base) ? { ...resume, path: base, tailored: false, lead: null, reason: BASE_CV_REASON } : null;
   }
   if (!resume || !resume.path) {
@@ -134,11 +133,10 @@ export async function refineCv(app: Application, job: Job, request: string, task
   const probe = checkForInjection(text);
   if (probe.suspicious) throw new CvError(`Not sent to Claude: ${probe.why}. Rephrase it as a plain request about the CV.`);
 
-  if (!(await isAdmin(app.userId))) throw new CvError(NO_RESUME);
   const doc = await claimsFor(app.userId);
   if (!doc) throw new CvError('Refining needs a profile. Add your positions and projects on the Profile screen.');
-  const menu = resumeMenu(doc);
-  if (!menu) throw new CvError('Refining needs RESUME_TEX: there is no LaTeX source to rearrange.');
+  const menu = await resumeMenu(doc, app.userId);
+  if (!menu) throw new CvError((await isAdmin(app.userId)) ? 'Refining needs a LaTeX source: upload an own .tex file, or set RESUME_TEX.' : NO_RESUME);
   const { mode, detail } = await claudeStatus(app.userId);
   if (mode === 'none') throw new CvError(detail);
 

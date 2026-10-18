@@ -70,7 +70,7 @@ describe('POST /api/outreach referral', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(buildResume).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(buildResume).mock.calls[0][4]).toMatchObject({ compile: false });
+    expect(vi.mocked(buildResume).mock.calls[0][5]).toMatchObject({ compile: false });
     expect(body.resume).toMatchObject({ path: base, tailored: false, reason: BASE_CV_REASON });
     const app = await db.application.findFirstOrThrow({ where: { userId: user.id, jobId: job.id } });
     expect(app.cvPath).toBe(base);

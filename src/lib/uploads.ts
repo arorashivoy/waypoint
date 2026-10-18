@@ -70,3 +70,10 @@ export function sniffResume(name: string, type: string, buf: Buffer): { kind: 'p
   }
   throw new HttpError(400, 'Upload the résumé as a PDF or a .tex file.');
 }
+
+/** The text of an own résumé source upload: a .tex name, text bytes, no PDF and no ZIP. Or HttpError(400). */
+export function sniffTex(name: string, type: string, buf: Buffer): string {
+  const text = /\.tex$/i.test(name) && TEX_TYPES.includes(type) && !startsWith(buf, PDF) && !startsWith(buf, ZIP) ? utf8(buf) : null;
+  if (text === null) throw new HttpError(400, 'Upload the résumé source as a .tex text file.');
+  return text.replace(/^﻿/, '');
+}

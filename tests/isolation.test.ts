@@ -55,6 +55,7 @@ import * as draftsReject from '@/app/api/profile/drafts/reject/route';
 import * as draftOne from '@/app/api/profile/drafts/[id]/route';
 import * as draftApprove from '@/app/api/profile/drafts/[id]/approve/route';
 import * as resumeFile from '@/app/api/resume/[id]/route';
+import * as ownTexRoute from '@/app/api/resume/own-tex/route';
 import * as stateRoute from '@/app/api/state/route';
 import * as settingsSearch from '@/app/api/settings/search/route';
 import * as account from '@/app/api/account/route';
@@ -123,6 +124,9 @@ describe('every route refuses a request without a session', () => {
     ['PUT /api/profile/drafts/[id]', draftOne.PUT as Handler, { id: 'x' }],
     ['POST /api/profile/drafts/[id]/approve', draftApprove.POST as Handler, { id: 'x' }],
     ['GET /api/resume/[id]', resumeFile.GET as Handler, { id: 'x' }],
+    ['GET /api/resume/own-tex', ownTexRoute.GET as Handler],
+    ['PUT /api/resume/own-tex', ownTexRoute.PUT as Handler],
+    ['DELETE /api/resume/own-tex', ownTexRoute.DELETE as Handler],
     ['GET /api/state', stateRoute.GET as Handler],
     ['GET /api/settings/search', settingsSearch.GET as Handler],
     ['PATCH /api/settings/search', settingsSearch.PATCH as Handler],

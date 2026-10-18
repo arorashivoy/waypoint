@@ -99,14 +99,24 @@ const IFFALSE = /\\iffalse(?![A-Za-z])/;
 const COMMENT_BEGIN = /\\begin\s{0,20}\{\s{0,20}comment\s{0,20}\}/g;
 const COMMENT_END = /\\end\s{0,20}\{\s{0,20}comment\s{0,20}\}/g;
 
-/** The words of a .tex file: no comments, no environments, macro arguments kept. */
-export function extractTex(srcIn: string): Extracted {
-  const src = srcIn.slice(0, MAX_TEX);
+/**
+ * The signs of hidden text in a .tex file: white text, a font under 4 pt, an `\iffalse` block and a `comment` environment.
+ * The résumé import and the own-source upload both use it.
+ */
+export function hiddenTexMarkers(src: string): string[] {
   const hidden = HIDDEN_TEX.test(src) ? ['The .tex file sets white text or a font under 4 pt.'] : [];
   // Text in these blocks does not show in the PDF. Nesting is hard to parse, so the file gets a warning.
   if (IFFALSE.test(src)) hidden.push('\\iffalse block');
   COMMENT_BEGIN.lastIndex = 0;
   if (COMMENT_BEGIN.test(src)) hidden.push('comment environment');
+  COMMENT_BEGIN.lastIndex = 0;
+  return hidden;
+}
+
+/** The words of a .tex file: no comments, no environments, macro arguments kept. */
+export function extractTex(srcIn: string): Extracted {
+  const src = srcIn.slice(0, MAX_TEX);
+  const hidden = hiddenTexMarkers(src);
   let t = src
     .replace(/(^|[^\\])%.*$/gm, '$1');
   t = cut(t.replace(COMMENT_BEGIN, '\\begin{comment}').replace(COMMENT_END, '\\end{comment}'), '\\begin{comment}', '\\end{comment}', false);

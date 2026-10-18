@@ -19,7 +19,7 @@ GITHUB_REMEDIATION.md
 data/profile/
 
 # Personal CV (base + LaTeX source). Never commit.
-resume/
+/resume/
 *_Resume*.pdf
 *_Resume*.tex
 

@@ -30,7 +30,7 @@ export const GET = handle<{ params: { id: string } }>(async (req, { params }) =>
   let path = resume.path;
   let tailored = resume.tailored;
   if (!existsSync(path)) {
-    const base = resumeConfig().pdf;
+    const base = (await resumeConfig(user.id)).pdf;
     if (base && existsSync(base)) {
       path = base;
       tailored = false;

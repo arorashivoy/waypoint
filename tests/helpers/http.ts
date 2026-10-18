@@ -35,7 +35,7 @@ export function request(
  * A form upload as the browser sends it: the multipart body with its
  * Content-Length. `headers` can replace or (with null) remove a header.
  */
-export async function formRequest(path: string, form: FormData, init: { cookie?: string; headers?: Record<string, string | null> } = {}): Promise<NextRequest> {
+export async function formRequest(path: string, form: FormData, init: { cookie?: string; method?: string; headers?: Record<string, string | null> } = {}): Promise<NextRequest> {
   const encoded = new Response(form);
   const body = Buffer.from(await encoded.arrayBuffer());
   const headers = new Headers({ origin: ORIGIN, host: 'localhost:3117', 'content-type': encoded.headers.get('content-type')!, 'content-length': String(body.length) });
@@ -44,7 +44,7 @@ export async function formRequest(path: string, form: FormData, init: { cookie?:
     if (v === null) headers.delete(k);
     else headers.set(k, v);
   }
-  return new NextRequest(new URL(path, ORIGIN), { method: 'POST', headers, body });
+  return new NextRequest(new URL(path, ORIGIN), { method: init.method ?? 'POST', headers, body });
 }
 
 export const ctx = <P extends Record<string, string> = Record<string, string>>(params = {} as P) => ({ params });

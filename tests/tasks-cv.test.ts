@@ -122,11 +122,11 @@ describe('the PDF folder', () => {
     const app = await db.application.create({ data: { userId: user.id, jobId: job.id } });
     await buildCv(app, job);
     expect(buildResume).toHaveBeenCalledTimes(1);
-    const opts = vi.mocked(buildResume).mock.calls[0][4];
+    const opts = vi.mocked(buildResume).mock.calls[0][5];
     expect(opts?.outDir).toBe(join(usersRoot(), user.id, 'resumes'));
     expect(opts?.compile).not.toBe(false); // the worker compiles by default
     await buildCv(app, job, { compile: false });
-    expect(vi.mocked(buildResume).mock.calls[1][4]).toMatchObject({ compile: false });
+    expect(vi.mocked(buildResume).mock.calls[1][5]).toMatchObject({ compile: false });
   });
 
   it('another user cannot read the PDF', async () => {
