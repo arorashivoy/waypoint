@@ -26,12 +26,12 @@ const CMD = String.raw`(?:ls|cat|rm|curl|wget|sudo|bash|sh|zsh|chmod|chown|nc|nc
 // The shorter list for a command without backticks, where words such as "node" are normal prose.
 const CMD_BARE = String.raw`(?:ls|cat|rm|curl|wget|sudo|bash|sh|zsh|chmod|chown|nc|ncat|printenv|ssh|scp|powershell|cmd)`;
 
-const SIGNALS: { re: RegExp; why: string }[] = [
+// Signals for text of any origin.
+type Signal = { re: RegExp; why: string };
+const COMMON: Signal[] = [
+  { re: /\bwhat\s+(is|are|were)\s+your\s+(system\s+)?(prompt|instructions|rules)\b|\brepeat\s+(everything|all|the text)\s+above\b/i, why: 'it asks for the system prompt' },
   { re: /\b(ignore|disregard|forget|override)\b[^.!?\n]{0,40}\b(previous|prior|above|earlier|all|any|these|those|your)\b[^.!?\n]{0,30}\b(instruction|prompt|rule|direction|message|context|system)/i,
     why: 'it tries to override the assistant’s instructions' },
-  { re: new RegExp(`${ASK}(show|reveal|print|repeat|tell|output|display|give|share|leak|ignore|bypass|forget)\\b[^.!?\\n]{0,40}\\b(system|developer|initial|hidden|original)\\s+(prompt|message|instruction)`, 'i'),
-    why: 'it asks for the system prompt' },
-  { re: /\bwhat\s+(is|are|were)\s+your\s+(system\s+)?(prompt|instructions|rules)\b|\brepeat\s+(everything|all|the text)\s+above\b/i, why: 'it asks for the system prompt' },
   { re: new RegExp(`${ASK}(run|execute|exec)\\s+(the\\s+|this\\s+|these\\s+|a\\s+)?(following\\s+)?(shell\\s+|bash\\s+|terminal\\s+)?(commands?|scripts?)\\b(?![- ]line)`, 'i'), why: 'it asks for a shell command to run' },
   { re: new RegExp(`${ASK}(run|execute|exec)\\b[^.!?\\n\`]{0,20}\`\\s*${CMD}\\b`, 'i'), why: 'it asks for a shell command to run' },
   { re: new RegExp(`${ASK}(run|execute|exec)\\s+(sudo\\s+)?${CMD_BARE}\\b`, 'i'), why: 'it asks for a shell command to run' },
@@ -49,7 +49,21 @@ const SIGNALS: { re: RegExp; why: string }[] = [
   { re: /\{\{[^}]*\}\}|\[\[[^\]]*\]\]/, why: 'it contains template markup aimed at a model' },
   { re: /\b(as|this is)\b[^.!?\n]{0,20}\b(anthropic|openai|your (developer|creator|administrator))\b/i,
     why: 'it falsely claims to speak for the assistant’s developer' },
-  { re: new RegExp(`${ASK}(send|share|give|tell|provide|reveal|show|paste|print|read|dump|forward|email)\\b[^.!?\\n]{0,30}\\b(api[_ -]?keys?|passwords?|credentials?|tokens?|ssh keys?|secrets?|\\.env)(?![\\w-])`, 'i'), why: 'it asks about credentials' },
+];
+
+// The broad set, for text from other people (the reply floor, postings, imports). It is as strict as it was
+// before the soft set existed: a bare word is enough.
+const BROAD_ONLY: Signal[] = [
+  { re: /\b(system|developer)\s+(prompt|message|instruction)/i, why: 'it refers to the system prompt' },
+  { re: /\b(api[_ -]?key|password|credential|token|ssh key)\b|(?<![\w.])\.env\b/i, why: 'it asks about credentials' },
+];
+
+// The soft set, for the words of the user. A bare word is normal job talk there ("my password manager project"),
+// so a signal needs an order aimed at the assistant.
+const SOFT_ONLY: Signal[] = [
+  { re: new RegExp(`${ASK}(show|reveal|print|repeat|tell|output|display|give|share|leak|ignore|bypass|forget)\\b[^.!?\\n]{0,40}\\b(system|developer|initial|hidden|original)\\s+(prompt|message|instruction)`, 'i'),
+    why: 'it asks for the system prompt' },
+  { re: new RegExp(`${ASK}(send|share|give|tell|provide|reveal|show|paste|print|read|dump|forward|email)\\b[^.!?\\n]{0,30}(?:\\b(?:api[_ -]?keys?|passwords?|credentials?|tokens?|ssh keys?|secrets?)(?![\\w-])|(?<![\\w.])\\.env(?![\\w-]))`, 'i'), why: 'it asks about credentials' },
   { re: /\bwhat('s|\s+is|\s+are)\b[^.!?\n]{0,20}\b(your|the)\b[^.!?\n]{0,15}\b(api[_ -]?keys?|passwords?|credentials?|tokens?|ssh keys?)\b/i, why: 'it asks about credentials' },
 ];
 
@@ -68,23 +82,28 @@ export function normaliseForScan(text: string): string {
 
 export type InjectionCheck = { suspicious: boolean; why: string | null };
 
-export function checkForInjection(text: string): InjectionCheck {
+function scan(text: string, extra: Signal[]): InjectionCheck {
   // Find the invisibles on the raw text, because normalising removes them.
   // Then match the other signals on the normalised copy, so a fullwidth form or
   // a split word ("ig<ZWSP>nore") is caught like the plain spelling.
   if (INVISIBLES.re.test(text)) return { suspicious: true, why: INVISIBLES.why };
   const folded = normaliseForScan(text);
-  for (const { re, why } of SIGNALS) {
+  for (const { re, why } of [...COMMON, ...extra]) {
     if (re.test(folded)) return { suspicious: true, why };
   }
   return { suspicious: false, why: null };
 }
 
+/** The broad check, for text from other people: replies, postings, imports, drafts. */
+export function checkForInjection(text: string): InjectionCheck {
+  return scan(text, BROAD_ONLY);
+}
+
 /**
  * The reason to refuse a request that the user typed, or null. The refine box and
- * the referral edit call this before any task or model call. It uses the same signals
- * as `checkForInjection`.
+ * the referral edit call this before any task or model call. It uses the soft set,
+ * because the words are the user's own.
  */
 export function refuseUserRequest(text: string): string | null {
-  return checkForInjection(text).why;
+  return scan(text, SOFT_ONLY).why;
 }
