@@ -170,6 +170,31 @@ describe('LaTeX template', () => {
   });
 });
 
+describe('pdfinfo template', () => {
+  it.skipIf(!findOnPath('pdfinfo'))('accepts the fixed template inside a temp work folder (the check passes, the run fails)', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
+    try {
+      const r = await runProgram('pdfinfo', ['-f', '1', '-l', '10', `${d}/missing.pdf`], T(d));
+      expect(r.code).not.toBe(0);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+  it('refuses another page range, another flag, and paths outside the work folder', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
+    try {
+      await expect(runProgram('pdfinfo', ['-f', '1', '-l', '99', `${d}/a.pdf`], T(d))).rejects.toThrow(/pdfinfo/);
+      await expect(runProgram('pdfinfo', ['-f', '2', '-l', '10', `${d}/a.pdf`], T(d))).rejects.toThrow(/pdfinfo/);
+      await expect(runProgram('pdfinfo', ['-box', '-f', '1', '-l', '10', `${d}/a.pdf`], T(d))).rejects.toThrow(/pdfinfo/);
+      await expect(runProgram('pdfinfo', ['-f', '1', '-l', '10', '/etc/passwd'], T(d))).rejects.toThrow(/pdfinfo/);
+      await expect(runProgram('pdfinfo', ['-f', '1', '-l', '10', `${d}/../x.pdf`], T(d))).rejects.toThrow(/pdfinfo/);
+      await expect(runProgram('pdfinfo', ['-f', '1', '-l', '10', `${d}/a.pdf`], { ...T(d), env: { PATH: '/usr/bin', FOO: 'x' } })).rejects.toThrow(/environment key FOO is not allowed for pdfinfo/);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('pdftoppm template', () => {
   it.skipIf(!findOnPath('pdftoppm'))('accepts the fixed template inside a temp work folder (the check passes, the run fails)', async () => {
     const d = mkdtempSync(join(tmpdir(), 'exec-test-'));

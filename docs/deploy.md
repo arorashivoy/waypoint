@@ -51,8 +51,8 @@ use `scripts/deploy.sh` for each update (step 10).
 
 3. Install the packages, apply the migrations and make the admin account.
 
-   The Pi needs the `poppler-utils` package. It holds `pdftotext` and `pdftoppm`.
-   The import of a PDF résumé uses both programs. If `pdftoppm` is missing, the import still works,
+   The Pi needs the `poppler-utils` package. It holds `pdftotext`, `pdfinfo` and `pdftoppm`.
+   The import of a PDF résumé uses all 3 programs. If `pdfinfo` or `pdftoppm` is missing, the import still works,
    but it shows the warning "Waypoint could not check text colour in this PDF."
    To install the package, run `sudo apt install poppler-utils`.
 

@@ -1,7 +1,7 @@
 /**
  * Hidden-by-colour check for PDFs (spec 6.4). `pdftotext` cannot see colour,
  * so this looks at a picture of each page from `pdftoppm`. A word is invisible
- * when no pixel in its box differs from the colour around the box. The check
+ * when its box holds no real ink (see isInvisible). The check
  * uses pixels only, so no text of the PDF (font names, for example) is parsed.
  */
 
@@ -75,10 +75,19 @@ export function ringColour(img: Raster, r: Region): Rgb | null {
 }
 
 
+/** A word is visible only when at least this share of the pixels in its box differ from the ring colour... */
+export const INK_MIN_SHARE = 0.08;
+/** ...and the pixels that differ cover at least this many rows and this many columns. A thin rule through white text has 1 row. */
+export const INK_MIN_SPAN = 3;
+/** Visible text has ink in most of the width of its box. A white word joined to a visible glyph has ink in a small part of the width. */
+export const INK_MIN_COLUMNS = 0.4;
+
 /**
- * True when no pixel inside the region differs from the median colour of the
- * 2 pixel ring around it by more than 24 on any channel. Returns null when the
- * ring has no pixels (the region is the whole picture): the word is not checked.
+ * True when the box does not hold visible ink. Ink is a pixel that differs from
+ * the median colour of the 2 pixel ring around the box by more than 24 on some
+ * channel. The box is visible when ink is 8% of its pixels, covers at least
+ * 3 rows and 3 columns (fewer for a box under 6 pixels), and covers 40% of the columns; a hairline or a joined glyph is not enough.
+ * Returns null when the ring has no pixels (the box is the whole picture): the word is not checked.
  */
 export function isInvisible(img: Raster, r: Region): boolean | null {
   const bg = ringColour(img, r);
@@ -89,11 +98,18 @@ export function isInvisible(img: Raster, r: Region): boolean | null {
   // A box has at least 1 pixel.
   const x1 = Math.min(W, Math.max(x0 + 1, Math.ceil(r.x1 * W)));
   const y1 = Math.min(H, Math.max(y0 + 1, Math.ceil(r.y1 * H)));
+  const rows = new Set<number>();
+  const cols = new Set<number>();
+  let ink = 0;
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
       const o = (y * W + x) * 3;
-      if (Math.abs(data[o] - bg[0]) > TOLERANCE || Math.abs(data[o + 1] - bg[1]) > TOLERANCE || Math.abs(data[o + 2] - bg[2]) > TOLERANCE) return false;
+      if (Math.abs(data[o] - bg[0]) > TOLERANCE || Math.abs(data[o + 1] - bg[1]) > TOLERANCE || Math.abs(data[o + 2] - bg[2]) > TOLERANCE) {
+        ink++;
+        rows.add(y);
+        cols.add(x);
+      }
     }
   }
-  return true;
+  return !(ink >= INK_MIN_SHARE * (x1 - x0) * (y1 - y0) && rows.size >= Math.min(INK_MIN_SPAN, Math.max(1, Math.floor((y1 - y0) / 2))) && cols.size >= Math.min(INK_MIN_SPAN, Math.max(1, Math.floor((x1 - x0) / 2))) && cols.size >= INK_MIN_COLUMNS * (x1 - x0));
 }

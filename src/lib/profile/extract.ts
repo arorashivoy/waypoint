@@ -31,6 +31,9 @@ function isTiny(w: number, h: number, chars: number): boolean {
 
 const decode = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 
+/** The picture of a page and its rotation in degrees (0, 90, 180 or 270). */
+export type PagePicture = Raster & { rotate: number };
+
 /**
  * The text of `pdftotext -bbox-layout` output, one line per line, without hidden words.
  * A word is hidden when it is tiny, or when no pixel in its box differs from the colour around it
@@ -38,7 +41,7 @@ const decode = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').repl
  * A word on a page with no picture is kept and `warnings` says that the colour was not checked.
  * Without `pages`, the colour is not checked and there is no warning. The hidden words of a line become one hidden phrase.
  */
-export function wordsFromBbox(html: string, pages?: ReadonlyMap<number, Raster>): Extracted {
+export function wordsFromBbox(html: string, pages?: ReadonlyMap<number, PagePicture>): Extracted {
   const lines: string[] = [];
   const hidden: string[] = [];
   let page = 0;
@@ -58,9 +61,12 @@ export function wordsFromBbox(html: string, pages?: ReadonlyMap<number, Raster>)
       const w = Number(m[3]) - Number(m[1]);
       const h = Number(m[4]) - Number(m[2]);
       let invisible: boolean | null = false;
-      if (pages) {
+      // A word with no letter or digit (a dash, a bullet) cannot carry an instruction, so it is not checked.
+      if (pages && /[\p{L}\p{N}]/u.test(word)) {
         const img = pages.get(page);
-        invisible = img && pw > 0 && ph > 0 ? isInvisible(img, { x0: Number(m[1]) / pw, y0: Number(m[2]) / ph, x1: Number(m[3]) / pw, y1: Number(m[4]) / ph }) : null;
+        // The word boxes are in the turned page. The page tag keeps the size before the turn, so 90 and 270 swap it.
+        const [dw, dh] = img && img.rotate % 180 === 90 ? [ph, pw] : [pw, ph];
+        invisible = img && dw > 0 && dh > 0 ? isInvisible(img, { x0: Number(m[1]) / dw, y0: Number(m[2]) / dh, x1: Number(m[3]) / dw, y1: Number(m[4]) / dh }) : null;
         if (invisible === null) unchecked = true;
       }
       (isTiny(w, h, [...word].length) || invisible ? tiny : shown).push(word);
@@ -74,13 +80,15 @@ export function wordsFromBbox(html: string, pages?: ReadonlyMap<number, Raster>)
 }
 
 /** The pictures of the pages that pdftoppm wrote, by page number. A file that is over 3 MB or is not a good PPM is left out. */
-function readPages(work: string, prefix: string): Map<number, Raster> {
-  const pages = new Map<number, Raster>();
+function readPages(work: string, prefix: string, rotations: ReadonlyMap<number, number>): Map<number, PagePicture> {
+  const pages = new Map<number, PagePicture>();
   for (const f of readdirSync(work)) {
     const m = new RegExp(`^${prefix}-(\\d{1,3})\\.ppm$`).exec(f);
     if (!m || statSync(join(work, f)).size > MAX_PPM_BYTES) continue;
     const img = parsePpm(readFileSync(join(work, f)));
-    if (img) pages.set(Number(m[1]), img);
+    const rotate = rotations.get(Number(m[1]));
+    // A page with no rotation, or a rotation that is not 0, 90, 180 or 270, gets no picture, so its colour is not checked.
+    if (img && rotate !== undefined && [0, 90, 180, 270].includes(rotate)) pages.set(Number(m[1]), { ...img, rotate });
   }
   return pages;
 }
@@ -96,10 +104,14 @@ export async function extractPdf(buf: Buffer): Promise<Extracted> {
     const bbox = readFileSync(output, 'utf8');
     // pdftotext cannot see colour. Pictures of the first 10 pages show it. If a picture is missing, the
     // tiny-text check still runs, and the user gets a warning.
-    let pages = new Map<number, Raster>();
+    let pages = new Map<number, PagePicture>();
     try {
+      const info = await runProgram('pdfinfo', ['-f', '1', '-l', '10', input], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
+      if (info.code !== 0) throw new Error('pdfinfo failed');
+      const rotations = new Map<number, number>();
+      for (const m of info.stdout.matchAll(/^Page\s+(\d{1,4}) rot:\s+(-?\d{1,6})\s*$/gm)) if (rotations.size < 10) rotations.set(Number(m[1]), ((Number(m[2]) % 360) + 360) % 360);
       const r2 = await runProgram('pdftoppm', ['-scale-to', '1000', '-l', '10', input, join(work, 'pg')], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
-      if (r2.code === 0) pages = readPages(work, 'pg');
+      if (r2.code === 0) pages = readPages(work, 'pg', rotations);
     } catch (e) {
       if (!(e instanceof Error)) throw e;
     }

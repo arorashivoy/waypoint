@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
  * importing child_process.
  */
 
-export type Program = 'claude' | 'pdflatex' | 'xelatex' | 'lualatex' | 'tectonic' | 'pdftotext' | 'pdftoppm' | 'rclone' | 'systemctl';
+export type Program = 'claude' | 'pdflatex' | 'xelatex' | 'lualatex' | 'tectonic' | 'pdftotext' | 'pdfinfo' | 'pdftoppm' | 'rclone' | 'systemctl';
 export const LATEX_ENGINES: readonly Program[] = ['pdflatex', 'xelatex', 'lualatex', 'tectonic'];
 
 export type RunOptions = {
@@ -126,6 +126,16 @@ function checkPdftotext(args: readonly string[], opts: RunOptions): string | nul
   return 'pdftotext takes only -v, or -layout or -bbox-layout <in> <out> with both files inside a work folder in the temp folder';
 }
 
+// pdfinfo reports the rotation of the first 10 pages.
+function checkPdfinfo(args: readonly string[], opts: RunOptions): string | null {
+  const want = ['-f', '1', '-l', '10'];
+  if (args.length === 5 && want.every((f, i) => args[i] === f)) {
+    const cwd = resolve(opts.cwd);
+    if (inside(cwd, resolve(tmpdir())) && inside(resolve(args[4]), cwd)) return null;
+  }
+  return 'pdfinfo takes only -f 1 -l 10 <in> with the file inside a work folder in the temp folder';
+}
+
 // pdftoppm draws pictures of the first 10 pages (PPM files, the long side at most 1000 pixels), to find text that has the colour of its background.
 function checkPdftoppm(args: readonly string[], opts: RunOptions): string | null {
   const want = ['-scale-to', '1000', '-l', '10'];
@@ -165,6 +175,7 @@ const CHECKS: Record<Program, (args: readonly string[], opts: RunOptions) => str
   lualatex: (a, o) => checkLatex('lualatex', a, o),
   tectonic: (a, o) => checkLatex('tectonic', a, o),
   pdftotext: checkPdftotext,
+  pdfinfo: checkPdfinfo,
   pdftoppm: checkPdftoppm,
   rclone: (a) => checkRclone(a),
   systemctl: (a) => checkSystemctl(a),
@@ -179,6 +190,7 @@ const ENV_KEYS: Record<Program, readonly string[]> = {
   lualatex: LATEX_KEYS,
   tectonic: LATEX_KEYS,
   pdftotext: BASE_KEYS,
+  pdfinfo: BASE_KEYS,
   pdftoppm: BASE_KEYS,
   rclone: ['HOME', 'PATH', 'RCLONE_CONFIG'],
   systemctl: ['HOME', 'PATH', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS'],

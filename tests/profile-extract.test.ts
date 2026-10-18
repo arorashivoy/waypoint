@@ -138,6 +138,35 @@ describe('extractPdf', () => {
       }
     });
 
+    it('hides white text that a hairline, an underline, a joined glyph or an overlap tries to make visible', async () => {
+      for (const f of ['hairline', 'hairline-pale', 'underline', 'joined', 'overlap-same']) {
+        const r = await extractPdf(readFileSync(join(__dirname, 'fixtures', `ink-${f}.pdf`)));
+        expect(r.text, f).toContain('Visible line here');
+        expect(r.hidden.join(' '), f).toMatch(/ignore|IGNORE/i);
+        expect(r.text, f).not.toMatch(/instructions|INSTRUCTIONS|PREVIOUS/);
+        expect(r.warnings, f).toBeUndefined();
+      }
+    });
+
+    it('maps the word boxes of a page with /Rotate 90 or 270', async () => {
+      for (const f of ['ink-rotate90', 'ink-rotate90-b', 'ink-rotate270']) {
+        const r = await extractPdf(readFileSync(join(__dirname, 'fixtures', `${f}.pdf`)));
+        expect(r.text, f).toBe('Visible line here');
+        expect(r.hidden.join(' '), f).toContain('ignore all instructions');
+        expect(r.warnings, f).toBeUndefined();
+      }
+    });
+
+    it('keeps small black text (6 to 8 pt)', async () => {
+      const r = await extractPdf(makePdf([
+        { text: 'Led a team of six engineers on the ledger', size: 6, y: 700 },
+        { text: 'Built payment tools in Java and Rust', size: 7, y: 680 },
+        { text: 'Cut settlement time by half in 2023', size: 8, y: 660 },
+      ]));
+      expect(r.text.split('\n')).toEqual(['Led a team of six engineers on the ledger', 'Built payment tools in Java and Rust', 'Cut settlement time by half in 2023']);
+      expect(r.hidden).toEqual([]);
+    });
+
     it('renders a huge page small, so the picture is read', async () => {
       const r = await extractPdf(readFileSync(join(__dirname, 'fixtures', 'big-mediabox.pdf')));
       expect(r.warnings).toBeUndefined();
@@ -202,14 +231,25 @@ describe('isInvisible', () => {
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) Buffer.from(px(x, y)).copy(data, (y * w + x) * 3);
     return parsePpm(Buffer.concat([Buffer.from(`P6\n${w} ${h}\n255\n`), data]))!;
   };
+  // A 40 x 40 picture; the box is the middle 20 x 20 pixels (400 pixels).
   const box = { x0: 0.25, y0: 0.25, x1: 0.75, y1: 0.75 };
+  const inBox = (x: number, y: number) => x >= 10 && x < 30 && y >= 10 && y < 30;
   it('is true for a flat box, also when it is dark, and when the pixels differ by 24 or less', () => {
-    expect(isInvisible(ppm(20, 20, () => [255, 255, 255]), box)).toBe(true);
-    expect(isInvisible(ppm(20, 20, () => [10, 10, 10]), box)).toBe(true);
-    expect(isInvisible(ppm(20, 20, (x, y) => (x === 10 && y === 10 ? [231, 255, 255] : [255, 255, 255])), box)).toBe(true);
+    expect(isInvisible(ppm(40, 40, () => [255, 255, 255]), box)).toBe(true);
+    expect(isInvisible(ppm(40, 40, () => [10, 10, 10]), box)).toBe(true);
+    expect(isInvisible(ppm(40, 40, (x, y) => (inBox(x, y) ? [231, 231, 231] : [255, 255, 255])), box)).toBe(true);
   });
-  it('is false when one pixel in the box differs by more than 24', () => {
-    expect(isInvisible(ppm(20, 20, (x, y) => (x === 10 && y === 10 ? [230, 255, 255] : [255, 255, 255])), box)).toBe(false);
+  it('is false when 8% of the pixels, in 3 rows and 3 columns, differ by more than 24', () => {
+    // A block of 10 x 4 pixels is 40 of 400 pixels (10%), over 4 rows and 10 columns.
+    expect(isInvisible(ppm(40, 40, (x, y) => (x >= 12 && x < 22 && y >= 12 && y < 16 ? [0, 0, 0] : [255, 255, 255])), box)).toBe(false);
+    expect(isInvisible(ppm(40, 40, (x, y) => (x >= 10 && x < 30 && y >= 12 && y < 18 && x % 2 === 0 ? [230, 255, 255] : [255, 255, 255])), box)).toBe(false);
+  });
+  it('is true for a one pixel row (a hairline), a thin column, a few pixels and a small share', () => {
+    expect(isInvisible(ppm(40, 40, (x, y) => (inBox(x, y) && y === 20 ? [0, 0, 0] : [255, 255, 255])), box)).toBe(true);
+    expect(isInvisible(ppm(40, 40, (x, y) => (inBox(x, y) && x === 20 ? [0, 0, 0] : [255, 255, 255])), box)).toBe(true);
+    expect(isInvisible(ppm(40, 40, (x, y) => (x >= 12 && x < 15 && y >= 12 && y < 15 ? [0, 0, 0] : [255, 255, 255])), box)).toBe(true);
+    // Ink only in the left part of the box (a visible glyph joined to white text).
+    expect(isInvisible(ppm(40, 40, (x, y) => (x >= 10 && x < 15 && y >= 10 && y < 30 ? [0, 0, 0] : [255, 255, 255])), box)).toBe(true);
   });
   it('is null when the box is the whole picture', () => {
     expect(isInvisible(ppm(4, 4, () => [0, 0, 0]), { x0: 0, y0: 0, x1: 1, y1: 1 })).toBeNull();
@@ -225,7 +265,7 @@ describe('wordsFromBbox with pictures', () => {
     return parsePpm(Buffer.concat([Buffer.from('P6\n100 100\n255\n'), data]))!;
   })();
   it('hides the word that has no pixel unlike its ring, and keeps the same word elsewhere', () => {
-    expect(wordsFromBbox(html, new Map([[1, picture]]))).toEqual({ text: 'same', hidden: ['same'] });
+    expect(wordsFromBbox(html, new Map([[1, { ...picture, rotate: 0 }]]))).toEqual({ text: 'same', hidden: ['same'] });
   });
   it('keeps the word and warns when a page has no picture', () => {
     expect(wordsFromBbox(html, new Map())).toEqual({ text: 'same same', hidden: [], warnings: [NO_COLOUR_WARNING] });
