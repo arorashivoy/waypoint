@@ -16,7 +16,13 @@ const OWN_TEX = 'own.tex';
 
 export type OwnTexCheck = { ok: true } | { ok: false; reasons: string[] };
 
-/** Each rule has a bounded pattern: no nested quantifier, so no input makes a pattern slow. */
+/**
+ * A second layer. Text checks cannot make TeX safe: macros can build any command from parts.
+ * The real guard is the engine choice (an own source never compiles with lualatex, see
+ * buildResume) with -no-shell-escape and openin_any=p / openout_any=p. These rules refuse the
+ * common forms early and give the user a reason.
+ * Each rule has a bounded pattern: no nested quantifier, so no input makes a pattern slow.
+ */
 const RULES: { re: RegExp; reason: string }[] = [
   { re: /\\write\s{0,20}18(?!\d)/, reason: 'The file uses \\write18, which starts a program.' },
   { re: /\\immediate\s{0,20}\\write(?![A-Za-z])/, reason: 'The file uses \\immediate\\write, which writes a file.' },
@@ -27,6 +33,7 @@ const RULES: { re: RegExp; reason: string }[] = [
   { re: /\\(?:usepackage|RequirePackage)\s{0,20}(?:\[[^\]]{0,300}\])?\s{0,20}\{[^}]{0,500}luacode/i, reason: 'The file loads the package luacode, which runs Lua code.' },
   { re: /\\begin\s{0,20}\{\s{0,20}luacode/, reason: 'The file has a luacode environment, which runs Lua code.' },
   { re: /directlua|luaexec|luadirect|latelua|lua_now|lua_shipout|\\lua_/, reason: 'The file runs Lua code, which can read and write files.' },
+  { re: /\\use:[cC]|\\cs:w|\\scantokens(?![A-Za-z])|\\pdfprimitive(?![A-Za-z])/, reason: 'The file uses \\use:c, \\cs:w, \\scantokens or \\pdfprimitive, which build or hide commands.' },
   { re: /\\csname(?![A-Za-z])/, reason: 'The file uses \\csname, which builds a command from text.' },
   { re: /\\if\s{0,3}0/, reason: 'The file uses \\if0, which can hide text.' },
   { re: /\\[hv]?phantom(?![A-Za-z])\s{0,20}\{[^{}]{0,500}[A-Za-z0-9]/, reason: 'The file uses \\phantom, \\hphantom or \\vphantom with text, which hides the text.' },
@@ -118,13 +125,13 @@ function clean(text: string): string {
 
 const TINY_SCALE = /\\scalebox\s{0,20}\{\s{0,20}([\d.]{1,12})|\\resizebox\*?\s{0,20}\{\s{0,20}([\d.]{1,12})/g;
 
-export function checkOwnTex(text: string): OwnTexCheck {
-  if (Buffer.byteLength(text, 'utf8') > MAX_TEX_BYTES) return { ok: false, reasons: ['The file is larger than 1 MB.'] };
+/** Every refusal check on one form of the text. */
+function scan(text: string): string[] {
   const reasons: string[] = [];
-  if (/\^\^/.test(text)) reasons.push('The file uses ^^ notation, which can hide a command.');
-  const raw = text;
-  text = clean(raw);
   for (const r of RULES) if (r.re.test(text)) reasons.push(r.reason);
+  if (/\\ExplSyntaxOn/.test(text) && /lua|write|input|open/.test(text)) {
+    reasons.push('The file uses \\ExplSyntaxOn with lua, write, input or open, which can build a command.');
+  }
   for (const m of text.matchAll(TINY_SCALE)) {
     const f = num(m[1] ?? m[2]);
     if (!Number.isNaN(f) && f < 0.2) {
@@ -140,7 +147,16 @@ export function checkOwnTex(text: string): OwnTexCheck {
     }
   }
   reasons.push(...colorReasons(text));
-  for (const h of hiddenTexMarkers(raw)) reasons.push(`The file has hidden text: ${h}`);
+  for (const h of hiddenTexMarkers(text)) reasons.push(`The file has hidden text: ${h}`);
+  return reasons;
+}
+
+/** Runs on the raw text and on the text without comments. A refusal of either form counts: \verb|%| can hide a line from one form but not from TeX. */
+export function checkOwnTex(text: string): OwnTexCheck {
+  if (Buffer.byteLength(text, 'utf8') > MAX_TEX_BYTES) return { ok: false, reasons: ['The file is larger than 1 MB.'] };
+  const reasons: string[] = [];
+  if (/\^\^/.test(text)) reasons.push('The file uses ^^ notation, which can hide a command.');
+  reasons.push(...scan(text), ...scan(clean(text)));
   return reasons.length ? { ok: false, reasons: [...new Set(reasons)] } : { ok: true };
 }
 

@@ -10,7 +10,7 @@ import { PROMPT_VERSIONS, REFINE_SYSTEM, refinePrompt } from './prompts';
 import { claimsFor, isAdmin } from './user';
 import { userDir } from './user-files';
 import { existsSync } from 'node:fs';
-import { buildResume, resumeConfig, resumeMenu, type BuiltResume, type Steer } from './resume';
+import { buildResume, resumeConfig, resumeMenu, ResumeEngineError, type BuiltResume, type Steer } from './resume';
 
 /**
  * One job's CV as a thing the user can hold: built from the posting plus any
@@ -61,10 +61,15 @@ export const NO_RESUME = 'No résumé is set up for your account yet.';
 
 /** The PDF goes to the folder of the user. With `compile: false` the build does not start the LaTeX engine; only the worker compiles. */
 export async function buildCv(app: Application, job: Job, opts: { compile?: boolean } = {}) {
-  return buildResume(app.userId, await claimsFor(app.userId), postingText(job), app.id, readSteer(app), {
-    outDir: userDir(app.userId, 'resumes'),
-    compile: opts.compile,
-  });
+  try {
+    return await buildResume(app.userId, await claimsFor(app.userId), postingText(job), app.id, readSteer(app), {
+      outDir: userDir(app.userId, 'resumes'),
+      compile: opts.compile,
+    });
+  } catch (e) {
+    if (e instanceof ResumeEngineError) throw new CvError(e.message);
+    throw e;
+  }
 }
 
 export type Published = { resume: BuiltResume | null; driveUrl: string | null; driveReason: string | null };

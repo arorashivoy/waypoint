@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const compile = vi.hoisted(() => vi.fn(async () => {}));
+const engines = vi.hoisted(() => ({ have: ['pdflatex', 'xelatex', 'lualatex'] as string[], asked: [] as (string | null | undefined)[] }));
 vi.mock('@/lib/gdrive', async (orig) => ({
   ...(await orig<typeof import('@/lib/gdrive')>()),
   shareResume: vi.fn(async () => ({ url: 'https://drive.test/f', id: 'd1', reason: null })),
@@ -15,7 +16,11 @@ vi.mock('@/lib/user', async (orig) => ({
 vi.mock('@/lib/latex', async (orig) => ({
   ...(await orig<typeof import('@/lib/latex')>()),
   compileLatex: compile,
-  findEngine: vi.fn(() => ({ program: 'pdflatex', bin: '/usr/bin/pdflatex' }) as never),
+  findEngine: vi.fn((forced?: string | null) => {
+    engines.asked.push(forced);
+    const name = forced ? forced.split('/').pop() : engines.have[0];
+    return name && engines.have.includes(name) ? ({ program: name, bin: `/usr/bin/${name}` } as never) : null;
+  }),
 }));
 
 import { DRIVE_ADMIN_ONLY, publishCv } from '@/lib/cv';
@@ -103,6 +108,12 @@ describe('checkOwnTex', () => {
     ['vphantom', '\\vphantom{Secret}'],
     ['scalebox', '\\scalebox{0.01}{Secret}'],
     ['resizebox', '\\resizebox{0.05\\textwidth}{!}{Secret}'],
+    ['verb hiding a comment sign', '\\verb|%|\\directlua{x}'],
+    ['\\use:c', '\\ExplSyntaxOn \\use:c{ direct \\c_empty_tl lua }{x}'],
+    ['\\cs:w', '\\cs:w foo\\cs_end:'],
+    ['\\scantokens', '\\scantokens{x}'],
+    ['\\pdfprimitive', '\\pdfprimitive\\write'],
+    ['ExplSyntaxOn with input', '\\ExplSyntaxOn \\input{a}'],
     ['hidden marker iffalse', '\\iffalse secret \\fi'],
     ['hidden marker comment', '\\begin{comment}x\\end{comment}'],
     ['hidden marker tiny font', '\\fontsize{2}{3}\\selectfont x'],
@@ -120,7 +131,8 @@ describe('checkOwnTex', () => {
     expect(checkOwnTex('\\color[rgb]{0.95,0.5,1}x')).toEqual({ ok: true });
     expect(checkOwnTex('\\color[HTML]{F5F0A0}x')).toEqual({ ok: true });
     expect(checkOwnTex('\\color{white!50!black}x \\color{black!80} \\color[cmyk]{0,0,0,1} \\scalebox{0.9}{x} 100\\% \\hspace{1pt}')).toEqual({ ok: true });
-    expect(checkOwnTex('% \\directlua{x}\nHello')).toEqual({ ok: true });
+    // A comment that holds a Lua command is refused too: the check runs on the raw text as well.
+    expect(checkOwnTex('% \\directlua{x}\nHello').ok).toBe(false);
   });
 
   it('refuses a file over 1 MB and checks long input fast', () => {
@@ -226,6 +238,57 @@ describe('resumeConfig and buildResume', () => {
   it('gives a member with no source no CV', async () => {
     const m = await makeUser();
     expect(await buildResume(m.user.id, null, 'x', 'app2', {}, { outDir: dir })).toBeNull();
+  });
+});
+
+describe('engine for an own source', () => {
+  const doc = { claims: [], targets: { projects: [], positions: [], educations: [] } } as never;
+  it('never uses lualatex, even when RESUME_ENGINE names it', async () => {
+    const m = await makeUser();
+    await upload(m.cookie, GOOD);
+    vi.stubEnv('RESUME_ENGINE', '/usr/bin/lualatex');
+    try {
+      for (const have of [['pdflatex', 'lualatex'], ['xelatex', 'lualatex']]) {
+        engines.have = have;
+        const { findEngine } = await import('@/lib/latex');
+        vi.mocked(findEngine).mockClear();
+        compile.mockClear();
+        await buildResume(m.user.id, doc, 'x', `e-${have[0]}`, {}, { outDir: join(dir, 'out') });
+        const used = (compile.mock.calls[0] as unknown as [{ engine: { program: string } }])[0].engine.program;
+        expect(used).toBe(have[0]);
+      }
+    } finally {
+      vi.unstubAllEnvs();
+      engines.have = ['pdflatex', 'xelatex', 'lualatex'];
+    }
+  });
+  it('fails with a message when only lualatex exists', async () => {
+    const m = await makeUser();
+    await upload(m.cookie, GOOD);
+    engines.have = ['lualatex'];
+    compile.mockClear();
+    try {
+      await expect(buildResume(m.user.id, doc, 'x', 'e-none', {}, { outDir: join(dir, 'out') })).rejects.toThrow('needs pdflatex or xelatex');
+      expect(compile).not.toHaveBeenCalled();
+    } finally {
+      engines.have = ['pdflatex', 'xelatex', 'lualatex'];
+    }
+  });
+  it('lets the admin file use RESUME_ENGINE=lualatex', async () => {
+    const admin = await makeUser('admin');
+    const texDir = mkdtempSync(join(dir, 'admin-'));
+    writeFileSync(join(texDir, 'cv.tex'), GOOD);
+    vi.stubEnv('RESUME_TEX', join(texDir, 'cv.tex'));
+    vi.stubEnv('RESUME_PDF', '');
+    vi.stubEnv('RESUME_ENGINE', '/usr/bin/lualatex');
+    compile.mockClear();
+    try {
+      await buildResume(admin.user.id, doc, 'x', 'e-admin', {}, { outDir: join(dir, 'out') });
+      expect(compile).toHaveBeenCalled();
+      expect((compile.mock.calls[0] as unknown as [{ engine: { program: string } }])[0].engine.program).toBe('lualatex');
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 

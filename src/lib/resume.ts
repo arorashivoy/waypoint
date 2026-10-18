@@ -34,6 +34,13 @@ const env = (k: string) => {
   return v ? v : null;
 };
 
+/** An own .tex needs pdflatex or xelatex on the server. */
+export class ResumeEngineError extends Error {
+  constructor() {
+    super('Your résumé source needs pdflatex or xelatex on the server. Ask the admin to install one.');
+  }
+}
+
 export type ResumeConfig = {
   /** The CV as it stands. Served whenever tailoring is unavailable. */
   pdf: string | null;
@@ -41,6 +48,8 @@ export type ResumeConfig = {
   tex: string | null;
   /** The folder that LaTeX copies class and image files from. Null for an own .tex: the folder of the user holds old PDFs, and an own .tex cannot use other files. */
   assetsDir: string | null;
+  /** True for the .tex that a user uploaded. It never compiles with lualatex. */
+  own: boolean;
   /** A URL a recruiter can actually open. localhost is not one, which is why
    *  this is separate from `pdf` and why the message only claims a link when it
    *  is set. */
@@ -62,7 +71,7 @@ export async function resumeConfig(userId: string): Promise<ResumeConfig> {
     timeoutMs: Number(env('RESUME_TIMEOUT_MS')) || 60_000,
   };
   if ((await getSettings(userId)).resumeMode === 'own-tex' && hasOwnTex(userId)) {
-    return { pdf: null, tex: ownTexPath(userId), assetsDir: null, publicUrl: null, ...common };
+    return { pdf: null, tex: ownTexPath(userId), assetsDir: null, own: true, publicUrl: null, ...common };
   }
   if (await isAdmin(userId)) {
     const pdf = env('RESUME_PDF');
@@ -72,11 +81,12 @@ export async function resumeConfig(userId: string): Promise<ResumeConfig> {
       pdf: pdf ? expand(pdf) : null,
       tex: texPath,
       assetsDir: texPath ? dirname(texPath) : null,
+      own: false,
       publicUrl: env('RESUME_PUBLIC_URL'),
       ...common,
     };
   }
-  return { pdf: null, tex: null, assetsDir: null, publicUrl: null, ...common };
+  return { pdf: null, tex: null, assetsDir: null, own: false, publicUrl: null, ...common };
 }
 
 const norm = (s: string) =>
@@ -781,7 +791,9 @@ export async function buildResume(
   // Without a base PDF (an own .tex), an unchanged source is still compiled: it is the only CV there is.
   if (source === template && cfg.pdf) return bail('the CV already leads with the most relevant work for this posting', skipped);
 
-  const engine = findEngine(env('RESUME_ENGINE'));
+  // The file of a user never compiles with lualatex, even when RESUME_ENGINE names it: Lua code can read any file.
+  const engine = cfg.own ? findEngine('pdflatex') ?? findEngine('xelatex') : findEngine(env('RESUME_ENGINE'));
+  if (cfg.own && !engine) throw new ResumeEngineError();
   if (!engine) return bail('no LaTeX engine found. Install pdflatex (texlive), or set RESUME_ENGINE to an engine on the list');
 
   // Keyed on the rendered source, so two postings that select the same order
