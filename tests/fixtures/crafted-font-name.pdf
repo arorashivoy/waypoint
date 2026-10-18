@@ -1,0 +1,37 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 149 >>
+stream
+BT 0 0 0 rg /F1 12 Tf 72 700 Td (visible a</text><text font="1">sneaky &amp; <b>x</b>) Tj ET
+BT 1 1 1 rg /F2 12 Tf 72 600 Td (whiteword secret) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Evil#22#20color#3D#22#23000000#22#20x#3D#22 >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000000451 00000 n 
+0000000521 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+625
+%%EOF

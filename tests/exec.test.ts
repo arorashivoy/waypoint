@@ -203,6 +203,31 @@ describe('pdftohtml template', () => {
   });
 });
 
+describe('pdftoppm template', () => {
+  it.skipIf(!findOnPath('pdftoppm'))('accepts the fixed template inside a temp work folder (the check passes, the run fails)', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
+    try {
+      const r = await runProgram('pdftoppm', ['-r', '36', '-l', '10', `${d}/missing.pdf`, `${d}/pg`], T(d));
+      expect(r.code).not.toBe(0);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+  it('refuses another resolution, another page range, another flag, and paths outside the work folder', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
+    try {
+      await expect(runProgram('pdftoppm', ['-r', '300', '-l', '10', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
+      await expect(runProgram('pdftoppm', ['-r', '36', '-l', '99', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
+      await expect(runProgram('pdftoppm', ['-r', '36', '-png', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
+      await expect(runProgram('pdftoppm', ['-r', '36', '-l', '10', `${d}/a.pdf`], T(d))).rejects.toThrow(/pdftoppm/);
+      await expect(runProgram('pdftoppm', ['-r', '36', '-l', '10', '/etc/passwd', `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
+      await expect(runProgram('pdftoppm', ['-r', '36', '-l', '10', `${d}/a.pdf`, `${homedir()}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('pdftotext paths', () => {
   it.skipIf(!findOnPath('pdftotext'))('accepts -bbox-layout with paths inside a temp work folder (the check passes, the run fails)', async () => {
     const d = mkdtempSync(join(tmpdir(), 'exec-test-'));

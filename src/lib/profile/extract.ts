@@ -1,8 +1,9 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HttpError } from '../auth/http';
 import { runProgram } from '../exec';
+import { backgroundFrom, colourHiddenRegions, NO_COLOUR_WARNING, parsePpm, type Background, type Raster, type Region } from './pdf-colour';
 
 /**
  * Text from a résumé file, for the import prompt (spec 3.3, step 1), and the
@@ -30,68 +31,55 @@ function isTiny(w: number, h: number, chars: number): boolean {
 
 const decode = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 
-const MAX_XML = 5 * 1024 * 1024;
-const MAX_XML_ELEMENTS = 50_000;
-/** A colour is white when every channel is within 16 of 255. */
-const WHITE_FROM = 255 - 16;
-export const NO_COLOUR_WARNING = 'Waypoint could not check text colour in this PDF.';
-
-const normWord = (w: string) => w.normalize('NFKC').toLowerCase();
-const decodeXml = (s: string) =>
-  decode(s.replace(/&#x([0-9a-f]{1,6});/gi, (_, h) => safeChar(parseInt(h, 16))).replace(/&#(\d{1,7});/g, (_, d) => safeChar(Number(d))));
-function safeChar(n: number): string {
-  return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '';
-}
-
-/**
- * The words of `pdftohtml -xml` output with white text (every colour channel
- * within 16 of #ffffff; the page is taken as white). The words are normalised
- * (NFKC, lower case). Throws when the XML is over 5 MB or has over 50 000 elements.
- */
-export function colourHiddenWords(xml: string): Set<string> {
-  if (xml.length > MAX_XML) throw new Error('The XML is too large.');
-  const colours = new Map<string, boolean>();
-  const words = new Set<string>();
-  let count = 0;
-  for (const m of xml.matchAll(/<fontspec\b([^>]*)>|<text\b([^>]*)>([\s\S]*?)<\/text>/g)) {
-    if (++count > MAX_XML_ELEMENTS) throw new Error('The XML has too many elements.');
-    if (m[1] !== undefined) {
-      const id = /\bid="([^"]*)"/.exec(m[1])?.[1];
-      const c = /\bcolor="#([0-9a-fA-F]{6})"/.exec(m[1])?.[1];
-      if (id === undefined) continue;
-      const v = c ? [0, 2, 4].map((i) => parseInt(c.slice(i, i + 2), 16)) : [0];
-      colours.set(id, v.length === 3 && v.every((x) => x >= WHITE_FROM));
-      continue;
-    }
-    const font = /\bfont="([^"]*)"/.exec(m[2])?.[1];
-    if (font === undefined || !colours.get(font)) continue;
-    for (const w of decodeXml(m[3].replace(/<[^>]*>/g, '')).split(/\s+/)) if (w) words.add(normWord(w));
-  }
-  return words;
-}
+/** A word centre this close (in points) to a hidden text box still counts as inside it. */
+const BOX_MARGIN = 1;
 
 /**
  * The text of `pdftotext -bbox-layout` output, one line per line, without hidden words.
- * A word is hidden when it is tiny, or when it is in `white` (see colourHiddenWords).
- * The hidden words of a line become one hidden phrase.
+ * A word is hidden when it is tiny, or when its centre is in a hidden region
+ * (see colourHiddenRegions), with a margin of 1 pt. The hidden words of a line become one hidden phrase.
  */
-export function wordsFromBbox(html: string, white?: ReadonlySet<string>): Extracted {
+export function wordsFromBbox(html: string, regions: readonly Region[] = []): Extracted {
   const lines: string[] = [];
   const hidden: string[] = [];
+  let page = 0;
+  let pw = 0;
+  let ph = 0;
   for (const line of html.split(/<\/line>/)) {
+    for (const p of line.matchAll(/<page width="([\d.]+)" height="([\d.]+)"/g)) {
+      page++;
+      pw = Number(p[1]);
+      ph = Number(p[2]);
+    }
     const shown: string[] = [];
     const tiny: string[] = [];
     for (const m of line.matchAll(/<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">([^<]*)<\/word>/g)) {
       const word = decode(m[5]);
       const w = Number(m[3]) - Number(m[1]);
       const h = Number(m[4]) - Number(m[2]);
-      (isTiny(w, h, [...word].length) || white?.has(normWord(word)) ? tiny : shown).push(word);
+      const cx = (Number(m[1]) + Number(m[3])) / 2 / (pw || 1);
+      const cy = (Number(m[2]) + Number(m[4])) / 2 / (ph || 1);
+      const mx = BOX_MARGIN / (pw || 1);
+      const my = BOX_MARGIN / (ph || 1);
+      const covered = pw > 0 && ph > 0 && regions.some((r) => r.page === page && cx >= r.x0 - mx && cx <= r.x1 + mx && cy >= r.y0 - my && cy <= r.y1 + my);
+      (isTiny(w, h, [...word].length) || covered ? tiny : shown).push(word);
     }
     if (shown.length) lines.push(shown.join(' '));
     const phrase = tiny.join(' ').slice(0, 200);
     if (/[A-Za-z]/.test(phrase) && hidden.length < MAX_HIDDEN) hidden.push(phrase);
   }
   return { text: lines.join('\n').slice(0, MAX_TEXT), hidden };
+}
+
+/** The pictures of the pages that pdftoppm wrote, by page number. A file that is not a good PPM is left out. */
+function readPages(work: string, prefix: string): Map<number, Raster> {
+  const pages = new Map<number, Raster>();
+  for (const f of readdirSync(work)) {
+    const m = new RegExp(`^${prefix}-(\\d{1,3})\\.ppm$`).exec(f);
+    const img = m ? parsePpm(readFileSync(join(work, f))) : null;
+    if (m && img) pages.set(Number(m[1]), img);
+  }
+  return pages;
 }
 
 export async function extractPdf(buf: Buffer): Promise<Extracted> {
@@ -103,15 +91,30 @@ export async function extractPdf(buf: Buffer): Promise<Extracted> {
     const r = await runProgram('pdftotext', ['-bbox-layout', input, output], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
     if (r.code !== 0) throw new HttpError(400, 'Waypoint could not read this PDF.');
     const bbox = readFileSync(output, 'utf8');
-    // pdftotext cannot see colour. If pdftohtml fails, the tiny-text check still runs, and the user gets a warning.
+    // pdftotext cannot see colour. If a colour step fails, the tiny-text check still runs, and the user gets a warning.
+    let xml: string;
     try {
       const r2 = await runProgram('pdftohtml', ['-xml', '-i', '-stdout', '-q', '-nodrm', input], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
       if (r2.code !== 0) throw new Error('pdftohtml failed');
-      return wordsFromBbox(bbox, colourHiddenWords(r2.stdout));
+      xml = r2.stdout;
+      colourHiddenRegions(xml);
     } catch (e) {
       if (!(e instanceof Error)) throw e;
       return { ...wordsFromBbox(bbox), warnings: [NO_COLOUR_WARNING] };
     }
+    // The colour around each text box comes from a small picture of each page. Without it, the page is taken as white.
+    const warnings: string[] = [];
+    let background: Background | undefined;
+    try {
+      const r3 = await runProgram('pdftoppm', ['-r', '36', '-l', '10', input, join(work, 'pg')], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
+      if (r3.code !== 0) throw new Error('pdftoppm failed');
+      background = backgroundFrom(readPages(work, 'pg'));
+    } catch (e) {
+      if (!(e instanceof Error)) throw e;
+      warnings.push(NO_COLOUR_WARNING);
+    }
+    const out = wordsFromBbox(bbox, colourHiddenRegions(xml, background));
+    return warnings.length ? { ...out, warnings } : out;
   } finally {
     rmSync(work, { recursive: true, force: true });
   }

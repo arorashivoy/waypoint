@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
  * importing child_process.
  */
 
-export type Program = 'claude' | 'pdflatex' | 'xelatex' | 'lualatex' | 'tectonic' | 'pdftotext' | 'pdftohtml' | 'rclone' | 'systemctl';
+export type Program = 'claude' | 'pdflatex' | 'xelatex' | 'lualatex' | 'tectonic' | 'pdftotext' | 'pdftohtml' | 'pdftoppm' | 'rclone' | 'systemctl';
 export const LATEX_ENGINES: readonly Program[] = ['pdflatex', 'xelatex', 'lualatex', 'tectonic'];
 
 export type RunOptions = {
@@ -137,6 +137,16 @@ function checkPdftohtml(args: readonly string[], opts: RunOptions): string | nul
   return 'pdftohtml takes only -xml -i -stdout -q -nodrm <in> with the file inside a work folder in the temp folder';
 }
 
+// pdftoppm draws small pictures of the first 10 pages (PPM files), to measure the colour around the text.
+function checkPdftoppm(args: readonly string[], opts: RunOptions): string | null {
+  const want = ['-r', '36', '-l', '10'];
+  if (args.length === 6 && want.every((f, i) => args[i] === f)) {
+    const cwd = resolve(opts.cwd);
+    if (inside(cwd, resolve(tmpdir())) && inside(resolve(args[4]), cwd) && inside(resolve(args[5]), cwd)) return null;
+  }
+  return 'pdftoppm takes only -r 36 -l 10 <in> <out prefix> with both inside a work folder in the temp folder';
+}
+
 export const RCLONE_REMOTE = /^[A-Za-z0-9][A-Za-z0-9_-]*:[A-Za-z0-9._\/-]*$/;
 const BACKUP_FILE = /^\d{4}-\d{2}-\d{2}(-users\.tar\.gz|\.db)$/;
 const UNITS = ['waypoint-web', 'waypoint-worker'];
@@ -167,6 +177,7 @@ const CHECKS: Record<Program, (args: readonly string[], opts: RunOptions) => str
   tectonic: (a, o) => checkLatex('tectonic', a, o),
   pdftotext: checkPdftotext,
   pdftohtml: checkPdftohtml,
+  pdftoppm: checkPdftoppm,
   rclone: (a) => checkRclone(a),
   systemctl: (a) => checkSystemctl(a),
 };
@@ -181,6 +192,7 @@ const ENV_KEYS: Record<Program, readonly string[]> = {
   tectonic: LATEX_KEYS,
   pdftotext: BASE_KEYS,
   pdftohtml: BASE_KEYS,
+  pdftoppm: BASE_KEYS,
   rclone: ['HOME', 'PATH', 'RCLONE_CONFIG'],
   systemctl: ['HOME', 'PATH', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS'],
 };
