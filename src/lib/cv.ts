@@ -6,7 +6,7 @@ import { HttpError } from './auth/http';
 import { RefineReply } from './schemas';
 import { shareResume } from './gdrive';
 import { checkForInjection } from './injection';
-import { REFINE_SYSTEM, refinePrompt } from './prompts';
+import { PROMPT_VERSIONS, REFINE_SYSTEM, refinePrompt } from './prompts';
 import { claimsFor, isAdmin } from './user';
 import { userDir } from './user-files';
 import { existsSync } from 'node:fs';
@@ -147,7 +147,7 @@ export async function refineCv(app: Application, job: Job, request: string, task
   // Through the cache: a retry with the same CV, history and message reuses the paid reply.
   const out = await askJsonCached(
     'refine',
-    'v1',
+    PROMPT_VERSIONS.refine,
     {
       system: REFINE_SYSTEM,
       prompt: refinePrompt(

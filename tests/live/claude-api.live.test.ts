@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { prompt } from '@/lib/prompts';
 import { askApi } from '@/lib/claude/api';
 import { HookReply } from '@/lib/schemas';
 
@@ -7,7 +8,7 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY)('Claude API (live)', () => {
   it('returns a structured reply from a Sonnet model', async () => {
     const r = await askApi(process.env.ANTHROPIC_API_KEY!, {
       system: 'You write one-line hooks for cold emails. Answer with JSON only.',
-      prompt: 'Write a hook for an engineer who builds Kafka pipelines.',
+      prompt: prompt`Write a hook for an engineer who builds Kafka pipelines.`,
       schema: HookReply,
       effort: 'low',
     }, { failureKey: 'shared' });

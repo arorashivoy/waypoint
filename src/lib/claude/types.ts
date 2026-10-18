@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { BuiltPrompt } from '../prompts/builder';
 
 export type Effort = 'low' | 'medium' | 'high';
 
@@ -18,7 +19,8 @@ export type Usage = {
 
 export type AskRequest<T> = {
   system: string;
-  prompt: string;
+  /** Only the `prompt` tag of the prompt builder makes a `BuiltPrompt`. */
+  prompt: BuiltPrompt;
   schema: z.ZodType<T>;
   effort: Effort;
   maxTokens?: number;

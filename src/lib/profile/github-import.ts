@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { askJsonCached } from '../cache';
 import { checkForInjection } from '../injection';
-import { GUARD, untrusted, untrustedFields } from '../prompts';
+import { GUARD, PROMPT_VERSIONS, prompt, untrusted, untrustedFields, type BuiltPrompt } from '../prompts';
 import { githubToken, languages, listRepos, readme, type Repo } from '../github';
 import { HttpError } from '../auth/http';
 import { db } from '../db';
@@ -27,8 +27,8 @@ export function repoSource(repo: Repo, langs: string[], text: string): string {
   return `${Object.entries(fields(repo, langs)).map(([k, v]) => `${k}: ${v}`).join('\n')}\n${text}`;
 }
 
-export function githubPrompt(repo: Repo, langs: string[], text: string): string {
-  return `${untrustedFields('GitHub repository', fields(repo, langs))}
+export function githubPrompt(repo: Repo, langs: string[], text: string): BuiltPrompt {
+  return prompt`${untrustedFields('GitHub repository', fields(repo, langs))}
 
 ${untrusted('README, first 4 KB', text || '(no README)')}
 
@@ -176,7 +176,7 @@ export async function draftsFromRepo(userId: string, username: string, name: str
   if (repo.fork) warnings.push('This repository is a fork. Check that the work in it is yours.');
   const scan = checkForInjection(repoSource(repo, langs, text));
   if (scan.suspicious) warnings.push(`The repository facts or README have a warning sign: ${scan.why}. Check the draft.`);
-  const data = await askJsonCached('github-import', 'v1', { system: GITHUB_IMPORT_SYSTEM, prompt: githubPrompt(repo, langs, text), schema: GithubReply, effort: 'low', maxTokens: 2000 }, { userId, kind: 'github-import' }, { perUser: true });
+  const data = await askJsonCached('github-import', PROMPT_VERSIONS['github-import'], { system: GITHUB_IMPORT_SYSTEM, prompt: githubPrompt(repo, langs, text), schema: GithubReply, effort: 'low', maxTokens: 2000 }, { userId, kind: 'github-import' }, { perUser: true });
   const built = buildRepoDrafts(data, repo, repoSource(repo, langs, text), taken, warnings);
   const drafts = await createDrafts(userId, { batchId, source: 'github', items: built.items });
   return { drafts, dropped: built.dropped };

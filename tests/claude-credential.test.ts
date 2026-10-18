@@ -5,6 +5,7 @@ import { z } from 'zod';
 vi.mock('@/lib/claude/cli', async (orig) => ({ ...(await orig<typeof import('@/lib/claude/cli')>()), cliBinary: vi.fn(() => '/usr/bin/claude'), askCli: vi.fn() }));
 vi.mock('@/lib/claude/api', () => ({ askApi: vi.fn() }));
 
+import { prompt } from '@/lib/prompts';
 import { db } from '@/lib/db';
 import { resetEnvForTests } from '@/lib/env';
 import { saveSecret } from '@/lib/secrets';
@@ -89,7 +90,7 @@ describe('credentialFor', () => {
 });
 
 describe('askJson', () => {
-  const req = { system: 's', prompt: 'p', schema: z.object({ ok: z.boolean() }), effort: 'low' as const };
+  const req = { system: 's', prompt: prompt`p`, schema: z.object({ ok: z.boolean() }), effort: 'low' as const };
 
   it('writes one usage row with the credential and the kind', async () => {
     const u = await user();

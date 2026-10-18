@@ -11,7 +11,7 @@ import { askJson, credentialFor } from '@/lib/claude';
 import { askJsonCached } from '@/lib/cache';
 import { DraftReply, HookReply, SlotsReply } from '@/lib/schemas';
 import { alumniHookBudget, MIN_HOOK, renderAlumniNote, renderReferral, resolveHighlight, type Slots } from '@/lib/templates';
-import { ALUMNI_SYSTEM, alumniPrompt, REFERRAL_SYSTEM, referralPrompt, REPLY_SYSTEM, replyPrompt } from '@/lib/prompts';
+import { ALUMNI_SYSTEM, alumniPrompt, PROMPT_VERSIONS, REFERRAL_SYSTEM, referralPrompt, REPLY_SYSTEM, replyPrompt } from '@/lib/prompts';
 import { checkForInjection } from '@/lib/injection';
 import { resumeOffer } from '@/lib/resume';
 import { publishCv, type Published } from '@/lib/cv';
@@ -45,7 +45,7 @@ async function draftReferral(app: Application, job: Job, profile: ResolvedProfil
   const slots: Slots =
     !cred
       ? { highlight: candidates[0] || '', hook: 'it lines up closely with what I build today', proof: `I ${profile.headline.toLowerCase()}` }
-      : await askJsonCached('referral', 'v1', { system: REFERRAL_SYSTEM, prompt: referralPrompt(profile, job, contactName), schema: SlotsReply, effort: 'low' }, { userId: app.userId, kind: 'referral' });
+      : await askJsonCached('referral', PROMPT_VERSIONS.referral, { system: REFERRAL_SYSTEM, prompt: referralPrompt(profile, job, contactName), schema: SlotsReply, effort: 'low' }, { userId: app.userId, kind: 'referral' });
 
   // Which projects lead is decided from the claim graph against this
   // posting's own words, plus whatever was chosen in "Refine with Claude" —
@@ -156,7 +156,7 @@ export const POST = handle(async (req) => {
     const hook =
       !cred || budget < MIN_HOOK
         ? ''
-        : (await askJsonCached('note', 'v1', { system: ALUMNI_SYSTEM, prompt: alumniPrompt(profile, job, school.short, budget), schema: HookReply, effort: 'low' }, { userId: user.id, kind: 'note' })).hook;
+        : (await askJsonCached('note', PROMPT_VERSIONS.note, { system: ALUMNI_SYSTEM, prompt: alumniPrompt(profile, job, school.short, budget), schema: HookReply, effort: 'low' }, { userId: user.id, kind: 'note' })).hook;
     const note = renderAlumniNote({ ...frame, hook });
     const open = alumniSearch(school, job.company);
     const name = `${school.short} alumni at ${job.company}`;

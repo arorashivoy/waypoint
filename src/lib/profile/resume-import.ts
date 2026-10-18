@@ -4,7 +4,7 @@ import { db } from '../db';
 import { HttpError } from '../auth/http';
 import { askJsonCached } from '../cache';
 import { checkForInjection } from '../injection';
-import { GUARD, untrusted } from '../prompts';
+import { GUARD, PROMPT_VERSIONS, prompt, untrusted, type BuiltPrompt } from '../prompts';
 import { sniffResume } from '../uploads';
 import { slugify } from './doc';
 import { createDrafts, MAX_PENDING, type NewDraft } from './drafts';
@@ -22,8 +22,8 @@ import type { DraftType } from './apply';
 
 export const RESUME_IMPORT_SYSTEM = `You read the text of one résumé and turn it into structured profile drafts for the person it describes. A person reviews every draft before it goes into the profile. ${GUARD}`;
 
-export function resumeImportPrompt(text: string): string {
-  return `${untrusted('resume text', text)}
+export function resumeImportPrompt(text: string): BuiltPrompt {
+  return prompt`${untrusted('resume text', text)}
 
 Turn the résumé above into JSON with exactly these keys:
 {
@@ -226,7 +226,7 @@ export async function draftsFromResume(userId: string, kind: ResumeKind, buf: Bu
   const scan = checkForInjection(ex.text);
   if (scan.suspicious) warnings.push(`The résumé text has a warning sign: ${scan.why}. Check each draft.`);
 
-  const data = await askJsonCached('resume-import', 'v1', { system: RESUME_IMPORT_SYSTEM, prompt: resumeImportPrompt(ex.text), schema: ResumeReply, effort: 'medium', maxTokens: 8000 }, { userId, kind: 'resume-import' }, { perUser: true });
+  const data = await askJsonCached('resume-import', PROMPT_VERSIONS['resume-import'], { system: RESUME_IMPORT_SYSTEM, prompt: resumeImportPrompt(ex.text), schema: ResumeReply, effort: 'medium', maxTokens: 8000 }, { userId, kind: 'resume-import' }, { perUser: true });
   const { items, dropped } = buildResumeDrafts(data, ex.text, user.name);
   const drafts = await createDrafts(userId, { batchId, source: 'resume', items, warnings });
   return { drafts, dropped, hidden: ex.hidden.length };

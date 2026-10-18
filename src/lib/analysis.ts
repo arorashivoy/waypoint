@@ -3,7 +3,7 @@ import { db } from './db';
 import { credentialFor } from './claude';
 import { askJsonCached } from './cache';
 import { AnalysisReply, coerceText } from './schemas';
-import { ANALYSE_SYSTEM, analysePrompt } from './prompts';
+import { ANALYSE_SYSTEM, analysePrompt, PROMPT_VERSIONS } from './prompts';
 import { claimsFor, profileSummary } from './user';
 import { fieldFit, levelFit, matchScore, rankRoutes, routeLabel } from './match';
 import { CV_COUNTRY_RULES, FIELD_QUERIES } from './countries';
@@ -150,7 +150,7 @@ export async function analyseJob(job: Job, userId: string, force = false): Promi
     analysis = heuristicAnalysis(job, profile, fitFromClaims(claims));
   } else {
     try {
-      const out = await askJsonCached('analysis', 'v1', { system: ANALYSE_SYSTEM, prompt: analysePrompt(profile, job), schema: AnalysisReply, effort: 'medium' }, { userId, kind: 'analysis' });
+      const out = await askJsonCached('analysis', PROMPT_VERSIONS.analysis, { system: ANALYSE_SYSTEM, prompt: analysePrompt(profile, job), schema: AnalysisReply, effort: 'medium' }, { userId, kind: 'analysis' });
       analysis = normalise(out, 'claude');
       read = true;
     } catch {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import Anthropic from '@anthropic-ai/sdk';
+import { prompt } from '@/lib/prompts';
 import { log } from '@/lib/log';
 import { askApi } from '@/lib/claude/api';
 import { HookReply } from '@/lib/schemas';
@@ -12,7 +13,7 @@ const ok = {
   usage: { input_tokens: 100, output_tokens: 10, cache_read_input_tokens: 50, cache_creation_input_tokens: 0 },
 };
 const fake = (impl: (p: any) => any) => ({ messages: { create: vi.fn(async (p: any) => impl(p)) } });
-const req = { system: 'SYS', prompt: 'PROMPT', schema: HookReply, effort: 'low' as const };
+const req = { system: 'SYS', prompt: prompt`PROMPT`, schema: HookReply, effort: 'low' as const };
 
 describe('askApi', () => {
   it('sends Sonnet, a structured output, the effort and a cached system block', async () => {
