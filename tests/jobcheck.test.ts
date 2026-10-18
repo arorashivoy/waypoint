@@ -44,7 +44,7 @@ const reply = (over: Partial<JobCheck> = {}): JobCheck => ({
 });
 
 describe('checkReply', () => {
-  const ctx = { slugs: new Set(['java']), posting: 'We need   Java.\nFluent GERMAN is required. Use <b>bold</b>.' };
+  const ctx = { slugs: new Set(['java']), posting: 'We need   Java.\nFluent GERMAN is required. Use <b>bold</b> everywhere.' };
 
   it('turns a met or partial requirement with an unknown slug into missing and removes the slug', () => {
     const out = checkReply(reply({ requirements: [req('must', 'met', ['java', 'ghost']), req('nice', 'partial', ['ghost']), req('must', 'met', ['java'])] }), ctx);
@@ -66,9 +66,34 @@ describe('checkReply', () => {
   });
 
   it('matches a quote with full-width angle brackets, as the fence writes them', () => {
-    const out = checkReply(reply({ blockers: [{ type: 'other', quote: 'Use ＜b＞bold＜/b＞' }] }), ctx);
+    const out = checkReply(reply({ blockers: [{ type: 'other', quote: 'Use ＜b＞bold＜/b＞ everywhere.' }] }), ctx);
     expect(out.blockers).toHaveLength(1);
     expect(normaliseQuote('＜A＞')).toBe('<a>');
+  });
+
+  it('removes a blocker quote with fewer than 3 words or 12 characters', () => {
+    const out = checkReply(reply({ blockers: [{ type: 'other', quote: 'Java' }, { type: 'other', quote: 'a' }, { type: 'other', quote: 'We need' }, { type: 'other', quote: 'We need Java.' }] }), ctx);
+    expect(out.blockers.map((b) => b.quote)).toEqual(['We need Java.']);
+  });
+
+  it('coerces each value that is outside its list', () => {
+    const wild = {
+      ...reply({ field: 'Backend', level: 'Intern', mode: 'Onsite', summary: 'ok' }),
+      requirements: [{ text: 'R', importance: 'critical', status: 'yes', evidence: ['java'] }, ...Array(20).fill(req('nice', 'missing'))],
+      blockers: [{ type: 'visa', quote: 'Fluent GERMAN is required' }, ...Array(10).fill({ type: 'language', quote: 'Fluent GERMAN is required' })],
+      legitimacy: ['scam', 'reposted', 'reposted'],
+    };
+    const out = checkReply(wild as never, { ...ctx, fields: ['Trading'], fallback: { level: 'Senior', mode: 'Hybrid' } });
+    expect(out.field).toBe('Other');
+    expect([out.level, out.mode]).toEqual(['Senior', 'Hybrid']);
+    expect(out.requirements).toHaveLength(15);
+    expect(out.requirements[0]).toMatchObject({ importance: 'nice', status: 'missing' });
+    expect(out.blockers).toHaveLength(6);
+    expect(out.blockers[0].type).toBe('other');
+    expect(out.legitimacy).toEqual(['reposted']);
+    const bare = checkReply(wild as never, ctx);
+    expect([bare.level, bare.mode]).toEqual(['Mid', 'On-site']);
+    expect(checkReply({ ...wild, field: 'Trading', level: 'Entry', mode: 'Remote' } as never, { ...ctx, fields: ['Trading'] })).toMatchObject({ field: 'Trading', level: 'Entry', mode: 'Remote' });
   });
 
   it('cuts the summary to 25 words', () => {
@@ -117,8 +142,8 @@ describe('fields', () => {
 
   it('sends the enum in the structured output format', () => {
     const { schema } = zodOutputFormat(jobCheckSchema(fieldChoices(['Trading'])) as never) as any;
-    // This SDK version writes an enum into the description of the property.
-    expect(schema.properties.field.description).toContain('["Trading","Other"]');
+    // The enum goes into the description only; the schema does not refuse other values.
+    expect(schema.properties.field.description).toContain('"Trading", "Other"');
   });
 });
 
@@ -146,8 +171,8 @@ describe('analyseJob', () => {
     ask.reply = { ...reply({ requirements: [req('must', 'met', ['java'])] }) };
     await analyseJob(j, userId);
     const [{ kind, version, req: r }] = ask.calls;
-    expect(PROMPT_VERSIONS['job-check']).toBe('job-check-1');
-    expect(version).toBe('job-check-1');
+    expect(PROMPT_VERSIONS['job-check']).toBe('job-check-2');
+    expect(version).toBe('job-check-2');
     expect(kind).toBe('job-check');
     expect(r.effort).toBe('medium');
     const rules = r.system.indexOf('Return JSON with exactly these keys');
@@ -156,7 +181,7 @@ describe('analyseJob', () => {
     expect(r.system).toContain('java · Java · built · Rebuilt the ledger in Java.');
     expect(r.system).not.toContain('gpa ·');
     expect(r.system).toMatch(/Countries: .*\bXJ\b/);
-    expect(r.system).toContain('Fields: Backend');
+    expect(r.system).toContain('Fields (choose one for "field"): Backend, Other');
     expect(r.system).toContain('Visa status: Needs sponsorship');
     expect(r.prompt).toContain('Java services.');
     expect(r.prompt).not.toContain('<profile>');
@@ -173,7 +198,7 @@ describe('analyseJob', () => {
     expect(a.requirements.map((r) => r.status)).toEqual(['met', 'missing']);
     expect(a.blockers).toHaveLength(1);
     expect(a.by).toBe('claude');
-    expect(a.promptVersion).toBe('job-check-1');
+    expect(a.promptVersion).toBe('job-check-2');
     // The model gave no score: code computes 20 · ratio (0.5 here) + the two fits - 25 for the one blocker.
     const fits = a.parts.filter((p) => p.kind === 'field' || p.kind === 'level').reduce((n, p) => n + p.points, 0);
     expect(a.score).toBe(Math.max(0, Math.round(10 + fits) - 25));
@@ -189,15 +214,40 @@ describe('analyseJob', () => {
     expect(ask.calls[0].req.schema.safeParse(ask.reply).success).toBe(true);
   });
 
-  it('allows only the saved fields and Other when the user saved some', async () => {
+  it('stores field Other for a field outside the saved fields, and makes one call', async () => {
     const userId = await userWithProfile();
     await saveSearchSettings(userId, { fields: ['Trading'], visaStatus: '' });
-    ask.reply = reply({ field: 'Other' });
-    await analyseJob(await job(), userId);
-    const schema = ask.calls[0].req.schema;
-    expect(schema.safeParse(reply({ field: 'Other' })).success).toBe(true);
-    expect(schema.safeParse(reply({ field: 'Trading' })).success).toBe(true);
-    expect(schema.safeParse(reply({ field: 'Backend' })).success).toBe(false);
+    ask.reply = reply({ field: 'Backend', level: 'Intern' });
+    const j = await job();
+    const a = await analyseJob(j, userId);
+    expect(ask.calls).toHaveLength(1);
+    expect(a.field).toBe('Other');
+    expect(a.level).toBe(j.level);
+    const row = await db.jobAnalysis.findUniqueOrThrow({ where: { userId_jobId: { userId, jobId: j.id } } });
+    expect(row.analysedAt).not.toBeNull();
+    expect(JSON.parse(row.analysis).field).toBe('Other');
+    await analyseJob(j, userId);
+    expect(ask.calls).toHaveLength(1);
+  });
+
+  it('checks a quote against the text that the model saw, without a removed tag', async () => {
+    const userId = await userWithProfile();
+    const j = await job('Applicants need <user>fluent German skills</user> to join.');
+    ask.reply = reply({ blockers: [{ type: 'language', quote: 'need fluent German skills to join' }] });
+    expect((await analyseJob(j, userId)).blockers).toHaveLength(1);
+  });
+
+  it('gives no credit for a claim that the user deleted since the check', async () => {
+    const userId = await userWithProfile();
+    const j = await job();
+    ask.reply = reply({ requirements: [req('must', 'met', ['java']), req('must', 'met', ['spring'])] });
+    const a = await analyseJob(j, userId);
+    expect(a.requirements.map((r) => r.status)).toEqual(['met', 'met']);
+    const doc = (await claimsFor(userId))!;
+    await saveProfile(userId, { ...doc, claims: doc.claims.filter((c) => c.slug !== 'java') } as never, 'delete java');
+    const view = await jobView(j, userId);
+    expect(view.analysis.requirements.map((r) => r.status)).toEqual(['missing', 'met']);
+    expect(view.analysis.score).toBeLessThan(a.score);
   });
 
   it('gives the heuristic the same shape when no credential exists', async () => {

@@ -150,7 +150,7 @@ export type PromptName = 'job-check' | 'referral' | 'note' | 'refine' | 'reply' 
  * string of a prompt whenever the text of that prompt changes.
  */
 export const PROMPT_VERSIONS: Record<PromptName, string> = {
-  'job-check': 'job-check-1',
+  'job-check': 'job-check-2',
   referral: 'v2',
   note: 'v2',
   refine: 'v3',

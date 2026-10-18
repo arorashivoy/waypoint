@@ -3,10 +3,10 @@ import { db } from './db';
 import { credentialFor } from './claude';
 import { askJsonCached } from './cache';
 import { coerceText, jobCheckSchema, BLOCKER_TYPES, LEGITIMACY_FLAGS } from './schemas';
-import { jobCheckPrompt, jobCheckSystem, PROMPT_VERSIONS } from './prompts';
+import { jobCheckPrompt, jobCheckSystem, PROMPT_VERSIONS, sanitise } from './prompts';
 import { claimsFor, profileSummary } from './user';
 import { fieldFit, levelFit, rankRoutes, routeLabel } from './match';
-import { checkReply, citableClaims, fieldChoices, jobCheckProfileText, scoreCheck, type Blocker, type JobCheck, type Requirement, type ScorePart } from './jobcheck';
+import { checkEvidence, checkReply, citableClaims, fieldChoices, jobCheckProfileText, scoreCheck, type Blocker, type JobCheck, type Requirement, type ScorePart } from './jobcheck';
 import { getSettings } from './settings';
 import { CV_COUNTRY_RULES, FIELD_QUERIES } from './countries';
 import { type ClaimsDoc } from './claims';
@@ -158,7 +158,13 @@ function cvHints(job: Job, profile: Profile, fit: Fit) {
 
 /** Adds the score. It depends on the profile, so it is computed on every read and not stored. */
 function scored(stored: StoredAnalysis, profile: Profile, fit: Fit): Analysis {
-  return { ...stored, ...scoreCheck(stored, fieldFit(stored.field, fit.strong), levelFit(stored.level, profile.levels)) };
+  // The slugs are checked again against the claims that exist now, so a claim
+  // that the user deleted stops giving credit. Old analyses and heuristics have no slugs to check.
+  const checked =
+    stored.by === 'claude' && stored.promptVersion !== LEGACY_VERSION
+      ? { ...stored, requirements: checkEvidence(stored.requirements, new Set(citableClaims(fit.claims).map((c) => c.slug))) }
+      : stored;
+  return { ...checked, ...scoreCheck(checked, fieldFit(checked.field, fit.strong), levelFit(checked.level, profile.levels)) };
 }
 
 /** How many times a posting may fail analysis before it stops being queued. A
@@ -190,18 +196,21 @@ export async function analyseJob(job: Job, userId: string, force = false): Promi
   } else {
     try {
       const [settings, prefs] = await Promise.all([getSettings(userId), db.countryPref.findMany({ where: { userId, on: true }, orderBy: { rank: 'asc' } })]);
+      const fields = fieldChoices(settings.fields);
       const out = await askJsonCached(
         'job-check',
         PROMPT_VERSIONS['job-check'],
         {
-          system: jobCheckSystem(jobCheckProfileText(claims, settings, prefs.map((p) => p.cc))),
+          system: jobCheckSystem(jobCheckProfileText(claims, { ...settings, fields }, prefs.map((p) => p.cc))),
           prompt: jobCheckPrompt(job),
-          schema: jobCheckSchema(fieldChoices(settings.fields)),
+          schema: jobCheckSchema(fields),
           effort: 'medium',
         },
         { userId, kind: 'analysis' },
       );
-      const check = checkReply(out, { slugs: new Set(citableClaims(claims).map((c) => c.slug)), posting: `${job.role}\n${job.company}\n${job.city}\n${job.description}` });
+      // The quotes are checked against the text that the model saw: after `sanitise`, not the raw description.
+      const posting = [job.role, job.company, job.city].map((v) => sanitise(v, 400)).join('\n') + `\n${sanitise(job.description)}`;
+      const check = checkReply(out, { slugs: new Set(citableClaims(claims).map((c) => c.slug)), posting, fields, fallback: { level: job.level, mode: job.mode } });
       stored = { ...check, by: 'claude', promptVersion: PROMPT_VERSIONS['job-check'] };
       read = true;
     } catch {

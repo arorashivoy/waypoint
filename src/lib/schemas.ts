@@ -18,30 +18,30 @@ export const BLOCKER_TYPES = ['citizenship', 'clearance', 'language', 'location'
 export const LEGITIMACY_FLAGS = ['no-company', 'pay-to-apply', 'reposted', 'vague-role'] as const;
 
 /**
- * The reply of the job check. `fields` is the list the user may get as `field`:
- * the saved fields of the user, or the default list, and always 'Other'. The
- * schema is built for each call, because the structured output sends the list.
+ * The reply of the job check, parsed leniently. The API sends enums and list
+ * limits only as descriptions, so it does not enforce them, and a strict schema
+ * would throw away a paid reply for one value outside a list. This schema checks
+ * only the outline. `checkReply` (jobcheck.ts) coerces each value. `fields` is
+ * the list that `field` should use; it goes to the model as a description.
  */
 export function jobCheckSchema(fields: readonly string[]) {
-  const choices = [...new Set([...fields, 'Other'])] as [string, ...string[]];
+  const choices = [...new Set([...fields, 'Other'])];
   return z.object({
-    requirements: z
-      .array(
-        z.object({
-          text: z.string(),
-          importance: z.enum(['must', 'nice']),
-          status: z.enum(['met', 'partial', 'missing']),
-          evidence: z.array(z.string()),
-        }),
-      )
-      .max(15),
-    blockers: z.array(z.object({ type: z.enum(BLOCKER_TYPES), quote: z.string() })).max(6),
-    legitimacy: z.array(z.enum(LEGITIMACY_FLAGS)),
-    level: z.enum(['Entry', 'Mid', 'Senior']),
-    mode: z.enum(['Remote', 'Hybrid', 'On-site']),
+    requirements: z.array(
+      z.object({
+        text: z.string(),
+        importance: z.string().describe('"must" or "nice"'),
+        status: z.string().describe('"met", "partial" or "missing"'),
+        evidence: z.array(z.string()),
+      }),
+    ),
+    blockers: z.array(z.object({ type: z.string().describe(BLOCKER_TYPES.map((t) => `"${t}"`).join(', ')), quote: z.string() })),
+    legitimacy: z.array(z.string().describe(LEGITIMACY_FLAGS.map((t) => `"${t}"`).join(', '))),
+    level: z.string().describe('"Entry", "Mid" or "Senior"'),
+    mode: z.string().describe('"Remote", "Hybrid" or "On-site"'),
     sponsor: z.boolean(),
     visa: z.string(),
-    field: z.enum(choices),
+    field: z.string().describe(choices.map((t) => `"${t}"`).join(', ')),
     summary: z.string(),
   });
 }

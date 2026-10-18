@@ -1,4 +1,4 @@
-import type { JobCheckReplyT } from './schemas';
+import { BLOCKER_TYPES, LEGITIMACY_FLAGS, type JobCheckReplyT } from './schemas';
 import { FIELD_CHOICES } from './settings';
 import { matchScore } from './match';
 import type { Claim, ClaimsDoc, Depth } from './claims';
@@ -10,8 +10,20 @@ import type { Claim, ClaimsDoc, Depth } from './claims';
  * gives a score.
  */
 
-/** A checked reply. `level` and `mode` are plain text, because the heuristic and old analyses read them from job rows. */
-export type JobCheck = Omit<JobCheckReplyT, 'level' | 'mode'> & { level: string; mode: string };
+/** A checked reply: every value is inside its list. `level` and `mode` are plain text, because the heuristic and old analyses read them from job rows. */
+export type JobCheck = {
+  requirements: { text: string; importance: 'must' | 'nice'; status: 'met' | 'partial' | 'missing'; evidence: string[] }[];
+  blockers: { type: (typeof BLOCKER_TYPES)[number]; quote: string }[];
+  legitimacy: (typeof LEGITIMACY_FLAGS)[number][];
+  level: string;
+  mode: string;
+  sponsor: boolean;
+  visa: string;
+  field: string;
+  summary: string;
+};
+/** The reply as the model gives it, before `checkReply`. */
+export type JobCheckReply = JobCheckReplyT;
 export type Requirement = JobCheck['requirements'][number];
 export type Blocker = JobCheck['blockers'][number];
 
@@ -48,7 +60,7 @@ export function jobCheckProfileText(doc: ClaimsDoc | null, settings: { fields: r
     'Claims (slug · label · depth · proof):',
     ...(lines.length ? lines : ['none']),
     `Countries: ${countries.join(', ') || 'none'}`,
-    `Fields: ${settings.fields.join(', ') || 'none saved'}`,
+    `Fields (choose one for "field"): ${settings.fields.join(', ') || 'none'}`,
     `Visa status: ${settings.visaStatus || 'not stated'}`,
   ].join('\n');
 }
@@ -61,27 +73,71 @@ export function jobCheckProfileText(doc: ClaimsDoc | null, settings: { fields: r
 export const normaliseQuote = (s: string): string =>
   s.normalize('NFKC').replace(/＜/g, '<').replace(/＞/g, '>').toLowerCase().replace(/\s+/g, ' ').trim();
 
+const oneOf = <T extends string>(list: readonly T[], v: string): v is T => (list as readonly string[]).includes(v);
 const words = (s: string, max: number) => s.trim().split(/\s+/).filter(Boolean).slice(0, max).join(' ');
 
+/** The most requirements and blockers that a check keeps. */
+export const MAX_REQUIREMENTS = 15;
+export const MAX_BLOCKERS = 6;
+/** A quote shorter than this is in almost every posting, so it proves nothing. */
+const MIN_QUOTE_WORDS = 3;
+const MIN_QUOTE_CHARS = 12;
+const LEVELS = ['Entry', 'Mid', 'Senior'];
+const MODES = ['Remote', 'Hybrid', 'On-site'];
+
 /**
- * Checks a reply against the facts that the server knows. A "met" or "partial"
- * requirement with a slug that is not in `ctx.slugs`, or with no slug, becomes
- * "missing". Unknown slugs are removed. A blocker whose quote is not in the
- * posting is removed. The summary is cut to 25 words.
+ * Checks the slugs of the requirements against the claims that exist. A "met" or
+ * "partial" requirement with a slug that is not in `slugs`, or with no slug,
+ * becomes "missing". Unknown slugs are removed. `analysis.ts` runs this again on
+ * every read, so a claim that the user deleted stops giving credit.
  */
-export function checkReply(reply: JobCheck, ctx: { slugs: ReadonlySet<string>; posting: string }): JobCheck {
+export function checkEvidence<R extends { status: string; evidence: string[] }>(reqs: R[], slugs: ReadonlySet<string>): R[] {
+  return reqs.map((r) => {
+    const evidence = r.evidence.filter((s) => slugs.has(s));
+    const bad = evidence.length !== r.evidence.length || (r.status !== 'missing' && !evidence.length);
+    return { ...r, evidence, status: (bad ? 'missing' : r.status) as R['status'] };
+  });
+}
+
+/**
+ * Turns a reply into a checked `JobCheck`. The reply is parsed leniently, so
+ * this function coerces each value:
+ * - an unknown `field` becomes "Other" (`ctx.fields` is the allowed list);
+ * - an unknown `level` or `mode` becomes `ctx.fallback` (the value of the job
+ *   row), or "Mid" and "On-site" without one;
+ * - an unknown blocker `type` becomes "other"; an unknown legitimacy flag is dropped;
+ * - `importance` outside the list becomes "nice", `status` becomes "missing";
+ * - the lists are cut to 15 requirements and 6 blockers, and the summary to 25 words.
+ * Then the slugs and the quotes are checked (see `checkEvidence`). A blocker
+ * whose quote is not in the posting, or is shorter than 3 words or 12 characters, is removed.
+ */
+export function checkReply(
+  reply: JobCheckReply,
+  ctx: { slugs: ReadonlySet<string>; posting: string; fields?: readonly string[]; fallback?: { level?: string; mode?: string } },
+): JobCheck {
   const posting = normaliseQuote(ctx.posting);
+  const allowed = new Set([...(ctx.fields ?? FIELD_CHOICES), 'Other']);
+  const requirements = reply.requirements.slice(0, MAX_REQUIREMENTS).map((r) => ({
+    text: r.text,
+    importance: r.importance === 'must' ? ('must' as const) : ('nice' as const),
+    status: oneOf(['met', 'partial'] as const, r.status) ? r.status : ('missing' as const),
+    evidence: r.evidence,
+  }));
   return {
-    ...reply,
-    requirements: reply.requirements.map((r) => {
-      const evidence = r.evidence.filter((s) => ctx.slugs.has(s));
-      const bad = evidence.length !== r.evidence.length || (r.status !== 'missing' && !evidence.length);
-      return { ...r, evidence, status: bad ? 'missing' : r.status };
-    }),
-    blockers: reply.blockers.filter((b) => {
-      const q = normaliseQuote(b.quote);
-      return q.length > 0 && posting.includes(q);
-    }),
+    requirements: checkEvidence(requirements, ctx.slugs),
+    blockers: reply.blockers
+      .map((b) => ({ type: oneOf(BLOCKER_TYPES, b.type) ? b.type : ('other' as const), quote: b.quote }))
+      .filter((b) => {
+        const q = normaliseQuote(b.quote);
+        return q.length >= MIN_QUOTE_CHARS && q.split(' ').length >= MIN_QUOTE_WORDS && posting.includes(q);
+      })
+      .slice(0, MAX_BLOCKERS),
+    legitimacy: [...new Set(reply.legitimacy.filter((f): f is (typeof LEGITIMACY_FLAGS)[number] => oneOf(LEGITIMACY_FLAGS, f)))],
+    level: LEVELS.includes(reply.level) ? reply.level : ctx.fallback?.level || 'Mid',
+    mode: MODES.includes(reply.mode) ? reply.mode : ctx.fallback?.mode || 'On-site',
+    sponsor: reply.sponsor,
+    visa: reply.visa,
+    field: allowed.has(reply.field) ? reply.field : 'Other',
     summary: words(reply.summary, 25),
   };
 }

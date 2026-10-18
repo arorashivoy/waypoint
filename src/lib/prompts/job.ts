@@ -56,7 +56,7 @@ Return JSON with exactly these keys:
 - "mode": "Remote", "Hybrid" or "On-site".
 - "sponsor": true only if the posting states visa sponsorship or relocation support.
 - "visa": a short phrase for the visa route, or "Sponsorship not stated".
-- "field": the field of the role. Choose from the fields that the schema allows. Use "Other" if the role is not a software role.
+- "field": the field of the role. Choose one of the "Fields" line of the profile block. If the role is in none of the listed fields, use "Other". Use "Other" also if the role is not a software role.
 - "summary": 25 words or fewer on how well the candidate fits this posting.
 
 ${profile(profileText)}`;

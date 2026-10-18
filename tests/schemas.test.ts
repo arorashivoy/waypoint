@@ -16,13 +16,9 @@ describe('jobCheckSchema', () => {
   it('accepts the documented shape', () => {
     expect(jobCheckSchema(['Backend']).parse(base)).toEqual(base);
   });
-  it('allows only the given fields and Other', () => {
-    expect(jobCheckSchema(['Trading']).safeParse(base).success).toBe(false);
-    expect(jobCheckSchema(['Trading']).safeParse({ ...base, field: 'Other' }).success).toBe(true);
-  });
-  it('refuses more than 15 requirements and more than 6 blockers', () => {
-    expect(JobCheckReply.safeParse({ ...base, field: 'Other', requirements: Array(16).fill(base.requirements[0]) }).success).toBe(false);
-    expect(JobCheckReply.safeParse({ ...base, field: 'Other', blockers: Array(7).fill(base.blockers[0]) }).success).toBe(false);
+  it('parses a value outside a list, because checkReply coerces it', () => {
+    expect(jobCheckSchema(['Trading']).safeParse(base).success).toBe(true);
+    expect(JobCheckReply.safeParse({ ...base, level: 'Intern', requirements: Array(16).fill(base.requirements[0]), blockers: Array(7).fill(base.blockers[0]) }).success).toBe(true);
   });
   it('accepts a string wrapped in an object, as old replies did', () => {
     expect(coerceText({ t: 'Notice period line' })).toBe('Notice period line');
