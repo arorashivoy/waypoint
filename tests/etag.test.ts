@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { jsonWithEtag } from '@/lib/etag';
+import { db } from '@/lib/db';
 import { GET as state } from '@/app/api/state/route';
 import { GET as profile } from '@/app/api/profile/route';
 import { ctx, makeUser, request } from './helpers/http';
@@ -35,8 +36,18 @@ describe('jsonWithEtag', () => {
 });
 
 describe('ETag on the routes', () => {
+  afterEach(() => vi.useRealTimers());
+
   it('/api/state sends an ETag and answers 304 for it', async () => {
-    const { cookie } = await makeUser();
+    const { user, cookie } = await makeUser();
+    // Only one country is on for this user, and its code is unique to this test,
+    // so no job from another test file enters the state.
+    await db.countryPref.updateMany({ where: { userId: user.id }, data: { on: false } });
+    const cc = `X${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`;
+    await db.countryPref.create({ data: { userId: user.id, cc, rank: 0, on: true } });
+    // Freeze the clock, so the relative times in the state do not change between requests.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-18T12:00:00Z'));
     const res = await state(request('/api/state', { cookie }), ctx());
     expect(res.status).toBe(200);
     const etag = res.headers.get('etag')!;
