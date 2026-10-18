@@ -323,6 +323,11 @@ type Cv = {
   chat: ChatTurn[];
 };
 
+type Wording = {
+  suggestions: { dropped: number; items: { bulletId: string; text: string; old: string; labels: string[]; status: 'pending' | 'accepted' | 'rejected' }[] };
+  keywords: { inResume: string[]; missingWithEvidence: string[] };
+};
+
 const wrapText = { minWidth: 0, overflowWrap: 'anywhere' } as const;
 
 /** The job check: summary, blockers, flags, the top requirements and the parts of the score. */
@@ -389,7 +394,8 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
   // more click instead of silently not happening.
   const [blocked, setBlocked] = useState(false);
   const [cv, setCv] = useState<Cv | null>(null);
-  const [cvBusy, setCvBusy] = useState<'generate' | 'refine' | 'reset' | null>(null);
+  const [cvBusy, setCvBusy] = useState<'generate' | 'refine' | 'reset' | 'suggest' | null>(null);
+  const [wording, setWording] = useState<Wording | null>(null);
   const [cvError, setCvError] = useState<string | null>(null);
   // A compile outlives a click to another job; its answer must not land on that job.
   const shown = useRef(id);
@@ -400,6 +406,7 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
     setJob(null);
     setBlocked(false);
     setCv(null);
+    setWording(null);
     setCvBusy(null);
     setCvError(null);
     api(`/api/jobs/${id}`)
@@ -407,6 +414,7 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
         if (!live) return;
         setJob(j);
         setCv(j.cv);
+        setWording(j.wording ?? null);
         // The worker reads the job. The screen shows the estimate until the task ends, then loads the job again.
         if (!j.analysing) return;
         try {
@@ -485,13 +493,17 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
     await refresh();
   };
 
-  const cvCall = async (kind: 'generate' | 'refine' | 'reset', start: () => Promise<{ taskId: string }>) => {
+  const cvCall = async (kind: 'generate' | 'refine' | 'reset' | 'suggest', start: () => Promise<{ taskId: string }>) => {
     const forId = id;
     setCvBusy(kind);
     setCvError(null);
     try {
-      const fresh = await runTask<Cv>(start);
-      if (shown.current === forId) setCv(fresh);
+      const fresh = await runTask<Cv & Partial<Wording>>(start);
+      if (shown.current === forId) {
+        // A suggest task builds no PDF. Its result holds only the suggestions and the keyword report.
+        if (kind !== 'suggest') setCv(fresh);
+        if (fresh.suggestions && fresh.keywords) setWording({ suggestions: fresh.suggestions, keywords: fresh.keywords });
+      }
       return true;
     } catch (e) {
       if (shown.current === forId) setCvError((e as Error).message);
@@ -503,6 +515,19 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
   const generateCv = () => cvCall('generate', () => post<{ taskId: string }>(`/api/jobs/${id}/resume`));
   const refineCv = (message: string) => cvCall('refine', () => post<{ taskId: string }>(`/api/jobs/${id}/resume/refine`, { message }));
   const resetCv = () => cvCall('reset', () => del<{ taskId: string }>(`/api/jobs/${id}/resume/refine`));
+  const suggestWording = () => cvCall('suggest', () => post<{ taskId: string }>(`/api/jobs/${id}/resume/suggestions`, { action: 'suggest' }));
+  // Accept builds the CV again in the worker. Reject changes only the mark of the suggestion.
+  const decide = async (bulletId: string, action: 'accept' | 'reject') => {
+    if (action === 'accept') return cvCall('generate', () => post<{ taskId: string }>(`/api/jobs/${id}/resume/suggestions`, { bulletId, action }));
+    try {
+      await post(`/api/jobs/${id}/resume/suggestions`, { bulletId, action });
+      setWording((w) => w && { ...w, suggestions: { ...w.suggestions, items: w.suggestions.items.map((i) => (i.bulletId === bulletId ? { ...i, status: 'rejected' } : i)) } });
+      return true;
+    } catch (e) {
+      setCvError((e as Error).message);
+      return false;
+    }
+  };
 
   const cvProps = { cv, busy: cvBusy, onGenerate: generateCv };
 
@@ -534,11 +559,12 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
         </div>
         <JobCheck job={job} />
         <CvStatus busy={cvBusy} error={cvError} />
-        {cv && (
+        {(cv || wording) && (
           <div className="stack" style={{ gap: 12, padding: 14, borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)' }}>
-            <CvLinks cv={cv} setToast={setToast} />
-            <CvSummary cv={cv} />
-            <RefineCv cv={cv} busy={cvBusy} onRefine={refineCv} onReset={resetCv} />
+            {cv && <CvLinks cv={cv} setToast={setToast} />}
+            {cv && <CvSummary cv={cv} />}
+            {cv && <RefineCv cv={cv} busy={cvBusy} onRefine={refineCv} onReset={resetCv} />}
+            {wording && <SuggestWording wording={wording} busy={cvBusy} onSuggest={suggestWording} onDecide={decide} />}
           </div>
         )}
       </div>
@@ -635,7 +661,7 @@ function JobDetail({ id, state, refresh, setToast, onBack, phone }: { id: string
   );
 }
 
-type CvBusy = 'generate' | 'refine' | 'reset' | null;
+type CvBusy = 'generate' | 'refine' | 'reset' | 'suggest' | null;
 
 function GenerateCv({ cv, busy, onGenerate }: { cv: Cv | null; busy: CvBusy; onGenerate: () => void }) {
   return (
@@ -654,6 +680,8 @@ function CvStatus({ busy, error }: { busy: CvBusy; error: string | null }) {
     <span role="status" style={{ fontSize: 14, lineHeight: 1.45, color: 'var(--muted)' }}>
       {busy === 'refine'
         ? 'Claude is choosing what to change, then the CV recompiles and Drive updates…'
+        : busy === 'suggest'
+        ? 'Claude is writing suggestions. Waypoint checks each one against your profile…'
         : 'Tailoring the CV, compiling the LaTeX and uploading to Drive. A first compile can take a minute.'}
     </span>
   );
@@ -710,6 +738,54 @@ function CvSummary({ cv }: { cv: Cv }) {
       ) : (
         <span style={{ color: 'var(--warn-ink)' }}>Base CV, not tailored{cv.reason ? `: ${cv.reason}` : ''}.</span>
       )}
+    </div>
+  );
+}
+
+/** The keyword report, then the wording suggestions. The user decides on each suggestion. */
+function SuggestWording({ wording, busy, onSuggest, onDecide }: { wording: Wording; busy: CvBusy; onSuggest: () => void; onDecide: (bulletId: string, action: 'accept' | 'reject') => Promise<boolean> }) {
+  const { items, dropped } = wording.suggestions;
+  const { inResume, missingWithEvidence } = wording.keywords;
+  return (
+    <div className="stack" style={{ gap: 10, borderTop: '1px solid var(--line-2)', paddingTop: 10 }}>
+      {(inResume.length > 0 || missingWithEvidence.length > 0) && (
+        <div className="stack" style={{ gap: 4, fontSize: 14, lineHeight: 1.45, ...wrapText }}>
+          {inResume.length > 0 && <span>Words of the posting that your CV has: <strong>{inResume.join(', ')}</strong>.</span>}
+          {missingWithEvidence.length > 0 && (
+            <span style={{ color: 'var(--warn-ink)' }}>
+              Words of the posting that your profile proves, but your CV does not show: <strong>{missingWithEvidence.join(', ')}</strong>.
+            </span>
+          )}
+        </div>
+      )}
+      <div className="row" style={{ gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button className="btn" style={{ height: 36, fontSize: 14 }} onClick={onSuggest} disabled={!!busy}>
+          {busy === 'suggest' ? 'Looking for wording…' : 'Suggest wording'}
+        </button>
+        <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.45, flex: '1 1 200px', minWidth: 0 }}>
+          Claude proposes new words for your bullets. Waypoint checks each one against your profile. Nothing changes until you accept it.
+        </span>
+      </div>
+      {dropped > 0 && (
+        <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.45 }}>
+          Waypoint dropped {dropped} {dropped === 1 ? 'suggestion' : 'suggestions'}, because the text had a number, a name or a tool that your profile does not show.
+        </span>
+      )}
+      {items.map((s) => (
+        <div key={s.bulletId} className="stack" style={{ gap: 6, padding: 10, borderRadius: 8, border: '1px solid var(--line-2)', ...wrapText }}>
+          <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.45, textDecoration: s.status === 'accepted' ? 'line-through' : undefined }}>Old: {s.old}</span>
+          <span style={{ fontSize: 14, lineHeight: 1.45 }}>New: {s.text}</span>
+          {s.labels.length > 0 && <span style={{ fontSize: 13, color: 'var(--muted)' }}>Backed by: {s.labels.join(', ')}</span>}
+          {s.status === 'pending' ? (
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn btn-dark" style={{ height: 36, fontSize: 14 }} disabled={!!busy} onClick={() => onDecide(s.bulletId, 'accept')}>Accept</button>
+              <button className="btn" style={{ height: 36, fontSize: 14 }} disabled={!!busy} onClick={() => onDecide(s.bulletId, 'reject')}>Reject</button>
+            </div>
+          ) : (
+            <span style={{ fontSize: 13, fontWeight: 600 }}>{s.status === 'accepted' ? 'Accepted. The CV uses the new text.' : 'Rejected.'}</span>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

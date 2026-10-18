@@ -7,7 +7,7 @@ import { FIELD_QUERIES } from './countries';
 import { compileLatex, findEngine } from './latex';
 import { DEPTH_WEIGHT } from './resume/depth';
 import { hasOwnTex, ownTexPath } from './resume/own-tex';
-import { baseOrder, baseResumePath, hasResumeContent, renderTemplate, tailorOrder, templateAssetsDir } from './resume/template';
+import { baseOrder, baseResumePath, escapeLatex, hasResumeContent, renderTemplate, tailorOrder, templateAssetsDir } from './resume/template';
 import { db } from './db';
 import { getSettings } from './settings';
 import { isAdmin } from './user';
@@ -461,6 +461,46 @@ export function tailorExperience(tex: string, doc: ClaimsDoc, ranked: EvidencePi
   return { tex: tex.slice(0, m.index!) + m[0].replace(m[1], () => section) + tex.slice(m.index! + m[0].length), order, dropped: [], added: [], notes: [] };
 }
 
+/**
+ * The `\item` block of each bullet of the profile, found in a .tex source with the `match` phrase.
+ * A bullet that no item or more than one item matches is not in the map, and an item that
+ * more than one bullet matches is not in the map. The same rule as `tailorExperience`.
+ */
+export function bulletItems(tex: string, doc: ClaimsDoc): Map<string, string> {
+  const found = new Map<string, string>();
+  const bullets = doc.targets.positions.flatMap((p) => (p.bullets || []).map((b) => ({ id: `${p.id}/${b.id}`, match: norm(b.match) })));
+  for (const block of tex.matchAll(ITEMIZE_BLOCK)) {
+    for (const raw of splitItems(block[2])) {
+      const text = norm(raw);
+      const hits = bullets.filter((b) => b.match && text.includes(b.match));
+      if (hits.length === 1) found.set(hits[0].id, found.has(hits[0].id) ? '' : raw);
+    }
+  }
+  for (const [id, raw] of found) if (!raw) found.delete(id);
+  return found;
+}
+
+/**
+ * Replaces the text of the bullet lines that have an accepted wording. The line is found with the
+ * `match` phrase, and the new text goes through `escapeLatex`, so it cannot hold a macro.
+ * The `\item` and the space before the line stay as they are.
+ */
+export function applyWording(tex: string, doc: ClaimsDoc, wording: Record<string, string> | undefined): string {
+  const ids = Object.keys(wording ?? {});
+  if (!wording || !ids.length) return tex;
+  const items = bulletItems(tex, doc);
+  let out = tex;
+  for (const id of ids) {
+    const raw = items.get(id);
+    const text = escapeLatex(typeof wording[id] === 'string' ? wording[id] : '');
+    if (!raw || !text) continue;
+    const head = raw.match(/^\\item(?:\s*\[[^\]\n]*\])?\s*/)![0];
+    const tail = raw.match(/\s*$/)![0];
+    out = out.replace(raw, () => head + text + tail);
+  }
+  return out;
+}
+
 const SKILLS_SECTION = /\\begin\{rSection\}\{[^}]*SKILL[^}]*\}([\s\S]*?)\\end\{rSection\}/i;
 
 /** LaTeX to the words a reader sees: `C\#` is C#, `\textbf{Go}` is Go. */
@@ -677,11 +717,15 @@ export type BuiltResume = {
  * A refinement of one posting's CV, expressed as choices between things he
  * already wrote: claims.yml project ids in the order they should run,
  * `position/bullet` ids in the order they should lead, and skill slugs to put
- * first. A field left out keeps the posting's own ranking. There is no field for
- * free text, so nothing a refinement asks for can put words on the CV that are
+ * first. A field left out keeps the posting's own ranking. The refine chat has no
+ * field for free text, so nothing it asks for can put words on the CV that are
  * not in his LaTeX or claims.yml already.
+ *
+ * `wording` is the one exception. It maps a `position/bullet` ID to a new text for
+ * that bullet. Only an accepted suggestion writes it (see resume/suggest.ts): the
+ * server checked the text against the bullet and the proofs, and the user approved it.
  */
-export type Steer = { projects?: string[]; bullets?: string[]; skills?: string[] };
+export type Steer = { projects?: string[]; bullets?: string[]; skills?: string[]; wording?: Record<string, string> };
 
 /** A steered kind replaces the posting's ranking rather than nudging it: "lead
  *  with X" has to mean X leads, and a blend would let the posting's score
@@ -831,6 +875,8 @@ export async function buildResume(
     const afterExperience = step('experience', afterProjects, experience);
     skills = tailorSkills(afterExperience, doc, weights);
     source = step('skills', afterExperience, skills);
+    // An accepted wording changes the line after the reorder, because the reorder finds the line by its old text.
+    source = applyWording(source, doc, steer.wording);
   }
 
   // Without a base PDF (an own .tex), an unchanged source is still compiled: it is the only CV there is.

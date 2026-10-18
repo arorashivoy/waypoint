@@ -157,9 +157,10 @@ const section = (title: string, body: string[]) => (body.length ? [`\\begin{rSec
 
 /**
  * A full .tex for `resume.cls`. It shows only the IDs of `order`, in that order. An ID that the
- * profile does not have is left out. `_steer` is already part of `order`; the render needs no more from it.
+ * profile does not have is left out. The steer is already part of `order`, except `wording`: the text
+ * of an accepted suggestion replaces the text of its bullet.
  */
-export function renderTemplate(doc: ClaimsDoc, _steer: Steer, order: Order): string {
+export function renderTemplate(doc: ClaimsDoc, steer: Steer, order: Order): string {
   const picked = new Map<string, string[]>();
   for (const id of order.bullets) {
     const [pos, bullet] = id.split('/');
@@ -168,7 +169,7 @@ export function renderTemplate(doc: ClaimsDoc, _steer: Steer, order: Order): str
 
   const experience = doc.targets.positions.flatMap((p) => {
     const lines = (picked.get(p.id) ?? [])
-      .map((id) => (p.bullets ?? []).find((b) => b.id === id)?.text)
+      .map((id) => steer.wording?.[`${p.id}/${id}`] ?? (p.bullets ?? []).find((b) => b.id === id)?.text)
       .filter((t): t is string => !!t?.trim());
     const dates = `${e(p.start)} -- ${e(p.end || 'Present')}`;
     if (!lines.length) {

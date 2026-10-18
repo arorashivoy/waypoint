@@ -40,8 +40,8 @@ model User {
   usage        LlmUsage[]
   analyses     JobAnalysis[]
   tasks        Task[]
-  invitesMade  Invite[]      @relation("InviteCreator")
-  resetLinks   Invite[]      @relation("InviteUser")
+  invitesMade  Invite[]          @relation("InviteCreator")
+  resetLinks   Invite[]          @relation("InviteUser")
   settings     UserSettings?
 }
 
@@ -324,9 +324,11 @@ model Application {
   // rebuild so a link already sent keeps working. `cvSteer` is the "Refine with
   // Claude" selection (JSON `Steer` from resume.ts) every rebuild applies, and
   // `cvChat` the conversation that produced it (JSON array of turns).
-  cvDriveId String?
-  cvSteer   String?
-  cvChat    String  @default("[]")
+  cvDriveId     String?
+  cvSteer       String?
+  cvChat        String  @default("[]")
+  // The checked wording suggestions for this job (JSON, zod-checked on read, see resume/suggest.ts).
+  cvSuggestions String?
 
   user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   job      Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)

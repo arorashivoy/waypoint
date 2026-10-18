@@ -9,6 +9,7 @@ import { queueJobAnalysis } from '@/lib/queue';
 import { alumniSearch, isAlumniRequest } from '@/lib/match';
 import { readChat } from '@/lib/cv';
 import { claimsFor } from '@/lib/user';
+import { wordingView } from '@/lib/resume/suggest';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +66,8 @@ async function detail(jobId: string, userId: string, analysing: string | null) {
     // The fallback when `routes` is empty. Null without a school on the
     // profile, since there is nobody to call a fellow alumnus.
     alumni: school && { school: school.short, url: alumniSearch(school, fresh.company) },
+    // The wording suggestions and the keyword report, computed in code from the stored rows.
+    wording: await wordingView(userId, fresh),
     isSent: app.status !== 'draft',
     isApplied: app.status === 'applied',
     // What was last generated, without rebuilding it: opening a job must not

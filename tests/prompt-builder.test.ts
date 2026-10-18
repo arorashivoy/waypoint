@@ -12,6 +12,7 @@ import {
   PROMPT_VERSIONS,
   referralPrompt,
   refinePrompt,
+  suggestPrompt,
   replyPrompt,
   request,
   trusted,
@@ -86,13 +87,14 @@ describe('prompt builder', () => {
       refinePrompt({ projects: [], bullets: [], skills: [] }, { projects: ['EVIL_CUR'], bullets: [], skills: [] }, job, [{ role: 'claude', text: 'EVIL_CHAT' }, { role: 'you', text: 'EVIL_YOU' }], 'EVIL_REQ'),
       replyPrompt(who, job, 'EVIL_NAME', 'EVIL_MSG'),
       resumeImportPrompt('EVIL_TEXT'),
+      suggestPrompt([{ id: 'p/b', position: 'EVIL_POS', text: 'EVIL_TEXT' }], [{ slug: 's', label: 'EVIL_LABEL', proofs: ['EVIL_PROOF'] }], { role: 'EVIL_ROLE', company: 'EVIL_CO', description: 'EVIL_DESC' }),
       githubPrompt({ name: 'EVIL_REPO', description: null, topics: [] } as never, [], 'EVIL_README'),
     ];
     for (const p of all) expect(outside(p)).not.toMatch(/EVIL_/);
   });
 
   it('has a version for every prompt', () => {
-    expect(Object.keys(PROMPT_VERSIONS).sort()).toEqual(['github-import', 'job-check', 'note', 'referral', 'refine', 'reply', 'resume-import']);
+    expect(Object.keys(PROMPT_VERSIONS).sort()).toEqual(['github-import', 'job-check', 'note', 'referral', 'refine', 'reply', 'resume-import', 'resume-suggest']);
   });
 });
 

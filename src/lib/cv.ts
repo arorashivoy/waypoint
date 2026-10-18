@@ -228,8 +228,8 @@ export async function refineCv(app: Application, job: Job, request: string, task
   return cvView(saved, await publishCv(saved, job));
 }
 
-/** Drops the refinement, so the next build is the posting's own selection again. */
+/** Drops the refinement and the wording suggestions, so the next build is the posting's own selection again. */
 export async function resetCv(app: Application, job: Job) {
-  const saved = await db.application.update({ where: { id: app.id }, data: { cvSteer: null, cvChat: '[]' } });
+  const saved = await db.application.update({ where: { id: app.id }, data: { cvSteer: null, cvChat: '[]', cvSuggestions: null } });
   return cvView(saved, await publishCv(saved, job));
 }

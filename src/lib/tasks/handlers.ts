@@ -15,6 +15,7 @@ import { fetchAll } from '@/lib/sources';
 import { queueAnalysis } from '@/lib/queue';
 import { searchQueries } from '@/lib/resume';
 import { ensureBaseResume } from '@/lib/resume/base';
+import { suggestWording, wordingView } from '@/lib/resume/suggest';
 import { CV_MESSAGE_MAX, NO_RESUME, CvError, cvView, publishCv, refineCv, resetCv } from '@/lib/cv';
 import { claimsFor, isAdmin } from '@/lib/user';
 import { TaskDeferred, TaskFatal } from '@/lib/tasks/worker';
@@ -115,11 +116,12 @@ registerHandler('refresh', z.object({ force: z.boolean() }), async ({ force }, t
 });
 
 // The action `base` builds the base résumé of the template after a profile save. It has no job.
+// The action `suggest` asks the model for new wording of the bullets. It builds no PDF.
 registerHandler(
   'cv',
   z.object({
     jobId: z.string().optional(),
-    action: z.enum(['generate', 'refine', 'reset', 'base']),
+    action: z.enum(['generate', 'refine', 'reset', 'base', 'suggest']),
     message: z.string().max(CV_MESSAGE_MAX).optional(),
   }),
   async ({ jobId, action, message }, task) => {
@@ -138,9 +140,11 @@ registerHandler(
       create: { userId, jobId },
     });
     try {
-      if (action === 'refine') return await refineCv(app, job, message ?? '', task.id);
-      if (action === 'reset') return await resetCv(app, job);
-      const view = cvView(app, await publishCv(app, job));
+      if (action === 'suggest') return await suggestWording(app, job);
+      // The wording view (the suggestions and the keyword report) goes with each CV view.
+      if (action === 'refine') return { ...(await refineCv(app, job, message ?? '', task.id)), ...(await wordingView(userId, job)) };
+      if (action === 'reset') return { ...(await resetCv(app, job)), ...(await wordingView(userId, job)) };
+      const view = { ...cvView(app, await publishCv(app, job)), ...(await wordingView(userId, job)) };
       if (!view.pdfUrl) {
         throw new TaskFatal((await isAdmin(userId)) ? 'No CV configured. Set RESUME_PDF, and RESUME_TEX to tailor it.' : NO_RESUME);
       }
