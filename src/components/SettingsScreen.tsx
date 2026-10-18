@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, copyText, del, leaveSession, patch, post, put, upload } from './api';
 
 type Status = { mode: 'own' | 'shared' | 'cli' | 'none'; detail: string; keyHint: string | null; sharedAvailable: boolean; capUsd: number; sharedSpentUsd: number; capReached: boolean; resetsAt: string };
+type SearchSettings = { fields: string[]; visaStatus: string; fieldChoices: string[] };
 type FailedBoard = { board: string; status: string; fetchedAt: string; error: string | null };
 type SessionRow = { id: string; current: boolean; userAgent: string | null; createdAt: string; lastSeenAt: string };
 type UserRow = { id: string; email: string; name: string; role: string; disabled: boolean; createdAt: string; lastSeenAt: string | null; sharedSpentUsd: number };
@@ -44,12 +45,14 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
   const [yamlErrors, setYamlErrors] = useState<string[]>([]);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [search, setSearch] = useState<SearchSettings | null>(null);
   const [link, setLink] = useState<{ url: string; expiresAt: string; label: string } | null>(null);
 
   const load = useCallback(async () => {
-    const [s, c, g, fd] = await Promise.all([api<{ sessions: SessionRow[] }>('/api/account/sessions'), api<Status>('/api/account/claude'), api<{ hint: string | null }>('/api/account/github'), api<FailedBoard[]>('/api/feeds')]);
+    const [s, c, g, fd, ss] = await Promise.all([api<{ sessions: SessionRow[] }>('/api/account/sessions'), api<Status>('/api/account/claude'), api<{ hint: string | null }>('/api/account/github'), api<FailedBoard[]>('/api/feeds'), api<SearchSettings>('/api/settings/search')]);
     setSessions(s.sessions);
     setFeeds(fd);
+    setSearch(ss);
     setClaude(c);
     setGithubHint(g.hint);
     if (isAdmin) setUsers((await api<{ users: UserRow[] }>('/api/admin/users')).users);
@@ -146,6 +149,30 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
           </form>
         )}
         <span className="hint">Google Drive links stay in the admin's .env until a later part.</span>
+      </Section>
+
+      <Section title="Job search">
+        {search && (
+          <form className="stack" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); run(() => patch('/api/settings/search', { fields: search.fields, visaStatus: search.visaStatus }), 'Saved your job search settings.'); }}>
+            <fieldset className="stack" style={{ gap: 8, border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+              <legend className="label">Fields (choose up to 6)</legend>
+              {search.fieldChoices.map((f) => (
+                <label key={f} className="row" style={{ gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={search.fields.includes(f)}
+                    disabled={!search.fields.includes(f) && search.fields.length >= 6}
+                    onChange={(e) => setSearch({ ...search, fields: e.target.checked ? [...search.fields, f] : search.fields.filter((x) => x !== f) })}
+                  />
+                  {f}
+                </label>
+              ))}
+            </fieldset>
+            <label className="label" htmlFor="visa-status">Visa status</label>
+            <input id="visa-status" className="field" type="text" maxLength={200} placeholder="For example: I need a work visa for Germany" value={search.visaStatus} onChange={(e) => setSearch({ ...search, visaStatus: e.target.value })} />
+            <div><button className="btn btn-dark" type="submit">Save</button></div>
+          </form>
+        )}
       </Section>
 
       <Section title="Job boards">
