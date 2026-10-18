@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
 const ask = vi.hoisted(() => ({ reply: null as unknown, calls: [] as { system: string; prompt: string }[] }));
@@ -23,7 +26,20 @@ import { runOnce } from '@/lib/tasks/worker';
 import '@/lib/tasks/handlers';
 import * as jobResume from '@/app/api/jobs/[id]/resume/route';
 import * as suggestRoute from '@/app/api/jobs/[id]/resume/suggestions/route';
-import { ctx, makeUser, request } from './helpers/http';
+import * as ownTexRoute from '@/app/api/resume/own-tex/route';
+import { ctx, formRequest, makeUser, request } from './helpers/http';
+
+let usersDir: string;
+const savedUsersDir = process.env.WAYPOINT_USERS_DIR;
+beforeAll(() => {
+  usersDir = mkdtempSync(join(tmpdir(), 'resume-suggest-'));
+  process.env.WAYPOINT_USERS_DIR = usersDir;
+});
+afterAll(() => {
+  if (savedUsersDir === undefined) delete process.env.WAYPOINT_USERS_DIR;
+  else process.env.WAYPOINT_USERS_DIR = savedUsersDir;
+  rmSync(usersDir, { recursive: true, force: true });
+});
 
 const claim = (slug: string, kind: string, label: string, evidence: { target: string; depth: string; proof?: string }[]) => ({ slug, kind, label, aliases: [], links: [], evidence, mentions: [] });
 
@@ -98,6 +114,28 @@ describe('checkSuggestion', () => {
   it('rejects a name that the evidence lacks, but not a name at the start of a sentence', () => {
     expect(verdict(sug({ text: 'Built a streaming parser in Rust for Globex.' })).ok).toBe(false);
     expect(verdict(sug({ text: 'Parsed streams in Rust. Reads 2 TB per day.' })).ok).toBe(true);
+  });
+
+  it('refuses a capitalised word at a sentence start or after a dash, and an acronym, unless the first word is a résumé verb', () => {
+    expect(verdict(sug({ text: 'Google adopted the Rust parser.' })).ok).toBe(false);
+    expect(verdict(sug({ text: 'Built a streaming parser in Rust - Globex scale.' })).ok).toBe(false);
+    expect(verdict(sug({ text: 'Built a streaming parser in Rust. Globex uses it.' })).ok).toBe(false);
+    expect(verdict(sug({ text: 'GKE runs the streaming parser in Rust.' })).ok).toBe(false);
+    expect(verdict(sug({ text: 'Built a streaming parser in Rust on GKE.' })).ok).toBe(false);
+    expect(verdict(sug({ text: 'Designed a streaming parser in Rust for the ingest service.' }))).toEqual({ ok: true });
+  });
+
+  it('treats number words and units as numbers', () => {
+    for (const text of [
+      'Built a streaming parser in Rust and cut costs by forty percent.',
+      'Built a streaming parser in Rust for two million users.',
+      'Built a streaming parser in Rust and doubled the speed.',
+      'Built a streaming parser in Rust with a tenfold gain.',
+      'Built a streaming parser in Rust that reads 2 million events per day.',
+      'Built a streaming parser in Rust that reads 3x more data.',
+      'Built a streaming parser in Rust that reads 2 TB per day for 10k users.',
+    ]) expect(verdict(sug({ text })).ok, text).toBe(false);
+    expect(verdict(sug({ text: 'Built a streaming parser in Rust that reads 2 TB per day on 4 nodes.' }))).toEqual({ ok: true });
   });
 
   it('lets the posting supply wording but not a technology that the evidence lacks', () => {
@@ -280,6 +318,44 @@ describe('POST /api/jobs/[id]/resume/suggestions', () => {
   it('refuses a request without a session', async () => {
     const res = await suggestRoute.POST(request('/api/jobs/x/resume/suggestions', { method: 'POST', body: { action: 'suggest' } }), ctx({ id: 'x' }));
     expect(res.status).toBe(401);
+  });
+});
+
+describe('an own .tex source', () => {
+  // The first bullet is not in the file under its match phrase; the second is.
+  const TEX = '\\documentclass{article}\n\\begin{document}\n\\begin{itemize}\n  \\item Wrote a parser for the ingest service.\n  \\item Ran the on-call rota for the team.\n\\end{itemize}\n\\end{document}\n';
+  async function own() {
+    const u = await setup();
+    const form = new FormData();
+    form.set('file', new File([TEX], 'cv.tex', { type: 'text/x-tex' }));
+    const up = await ownTexRoute.PUT(await formRequest('/api/resume/own-tex', form, { cookie: u.cookie, method: 'PUT' }), ctx());
+    expect(up.status).toBe(200);
+    return u;
+  }
+
+  it('does not offer or keep a suggestion for a bullet that the match phrase does not find', async () => {
+    const u = await own();
+    const task = await suggested(u, [sug(), sug({ bulletId: 'job/b2', text: 'Ran the on-call rota and packed services in Docker.', claims: ['docker'] })]);
+    expect(task.status).toBe('done');
+    expect(ask.calls[0].prompt).not.toContain('job/b1');
+    expect(ask.calls[0].prompt).toContain('job/b2');
+    const stored = readSuggestions(await appOf(u));
+    expect(stored.items.map((i) => i.bulletId)).toEqual(['job/b2']);
+    expect(stored.dropped).toBe(1);
+  });
+
+  it('gives 409 on accept when the line is not in the source, and changes nothing', async () => {
+    const u = await own();
+    await suggested(u, []);
+    const app = await appOf(u);
+    const items = [{ bulletId: 'job/b1', text: sug().text, claims: ['rust'], labels: ['Rust'], old: 'x', status: 'pending' }];
+    await db.application.update({ where: { id: app.id }, data: { cvSuggestions: JSON.stringify({ items, dropped: 0 }) } });
+    const res = await post(u, { bulletId: 'job/b1', action: 'accept' });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: 'Waypoint could not find this line in your résumé source.' });
+    const after = await appOf(u);
+    expect(readSteer(after).wording).toBeUndefined();
+    expect(readSuggestions(after).items[0].status).toBe('pending');
   });
 });
 

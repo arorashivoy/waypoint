@@ -86,17 +86,34 @@ type Ctx = {
 
 export type Check = { ok: true } | { ok: false; why: string };
 
-const NUMBER = /(\d+(?:[.,]\d+)*)\s?(%|percent|[kmbx](?![\p{L}\p{N}]))?/giu;
+const NUMBER = /(\d+(?:[.,]\d+)*)\s?(%|percent|(?:hundred|thousand|million|billion|trillion)(?![\p{L}\p{N}])|[kmbx](?![\p{L}\p{N}]))?/giu;
 const canon = (n: string, suffix?: string) => n.replace(/,(?=\d{3}(?!\d))/g, '') + (suffix ? (suffix === 'percent' ? '%' : suffix) : '');
 const numbersOf = (text: string) => [...fold(text).matchAll(NUMBER)].map((m) => ({ run: canon(m[1]), form: canon(m[1], m[2]), shown: m[0].trim() }));
 
-const NAME = /(?<![\p{L}\p{N}])\p{Lu}[\p{L}\p{N}]*/gu;
+/** A word with a capital letter anywhere: a name, an acronym (GKE, SOC2) or a mixed form (iOS). */
+const CAPITAL_WORD = /(?<![\p{L}\p{N}])[\p{L}\p{N}]*\p{Lu}[\p{L}\p{N}]*/gu;
+
+/** Common résumé verbs. Only the first word of a suggestion may be a capitalised word outside the evidence, and only if it is here. */
+export const RESUME_VERBS = new Set(
+  `achieved added analysed analyzed architected authored automated built chaired collaborated configured contributed coordinated created
+  cut debugged delivered deployed designed developed drove enabled engineered established evaluated extended fixed founded generated
+  handled implemented improved increased integrated introduced launched led maintained managed migrated mentored modelled modeled
+  monitored optimised optimized organised organized owned planned prototyped reduced refactored released replaced researched resolved
+  reviewed scaled shipped simplified solved streamlined supported tested trained wrote ran parsed`.split(/\s+/),
+);
+
+/** Number words. Each one in a suggestion must be in the bullet or the proofs, as a digit run must. */
+const NUMBER_WORD = new RegExp(
+  `(?<![\\p{L}\\p{N}])(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|trillion|percent|half|dozen|twice|(?:double|triple|quadruple)[d]?|\\p{L}*fold)(?![\\p{L}\\p{N}])`,
+  'gu',
+);
 
 /**
  * Checks one suggestion. A suggestion passes if each number, name and technology in it is in the text of
  * the bullet or in the proofs of the claims that it names. The posting can give words, but it never gives
  * a number, a name or a technology: the check does not read the posting.
- * A "name" is a capitalised word that is not at the start of a sentence.
+ * A "name" is any word with a capital letter, an acronym too. Only the first word of the suggestion may be
+ * outside the evidence, and only if it is a common résumé verb. A number word counts as a number.
  */
 export function checkSuggestion(s: Suggestion, ctx: Ctx): Check {
   if (ctx.problem) return { ok: false, why: ctx.problem };
@@ -123,9 +140,14 @@ export function checkSuggestion(s: Suggestion, ctx: Ctx): Check {
     if (has(shown, t) && !has(hay, t)) return { ok: false, why: `the technology "${t}" is not in the bullet or the proofs` };
   }
 
-  for (const m of text.matchAll(NAME)) {
-    const before = text.slice(0, m.index).trimEnd();
-    if (!before || /[.!?:;•\-–—]$/.test(before)) continue;
+  // Number words. A digit token with its unit was checked above, so it is taken out first.
+  const words = fold(text).replace(NUMBER, ' ');
+  for (const m of words.matchAll(NUMBER_WORD)) {
+    if (!has(hay, m[0])) return { ok: false, why: `the number word "${m[0]}" is not in the bullet or the proofs` };
+  }
+
+  for (const m of text.matchAll(CAPITAL_WORD)) {
+    if (m.index === 0 && RESUME_VERBS.has(fold(m[0]))) continue;
     if (!has(hay, fold(m[0]))) return { ok: false, why: `the name "${m[0]}" is not in the bullet or the proofs` };
   }
   return { ok: true };
@@ -163,11 +185,20 @@ const plainTex = (s: string) =>
   s.replace(/\\([#&%$_{}])/g, '$1').replace(/\\[a-zA-Z]+\*?/g, ' ').replace(/[{}]/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** The text of each bullet as the CV has it now. An own .tex gives the line of the file when the match phrase finds it. */
-async function sourcesOf(userId: string, doc: ClaimsDoc): Promise<Map<string, string>> {
+async function sourcesOf(userId: string, doc: ClaimsDoc): Promise<{ map: Map<string, string>; strict: boolean }> {
   const cfg = await resumeConfig(userId);
-  const items = cfg.tex && existsSync(cfg.tex) ? bulletItems(readFileSync(cfg.tex, 'utf8'), doc) : new Map<string, string>();
-  return new Map(bulletsOf(doc).map((b) => [b.id, items.has(b.id) ? plainTex(items.get(b.id)!.replace(/^\\item\s*/, '')) : b.text || b.match]));
+  // With a .tex source (an own file or RESUME_TEX), only a bullet that the match phrase finds in one item is on the CV.
+  const strict = !!cfg.tex && existsSync(cfg.tex);
+  const items = strict ? bulletItems(readFileSync(cfg.tex!, 'utf8'), doc) : new Map<string, string>();
+  const map = new Map<string, string>();
+  for (const b of bulletsOf(doc)) {
+    if (items.has(b.id)) map.set(b.id, plainTex(items.get(b.id)!.replace(/^\\item\s*/, '')));
+    else if (!strict) map.set(b.id, b.text || b.match);
+  }
+  return { map, strict };
 }
+
+const NOT_FOUND = 'Waypoint could not find this line in your résumé source.';
 
 /** The text of the CV, for the keyword report. */
 async function resumeTextOf(userId: string, doc: ClaimsDoc, steer: Steer): Promise<string> {
@@ -236,8 +267,9 @@ export async function suggestWording(app: Application, job: Job) {
   if (mode === 'none') throw new CvError(detail);
 
   const wording = readSteer(app).wording ?? {};
-  const sources = await sourcesOf(userId, doc);
-  const bullets = bulletsOf(doc).map((b) => ({ id: b.id, position: b.position, text: wording[b.id] ?? sources.get(b.id) ?? b.match }));
+  const { map: sources } = await sourcesOf(userId, doc);
+  const bullets = bulletsOf(doc).filter((b) => sources.has(b.id)).map((b) => ({ id: b.id, position: b.position, text: wording[b.id] ?? sources.get(b.id) ?? b.match }));
+  if (!bullets.length) throw new CvError('Waypoint could not find any bullet of your profile in your résumé source. Check the match phrases on the Profile screen.');
   const claims = doc.claims
     .map((c) => ({ slug: c.slug, label: c.label, proofs: c.evidence.flatMap((e) => (e.proof ? [e.proof] : [])) }))
     .filter((c) => c.proofs.length)
@@ -255,7 +287,7 @@ export async function suggestWording(app: Application, job: Job) {
   let dropped = 0;
   for (const s of out.suggestions) {
     const ctx = suggestionContext(doc, s, { source: sources.get(s.bulletId), wording: wording[s.bulletId] });
-    if (items.some((i) => i.bulletId === s.bulletId) || !checkSuggestion(s, ctx).ok) {
+    if (!sources.has(s.bulletId) || items.some((i) => i.bulletId === s.bulletId) || !checkSuggestion(s, ctx).ok) {
       dropped++;
       continue;
     }
@@ -289,7 +321,10 @@ export async function decideSuggestion(userId: string, jobId: string, bulletId: 
   const doc = await claimsFor(userId);
   const steer = readSteer(app);
   const s = { bulletId, text: found.text, claims: found.claims };
-  const checked = doc && checkSuggestion(s, suggestionContext(doc, s, { source: (await sourcesOf(userId, doc)).get(bulletId), wording: steer.wording?.[bulletId] }));
+  const { map: sources } = doc ? await sourcesOf(userId, doc) : { map: new Map<string, string>() };
+  // The change must be possible now: with a .tex source the line must be there, or the card would say "Accepted" for nothing.
+  if (doc && !sources.has(bulletId)) throw new HttpError(409, NOT_FOUND);
+  const checked = doc && checkSuggestion(s, suggestionContext(doc, s, { source: sources.get(bulletId), wording: steer.wording?.[bulletId] }));
   if (!checked?.ok) throw new HttpError(409, 'Your profile changed, so this suggestion is no longer safe. Ask for new suggestions.');
 
   const next: Steer = { ...steer, wording: { ...steer.wording, [bulletId]: found.text } };
