@@ -90,7 +90,7 @@ describe('credentialFor', () => {
 });
 
 describe('askJson', () => {
-  const req = { system: 's', prompt: prompt`p`, schema: z.object({ ok: z.boolean() }), effort: 'low' as const };
+  const req = { system: prompt`s`, prompt: prompt`p`, schema: z.object({ ok: z.boolean() }), effort: 'low' as const };
 
   it('writes one usage row with the credential and the kind', async () => {
     const u = await user();

@@ -14,16 +14,40 @@ import { z } from 'zod';
 export const coerceText = (v: unknown): string =>
   typeof v === 'string' ? v : v && typeof v === 'object' ? coerceText(Object.values(v).find((x) => typeof x === 'string') ?? '') : String(v ?? '');
 
-export const AnalysisReply = z.object({
-  field: z.string(),
-  mode: z.string(),
-  level: z.string(),
-  sponsor: z.boolean(),
-  visa: z.string(),
-  requirements: z.array(z.object({ t: z.string(), ok: z.boolean() })),
-  must: z.array(z.string()),
-  projects: z.array(z.object({ n: z.string(), why: z.string() })),
-});
+export const BLOCKER_TYPES = ['citizenship', 'clearance', 'language', 'location', 'seniority', 'other'] as const;
+export const LEGITIMACY_FLAGS = ['no-company', 'pay-to-apply', 'reposted', 'vague-role'] as const;
+
+/**
+ * The reply of the job check. `fields` is the list the user may get as `field`:
+ * the saved fields of the user, or the default list, and always 'Other'. The
+ * schema is built for each call, because the structured output sends the list.
+ */
+export function jobCheckSchema(fields: readonly string[]) {
+  const choices = [...new Set([...fields, 'Other'])] as [string, ...string[]];
+  return z.object({
+    requirements: z
+      .array(
+        z.object({
+          text: z.string(),
+          importance: z.enum(['must', 'nice']),
+          status: z.enum(['met', 'partial', 'missing']),
+          evidence: z.array(z.string()),
+        }),
+      )
+      .max(15),
+    blockers: z.array(z.object({ type: z.enum(BLOCKER_TYPES), quote: z.string() })).max(6),
+    legitimacy: z.array(z.enum(LEGITIMACY_FLAGS)),
+    level: z.enum(['Entry', 'Mid', 'Senior']),
+    mode: z.enum(['Remote', 'Hybrid', 'On-site']),
+    sponsor: z.boolean(),
+    visa: z.string(),
+    field: z.enum(choices),
+    summary: z.string(),
+  });
+}
+
+/** The schema with the default list of fields. */
+export const JobCheckReply = jobCheckSchema([]);
 
 export const SlotsReply = z.object({ highlight: z.string(), hook: z.string(), proof: z.string() });
 
@@ -38,7 +62,7 @@ export const RefineReply = z.object({
 
 export const DraftReply = z.object({ draft: z.string(), certain: z.boolean(), reason: z.string() });
 
-export type AnalysisReplyT = z.infer<typeof AnalysisReply>;
+export type JobCheckReplyT = z.infer<typeof JobCheckReply>;
 export type SlotsReplyT = z.infer<typeof SlotsReply>;
 export type HookReplyT = z.infer<typeof HookReply>;
 export type RefineReplyT = z.infer<typeof RefineReply>;

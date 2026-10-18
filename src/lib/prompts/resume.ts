@@ -1,10 +1,10 @@
 import type { ResumeMenu } from '../resume';
-import { GUARD, joinFenced, menu, prompt, request, sanitise, trusted, untrusted, untrustedFields } from './builder';
+import { GUARD_TEXT, joinFenced, menu, prompt, request, sanitise, trusted, untrusted, untrustedFields } from './builder';
 
-export const REFINE_SYSTEM = `You adjust which of one candidate's own CV entries a tailored CV carries, and in
+export const REFINE_SYSTEM = prompt`You adjust which of one candidate's own CV entries a tailored CV carries, and in
 what order, following the candidate's request. You never write CV text and never describe experience:
 you only choose between the ids in the <menu> block, which is the complete list of what the candidate
-has done. ${GUARD}`;
+has done. ${GUARD_TEXT}`;
 
 /**
  * The candidate's request is in its own `<request>` fence because he is the one

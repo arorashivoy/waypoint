@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { askJsonCached } from '../cache';
 import { checkForInjection } from '../injection';
-import { GUARD, PROMPT_VERSIONS, prompt, untrusted, untrustedFields, type BuiltPrompt } from '../prompts';
+import { GUARD_TEXT, PROMPT_VERSIONS, prompt, untrusted, untrustedFields, type BuiltPrompt } from '../prompts';
 import { githubToken, languages, listRepos, readme, type Repo } from '../github';
 import { HttpError } from '../auth/http';
 import { db } from '../db';
@@ -18,7 +18,7 @@ import { quoteCheck } from './quotes';
  * is dropped.
  */
 
-export const GITHUB_IMPORT_SYSTEM = `You read the facts and the README of one GitHub repository, and draft one profile project and its skills for the owner of the repository. A person reviews every draft. ${GUARD}`;
+export const GITHUB_IMPORT_SYSTEM = prompt`You read the facts and the README of one GitHub repository, and draft one profile project and its skills for the owner of the repository. A person reviews every draft. ${GUARD_TEXT}`;
 
 const fields = (repo: Repo, langs: string[]) => ({ name: repo.name, description: repo.description ?? '', topics: repo.topics.join(', '), languages: langs.join(', ') });
 

@@ -9,7 +9,7 @@ import { prompt } from '@/lib/prompts';
 
 const KEY = Buffer.alloc(32, 1).toString('base64');
 const usage = { model: 'claude-sonnet-5', inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 };
-const req = { system: 'S', prompt: prompt`P`, schema: z.object({ hook: z.string() }), effort: 'low' as const };
+const req = { system: prompt`S`, prompt: prompt`P`, schema: z.object({ hook: z.string() }), effort: 'low' as const };
 
 async function load(extra: Record<string, string> = {}, role: 'admin' | 'member' = 'admin') {
   vi.resetModules();

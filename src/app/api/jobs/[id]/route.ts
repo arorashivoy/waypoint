@@ -48,8 +48,10 @@ async function detail(jobId: string, userId: string, analysing: string | null) {
     url: fresh.url,
     sourceList: fresh.source,
     ...view.analysis,
-    reqs: view.analysis.requirements,
-    projects: view.analysis.projects.map((p, i) => ({ ...p, rank: String(i + 1) })),
+    // The screen still reads the old shape of a requirement and the CV hints until Task 5.
+    reqs: view.analysis.requirements.map((r) => ({ t: r.text, ok: r.status === 'met' })),
+    must: view.hints.must,
+    projects: view.hints.projects.map((p, i) => ({ ...p, rank: String(i + 1) })),
     routes: view.routes,
     match: view.match,
     // The task that reads this job now, or null. The screen waits for it and then loads the job again.

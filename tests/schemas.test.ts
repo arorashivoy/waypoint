@@ -1,18 +1,35 @@
 import { describe, expect, it } from 'vitest';
-import { AnalysisReply, RefineReply, coerceText } from '@/lib/schemas';
+import { JobCheckReply, RefineReply, coerceText, jobCheckSchema } from '@/lib/schemas';
 
-const base = { field: 'Backend', mode: 'Remote', level: 'Mid', sponsor: false, visa: 'Sponsorship not stated', requirements: [{ t: 'Java', ok: true }], must: ['x'], projects: [{ n: 'Waypoint', why: 'fits' }] };
-
-describe('AnalysisReply', () => {
+describe('jobCheckSchema', () => {
+  const base = {
+    requirements: [{ text: 'Java', importance: 'must', status: 'met', evidence: ['java'] }],
+    blockers: [{ type: 'language', quote: 'fluent German' }],
+    legitimacy: ['reposted'],
+    level: 'Mid',
+    mode: 'Remote',
+    sponsor: false,
+    visa: 'Sponsorship not stated',
+    field: 'Backend',
+    summary: 'Good fit.',
+  };
   it('accepts the documented shape', () => {
-    expect(AnalysisReply.parse(base)).toEqual(base);
+    expect(jobCheckSchema(['Backend']).parse(base)).toEqual(base);
+  });
+  it('allows only the given fields and Other', () => {
+    expect(jobCheckSchema(['Trading']).safeParse(base).success).toBe(false);
+    expect(jobCheckSchema(['Trading']).safeParse({ ...base, field: 'Other' }).success).toBe(true);
+  });
+  it('refuses more than 15 requirements and more than 6 blockers', () => {
+    expect(JobCheckReply.safeParse({ ...base, field: 'Other', requirements: Array(16).fill(base.requirements[0]) }).success).toBe(false);
+    expect(JobCheckReply.safeParse({ ...base, field: 'Other', blockers: Array(7).fill(base.blockers[0]) }).success).toBe(false);
   });
   it('accepts a string wrapped in an object, as old replies did', () => {
     expect(coerceText({ t: 'Notice period line' })).toBe('Notice period line');
   });
   it('refuses a missing key', () => {
     const { visa, ...rest } = base;
-    expect(AnalysisReply.safeParse(rest).success).toBe(false);
+    expect(JobCheckReply.safeParse({ ...rest, field: 'Other' }).success).toBe(false);
   });
 });
 

@@ -1,9 +1,11 @@
 import type { Contact } from '@prisma/client';
 
-export type Requirement = { t: string; ok: boolean };
-
 /**
- * match % = 20·(requirements met) + 40·(field fit) + 40·(level fit).
+ * match % = 20·(requirement ratio) + 40·(field fit) + 40·(level fit).
+ *
+ * The requirement ratio is a value from 0 to 1. `scoreCheck` in jobcheck.ts
+ * weighs it (must 3, nice 1; met 1, partial 0.5, missing 0) and takes 25 points
+ * for each blocker after this sum.
  *
  * Requirements are weighted *low on purpose*. A job posting's requirement list
  * is a wish-list, not a bar: teams routinely list every technology they touch
@@ -35,8 +37,7 @@ export type Requirement = { t: string; ok: boolean };
  * Worked example: 3 of 4 requirements met, field matches, level is adjacent
  * (posting Senior, candidate Mid) → 20·0.75 + 40·1 + 40·0.5 = 15 + 40 + 20 = 75.
  */
-export function matchScore(reqs: Requirement[], fieldFit: number, levelFit: number): number {
-  const ratio = reqs.length ? reqs.filter((r) => r.ok).length / reqs.length : 0;
+export function matchScore(ratio: number, fieldFit: number, levelFit: number): number {
   return Math.round(20 * ratio + 40 * fieldFit + 40 * levelFit);
 }
 

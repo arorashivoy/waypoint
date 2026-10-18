@@ -113,6 +113,9 @@ export const menu = (text: string): Fenced => fenced(`<menu>\n${inside(text, MAX
  */
 export const trusted = (text: string): Literal => ({ text }) as Literal;
 
+/** The `GUARD` rules as a part, for a system prompt that is a code constant. */
+export const GUARD_TEXT: Literal = trusted(GUARD);
+
 /**
  * The only way to make a prompt. The template text is written in code. Each
  * `${}` must be a `Part`, so a raw string there is a type error.
@@ -140,14 +143,14 @@ Your previous reply did not match the required JSON shape:
 ${untrusted('schema problems', problems.slice(0, 600))}
 Reply again with JSON only, with exactly the keys asked for.`;
 
-export type PromptName = 'analysis' | 'referral' | 'note' | 'refine' | 'reply' | 'resume-import' | 'github-import';
+export type PromptName = 'job-check' | 'referral' | 'note' | 'refine' | 'reply' | 'resume-import' | 'github-import';
 
 /**
  * The version string of each prompt. It is part of the cache key. Change the
  * string of a prompt whenever the text of that prompt changes.
  */
 export const PROMPT_VERSIONS: Record<PromptName, string> = {
-  analysis: 'v1',
+  'job-check': 'job-check-1',
   referral: 'v2',
   note: 'v2',
   refine: 'v3',

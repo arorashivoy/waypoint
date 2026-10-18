@@ -151,11 +151,11 @@ export function rankEvidence(doc: ClaimsDoc, postingText: string): EvidencePick[
 /** Skills and languages from claims.yml that a posting names, each with
  *  whether it has evidence behind it. A claim with none is listed on a surface
  *  but unproven, so it is shown as a gap rather than credited. */
-export function claimsInPosting(doc: ClaimsDoc, postingText: string): { t: string; ok: boolean }[] {
+export function claimsInPosting(doc: ClaimsDoc, postingText: string): { slug: string; t: string; ok: boolean }[] {
   const text = norm(postingText);
   return doc.claims
     .filter((c) => (c.kind === 'skill' || c.kind === 'language') && [c.label, ...c.aliases].some((t) => mentions(text, t)))
-    .map((c) => ({ t: c.label, ok: c.evidence.some((e) => e.depth !== 'mentioned') }));
+    .map((c) => ({ slug: c.slug, t: c.label, ok: c.evidence.some((e) => e.depth !== 'mentioned') }));
 }
 
 export type ProjectPick = { role: string; lead: string; then: string };

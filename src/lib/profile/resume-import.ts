@@ -4,7 +4,7 @@ import { db } from '../db';
 import { HttpError } from '../auth/http';
 import { askJsonCached } from '../cache';
 import { checkForInjection } from '../injection';
-import { GUARD, PROMPT_VERSIONS, prompt, untrusted, type BuiltPrompt } from '../prompts';
+import { GUARD_TEXT, PROMPT_VERSIONS, prompt, untrusted, type BuiltPrompt } from '../prompts';
 import { sniffResume } from '../uploads';
 import { slugify } from './doc';
 import { createDrafts, MAX_PENDING, type NewDraft } from './drafts';
@@ -20,7 +20,7 @@ import type { DraftType } from './apply';
  * whose quote is not in the text is dropped. The drafts wait for the user.
  */
 
-export const RESUME_IMPORT_SYSTEM = `You read the text of one résumé and turn it into structured profile drafts for the person it describes. A person reviews every draft before it goes into the profile. ${GUARD}`;
+export const RESUME_IMPORT_SYSTEM = prompt`You read the text of one résumé and turn it into structured profile drafts for the person it describes. A person reviews every draft before it goes into the profile. ${GUARD_TEXT}`;
 
 export function resumeImportPrompt(text: string): BuiltPrompt {
   return prompt`${untrusted('resume text', text)}

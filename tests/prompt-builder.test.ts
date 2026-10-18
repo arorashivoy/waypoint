@@ -5,7 +5,8 @@ import { z } from 'zod';
 import type { AskRequest } from '@/lib/claude/types';
 import {
   alumniPrompt,
-  analysePrompt,
+  jobCheckPrompt,
+  jobCheckSystem,
   profile,
   prompt,
   PROMPT_VERSIONS,
@@ -66,8 +67,11 @@ describe('prompt builder', () => {
     // @ts-expect-error A raw string is not a Part. `npm run typecheck` fails if this line compiles.
     prompt`${'raw'}`;
     // @ts-expect-error A plain string is not a BuiltPrompt, so askJson refuses it.
-    const bad: AskRequest<unknown> = { system: 's', prompt: 'raw', schema: z.unknown(), effort: 'low' };
+    const bad: AskRequest<unknown> = { system: prompt`s`, prompt: 'raw', schema: z.unknown(), effort: 'low' };
     expect(bad).toBeTruthy();
+    // @ts-expect-error A plain string is not a BuiltPrompt, so a system prompt needs `prompt` too.
+    const badSystem: AskRequest<unknown> = { system: 'raw', prompt: prompt`p`, schema: z.unknown(), effort: 'low' };
+    expect(badSystem).toBeTruthy();
   });
 
   it('fences the hostile fields of every prompt', () => {
@@ -75,7 +79,8 @@ describe('prompt builder', () => {
     const job = { role: 'EVIL_ROLE', company: 'EVIL_CO', city: 'EVIL_CITY', cc: 'XQ', description: 'EVIL_DESC' };
     const outside = (p: string) => p.replace(/<(untrusted|profile|request|menu)[^>]*>[\s\S]*?<\/\1>/g, '');
     const all = [
-      analysePrompt(who, job),
+      jobCheckPrompt(job),
+      jobCheckSystem('Claims (slug · label · depth · proof):\nrust · EVIL_CLAIM · built · EVIL_PROOF\nVisa status: EVIL_VISA'),
       referralPrompt(who, job, 'EVIL_NAME'),
       alumniPrompt(who, job, 'EVIL_SCHOOL', 100),
       refinePrompt({ projects: [], bullets: [], skills: [] }, { projects: ['EVIL_CUR'], bullets: [], skills: [] }, job, [{ role: 'claude', text: 'EVIL_CHAT' }, { role: 'you', text: 'EVIL_YOU' }], 'EVIL_REQ'),
@@ -87,7 +92,7 @@ describe('prompt builder', () => {
   });
 
   it('has a version for every prompt', () => {
-    expect(Object.keys(PROMPT_VERSIONS).sort()).toEqual(['analysis', 'github-import', 'note', 'referral', 'refine', 'reply', 'resume-import']);
+    expect(Object.keys(PROMPT_VERSIONS).sort()).toEqual(['github-import', 'job-check', 'note', 'referral', 'refine', 'reply', 'resume-import']);
   });
 });
 

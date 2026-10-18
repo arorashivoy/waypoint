@@ -7,7 +7,7 @@ import { HookReply } from '@/lib/schemas';
 describe.skipIf(!process.env.ANTHROPIC_API_KEY)('Claude API (live)', () => {
   it('returns a structured reply from a Sonnet model', async () => {
     const r = await askApi(process.env.ANTHROPIC_API_KEY!, {
-      system: 'You write one-line hooks for cold emails. Answer with JSON only.',
+      system: prompt`You write one-line hooks for cold emails. Answer with JSON only.`,
       prompt: prompt`Write a hook for an engineer who builds Kafka pipelines.`,
       schema: HookReply,
       effort: 'low',

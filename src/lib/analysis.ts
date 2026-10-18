@@ -2,39 +2,54 @@ import type { Job } from '@prisma/client';
 import { db } from './db';
 import { credentialFor } from './claude';
 import { askJsonCached } from './cache';
-import { AnalysisReply, coerceText } from './schemas';
-import { ANALYSE_SYSTEM, analysePrompt, PROMPT_VERSIONS } from './prompts';
+import { coerceText, jobCheckSchema, BLOCKER_TYPES, LEGITIMACY_FLAGS } from './schemas';
+import { jobCheckPrompt, jobCheckSystem, PROMPT_VERSIONS } from './prompts';
 import { claimsFor, profileSummary } from './user';
-import { fieldFit, levelFit, matchScore, rankRoutes, routeLabel } from './match';
+import { fieldFit, levelFit, rankRoutes, routeLabel } from './match';
+import { checkReply, citableClaims, fieldChoices, jobCheckProfileText, scoreCheck, type Blocker, type JobCheck, type Requirement, type ScorePart } from './jobcheck';
+import { getSettings } from './settings';
 import { CV_COUNTRY_RULES, FIELD_QUERIES } from './countries';
 import { type ClaimsDoc } from './claims';
 import { claimsInPosting, projectPicks, rankEvidence, type ProjectPick } from './resume';
 import { fieldFromText, levelFromPosting, requiredYears } from './sources/geo';
 
-export type Analysis = {
-  field: string;
-  mode: string;
-  level: string;
-  sponsor: boolean;
-  visa: string;
-  requirements: { t: string; ok: boolean }[];
-  must: string[];
-  projects: { n: string; why: string }[];
-  by: 'claude' | 'heuristic';
-};
+/** What is stored: the checked reply, and who made it. The score is computed on every read. */
+export type StoredAnalysis = JobCheck & { by: 'claude' | 'heuristic'; promptVersion: string };
+export type Analysis = StoredAnalysis & { score: number; parts: ScorePart[] };
 
-/** The model sometimes wraps a list item it was asked for as a string in an
- *  object (`must: [{ t: "…" }]`), and React throws on rendering an object.
- *  Coerced on every read, so analyses already stored in that shape render too. */
-const text = coerceText;
+/** `promptVersion` of an analysis that was stored before the job check existed. */
+const LEGACY_VERSION = 'analysis-v1';
 
-function normalise(a: any, by: Analysis['by'] = a.by): Analysis {
+const oneOf = <T extends string>(list: readonly T[], v: unknown): v is T => typeof v === 'string' && (list as readonly string[]).includes(v);
+
+function readRequirement(r: any): Requirement {
+  // The old shape was { t, ok }. Old analyses are read, not migrated.
+  if (r && typeof r === 'object' && 'text' in r) {
+    return {
+      text: coerceText(r.text),
+      importance: r.importance === 'nice' ? 'nice' : 'must',
+      status: r.status === 'met' || r.status === 'partial' ? r.status : 'missing',
+      evidence: Array.isArray(r.evidence) ? r.evidence.filter((x: unknown): x is string => typeof x === 'string') : [],
+    };
+  }
+  return { text: coerceText(r?.t ?? r), importance: 'must', status: r?.ok ? 'met' : 'missing', evidence: [] };
+}
+
+/** Reads a stored analysis of the old shape or the new shape. The model sometimes
+ *  wrapped a string in an object, so every text goes through `coerceText`. */
+function normalise(a: any, by: StoredAnalysis['by'] = a.by): StoredAnalysis {
   return {
-    ...a,
-    requirements: (a.requirements || []).map((r: any) => ({ t: text(r?.t ?? r), ok: Boolean(r?.ok) })),
-    must: (a.must || []).map(text),
-    projects: (a.projects || []).map((p: any) => ({ n: text(p?.n ?? p), why: text(p?.why ?? '') })),
+    requirements: (a.requirements || []).map(readRequirement),
+    blockers: (a.blockers || []).filter((b: any): b is Blocker => oneOf(BLOCKER_TYPES, b?.type) && typeof b?.quote === 'string'),
+    legitimacy: (a.legitimacy || []).filter((x: unknown): x is JobCheck['legitimacy'][number] => oneOf(LEGITIMACY_FLAGS, x)),
+    field: coerceText(a.field),
+    mode: coerceText(a.mode),
+    level: coerceText(a.level),
+    sponsor: Boolean(a.sponsor),
+    visa: coerceText(a.visa),
+    summary: coerceText(a.summary),
     by,
+    promptVersion: typeof a.promptVersion === 'string' ? a.promptVersion : LEGACY_VERSION,
   };
 }
 
@@ -61,7 +76,7 @@ function fitFromClaims(claims: ClaimsDoc | null): Fit {
 }
 
 /** Keyword overlap, used when Claude is not reachable so the app still works. */
-function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileSummary>>, fit: Fit): Analysis {
+function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileSummary>>, fit: Fit): StoredAnalysis {
   const haystack = [
     ...profile.positions.map((p) => `${p.title} ${p.company} ${p.summary || ''}`),
     ...profile.projects.map((p) => `${p.title} ${p.description || ''}`),
@@ -85,25 +100,29 @@ function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileS
   ] as const;
 
   const { claims } = fit;
-  const requirements: { t: string; ok: boolean }[] =
+  // Same shape as a check by Claude. The claims.yml path names the slug of the
+  // claim as evidence. The keyword path has no slug, so a "met" there has an
+  // empty evidence list; the score of a heuristic is capped at 65 (see `viewOf`).
+  const found: { text: string; ok: boolean; slug?: string }[] =
     field === 'Other'
-      ? [{ t: 'A software engineering role', ok: false }]
+      ? [{ text: 'A software engineering role', ok: false }]
       : claims
-      ? claimsInPosting(claims, `${job.role}\n${job.description}`).slice(0, 5)
+      ? claimsInPosting(claims, `${job.role}\n${job.description}`).slice(0, 5).map((r) => ({ text: r.t, ok: r.ok, slug: r.slug }))
       : candidates
           .filter(([, re]) => re.test(job.description) || re.test(job.role))
           .slice(0, 5)
-          .map(([t, re]) => ({ t, ok: re.test(haystack) }));
+          .map(([text, re]) => ({ text, ok: re.test(haystack) }));
 
   // A posting that names none of these is outside the profile's vocabulary, so
   // nothing is credited until Claude has actually read it.
-  if (requirements.length < 2) requirements.push({ t: 'Core skills named in the posting', ok: false });
+  if (found.length < 2) found.push({ text: 'Core skills named in the posting', ok: false });
 
-  const lead = fit.picks.find((p) => p.role === job.field)?.lead;
-  const projects = profile.projects
-    .map((p) => ({ n: p.title, why: p.title === lead ? 'Closest match to this posting' : 'Supporting evidence, one line' }))
-    .sort((a, b) => (a.n === lead ? -1 : b.n === lead ? 1 : 0))
-    .slice(0, 3);
+  const requirements: Requirement[] = found.map((r) => ({
+    text: r.text,
+    importance: 'must',
+    status: r.ok ? 'met' : 'missing',
+    evidence: r.ok && r.slug ? [r.slug] : [],
+  }));
 
   return {
     field,
@@ -112,15 +131,34 @@ function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileS
     sponsor: job.sponsor,
     visa: job.visa,
     requirements,
-    must: [
-      job.cc === 'IN'
-        ? 'A notice period line'
-        : `A work authorisation line: "Will require ${job.visa === 'Sponsorship not stated' ? 'sponsorship' : job.visa} sponsorship"`,
-      ...(CV_COUNTRY_RULES[job.cc] || []).slice(0, 1),
-    ].filter(Boolean),
-    projects,
+    blockers: [],
+    legitimacy: [],
+    summary: '',
     by: 'heuristic',
+    promptVersion: 'heuristic-1',
   };
+}
+
+/** The CV lines and the project order that the job screen shows. Code makes them
+ *  from the profile and the country, not the model. */
+function cvHints(job: Job, profile: Profile, fit: Fit) {
+  const lead = fit.picks.find((p) => p.role === job.field)?.lead;
+  const projects = profile.projects
+    .map((p) => ({ n: p.title, why: p.title === lead ? 'Closest match to this posting' : 'Supporting evidence, one line' }))
+    .sort((a, b) => (a.n === lead ? -1 : b.n === lead ? 1 : 0))
+    .slice(0, 3);
+  const must = [
+    job.cc === 'IN'
+      ? 'A notice period line'
+      : `A work authorisation line: "Will require ${job.visa === 'Sponsorship not stated' ? 'sponsorship' : job.visa} sponsorship"`,
+    ...(CV_COUNTRY_RULES[job.cc] || []).slice(0, 1),
+  ].filter(Boolean);
+  return { must, projects };
+}
+
+/** Adds the score. It depends on the profile, so it is computed on every read and not stored. */
+function scored(stored: StoredAnalysis, profile: Profile, fit: Fit): Analysis {
+  return { ...stored, ...scoreCheck(stored, fieldFit(stored.field, fit.strong), levelFit(stored.level, profile.levels)) };
 }
 
 /** How many times a posting may fail analysis before it stops being queued. A
@@ -140,24 +178,38 @@ export const MAX_ANALYSIS_TRIES = 3;
  */
 export async function analyseJob(job: Job, userId: string, force = false): Promise<Analysis> {
   const row = await db.jobAnalysis.findUnique({ where: { userId_jobId: { userId, jobId: job.id } } });
-  if (row?.analysedAt && !force) return parseAnalysis(row.analysis);
-
   const [profile, claims] = await Promise.all([profileSummary(userId), claimsFor(userId)]);
-  let analysis: Analysis;
+  const fit = fitFromClaims(claims);
+  if (row?.analysedAt && !force) return scored(parseAnalysis(row.analysis), profile, fit);
+
+  let stored: StoredAnalysis;
   let read = false;
 
   if (!(await credentialFor(userId))) {
-    analysis = heuristicAnalysis(job, profile, fitFromClaims(claims));
+    stored = heuristicAnalysis(job, profile, fit);
   } else {
     try {
-      const out = await askJsonCached('analysis', PROMPT_VERSIONS.analysis, { system: ANALYSE_SYSTEM, prompt: analysePrompt(profile, job), schema: AnalysisReply, effort: 'medium' }, { userId, kind: 'analysis' });
-      analysis = normalise(out, 'claude');
+      const [settings, prefs] = await Promise.all([getSettings(userId), db.countryPref.findMany({ where: { userId, on: true }, orderBy: { rank: 'asc' } })]);
+      const out = await askJsonCached(
+        'job-check',
+        PROMPT_VERSIONS['job-check'],
+        {
+          system: jobCheckSystem(jobCheckProfileText(claims, settings, prefs.map((p) => p.cc))),
+          prompt: jobCheckPrompt(job),
+          schema: jobCheckSchema(fieldChoices(settings.fields)),
+          effort: 'medium',
+        },
+        { userId, kind: 'analysis' },
+      );
+      const check = checkReply(out, { slugs: new Set(citableClaims(claims).map((c) => c.slug)), posting: `${job.role}\n${job.company}\n${job.city}\n${job.description}` });
+      stored = { ...check, by: 'claude', promptVersion: PROMPT_VERSIONS['job-check'] };
       read = true;
     } catch {
-      analysis = heuristicAnalysis(job, profile, fitFromClaims(claims));
+      stored = heuristicAnalysis(job, profile, fit);
     }
   }
 
+  const analysis = scored(stored, profile, fit);
   await db.jobAnalysis.upsert({
     where: { userId_jobId: { userId, jobId: job.id } },
     create: { userId, jobId: job.id, analysis: JSON.stringify(analysis), analysedAt: read ? new Date() : null, tries: read ? 0 : 1 },
@@ -174,7 +226,7 @@ const statedLevels = new Map<string, { length: number; level: string | null }>()
 
 /** Years the posting states beat any stored level: analyses written before the
  *  prompt defined levels by years carry the model's unanchored guess. */
-function levelOf(job: Job, analysis: Analysis): string {
+function levelOf(job: Job, analysis: StoredAnalysis): string {
   let seen = statedLevels.get(job.id);
   if (!seen || seen.length !== job.description.length) {
     const level = requiredYears(job.description) === null ? null : levelFromPosting(job.role, job.description);
@@ -184,8 +236,8 @@ function levelOf(job: Job, analysis: Analysis): string {
   return seen.level ?? analysis.level;
 }
 
-function viewOf(job: Job, profile: Profile, contacts: { company: string | null; position: string | null; firstName: string; lastName: string; profileUrl: string | null }[], stored: Analysis, fit: Fit) {
-  const analysis = { ...stored, level: levelOf(job, stored) };
+function viewOf(job: Job, profile: Profile, contacts: { company: string | null; position: string | null; firstName: string; lastName: string; profileUrl: string | null }[], stored: StoredAnalysis, fit: Fit) {
+  const analysis = scored({ ...stored, level: levelOf(job, stored) }, profile, fit);
   const routes = rankRoutes(contacts as any, {
     company: job.company,
     field: analysis.field,
@@ -195,11 +247,10 @@ function viewOf(job: Job, profile: Profile, contacts: { company: string | null; 
   });
 
   const provisional = analysis.by !== 'claude';
-  const raw = matchScore(analysis.requirements, fieldFit(analysis.field, fit.strong), levelFit(analysis.level, profile.levels));
   // A keyword guess is never allowed to outrank a posting Claude actually read.
-  const match = provisional ? Math.min(raw, 65) : raw;
+  const match = provisional ? Math.min(analysis.score, 65) : analysis.score;
 
-  return { analysis, routes, match, provisional, path: routeLabel(routes, job.company) };
+  return { analysis, routes, match, provisional, path: routeLabel(routes, job.company), hints: cvHints(job, profile, fit) };
 }
 
 /**
@@ -231,7 +282,7 @@ export async function jobView(job: Job, userId: string, opts: { analyse?: boolea
   ]);
 
   const fit = fitFromClaims(claims);
-  const analysis: Analysis = row
+  const analysis: StoredAnalysis = row
     ? parseAnalysis(row.analysis)
     : opts.analyse
       ? await analyseJob(job, userId)

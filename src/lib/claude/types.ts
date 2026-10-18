@@ -18,7 +18,8 @@ export type Usage = {
 };
 
 export type AskRequest<T> = {
-  system: string;
+  /** Only the `prompt` tag of the prompt builder makes a `BuiltPrompt`. */
+  system: BuiltPrompt;
   /** Only the `prompt` tag of the prompt builder makes a `BuiltPrompt`. */
   prompt: BuiltPrompt;
   schema: z.ZodType<T>;
