@@ -1,5 +1,5 @@
 import type { ResumeMenu } from '../resume';
-import { GUARD, menu, prompt, request, sanitise, untrusted, untrustedFields } from './builder';
+import { GUARD, joinFenced, menu, prompt, request, sanitise, trusted, untrusted, untrustedFields } from './builder';
 
 export const REFINE_SYSTEM = `You adjust which of one candidate's own CV entries a tailored CV carries, and in
 what order, following the candidate's request. You never write CV text and never describe experience:
@@ -31,10 +31,10 @@ ${choices.skills.map((s) => `- ${s.slug} — ${sanitise(s.label, 80)} — ${s.ev
 Lead job's bullets: ${current.bullets.map((t) => sanitise(t, 160)).join(' | ') || 'unchanged from the base CV'}
 Skills leading their lines: ${current.skills.map((t) => sanitise(t, 80)).join(', ') || 'unchanged from the base CV'}`,
   );
-  const chat = untrusted(
-    'earlier chat',
-    history.map((t) => `${t.role === 'you' ? 'Candidate' : 'You'}: ${sanitise(t.text, 600)}`).join('\n') || '(none)',
-  );
+  // Each turn has its own fence: the candidate's turns are requests, the answers of Claude are data.
+  const chat = history.length
+    ? joinFenced(history.map((t) => (t.role === 'you' ? request(t.text) : untrusted('earlier answer', t.text))))
+    : trusted('(none)');
   return prompt`
 ${menuBlock}
 

@@ -73,11 +73,18 @@ export type Part = Fenced | Literal;
 export type BuiltPrompt = string & { readonly [builtBrand]: true };
 
 const fenced = (text: string) => ({ text }) as Fenced;
+/**
+ * Text for the inside of a fence. After `sanitise`, each `<` and `>` becomes a
+ * full-width character. Stripping tags in one pass is not enough, because
+ * removing `</untrusted>` from `</untr</untrusted>usted>` makes a new tag. With
+ * no `<` or `>` left, a value cannot write any tag, so it cannot close its fence.
+ */
+const inside = (value: unknown, max: number) => sanitise(value, max).replace(/</g, '\uFF1C').replace(/>/g, '\uFF1E');
 const label_ = (label: string) => label.replace(/[^a-z0-9 _-]/gi, '');
 
 /** Fences one block of third-party text. */
 export const untrusted = (label: string, body: string): Fenced =>
-  fenced(`<untrusted source="${label_(label)}">\n${sanitise(body)}\n</untrusted>`);
+  fenced(`<untrusted source="${label_(label)}">\n${inside(body, MAX_UNTRUSTED)}\n</untrusted>`);
 
 /** Fences a set of third-party fields as labelled lines, so that a job title or
  *  a contact's headline is quoted data rather than part of the sentence. */
@@ -85,19 +92,19 @@ export const untrustedFields = (label: string, fields: Record<string, unknown>):
   fenced(
     `<untrusted source="${label_(label)}">\n` +
       Object.entries(fields)
-        .map(([k, v]) => `${k}: ${sanitise(v, 400)}`)
+        .map(([k, v]) => `${k}: ${inside(v, 400)}`)
         .join('\n') +
       `\n</untrusted>`,
   );
 
 /** Fences the candidate's own record. Capped at 40 000 characters. */
-export const profile = (text: string): Fenced => fenced(`<profile>\n${sanitise(text, MAX_PROFILE)}\n</profile>`);
+export const profile = (text: string): Fenced => fenced(`<profile>\n${inside(text, MAX_PROFILE)}\n</profile>`);
 
 /** Fences a request that the user typed. Capped at 2 000 characters. */
-export const request = (text: string): Fenced => fenced(`<request>\n${sanitise(text, MAX_REQUEST)}\n</request>`);
+export const request = (text: string): Fenced => fenced(`<request>\n${inside(text, MAX_REQUEST)}\n</request>`);
 
 /** Fences the list of choices (ids and titles) that a reply may select from. */
-export const menu = (text: string): Fenced => fenced(`<menu>\n${sanitise(text, MAX_PROFILE)}\n</menu>`);
+export const menu = (text: string): Fenced => fenced(`<menu>\n${inside(text, MAX_PROFILE)}\n</menu>`);
 
 /**
  * Marks text that comes from code constants only: a number, a list of options
@@ -118,6 +125,21 @@ export function prompt(strings: TemplateStringsArray, ...parts: Part[]): BuiltPr
   return out as BuiltPrompt;
 }
 
+/** Joins fenced values with a new line. Each part is already safe. */
+export const joinFenced = (parts: Fenced[]): Fenced => fenced(parts.map((p) => p.text).join('\n'));
+
+/**
+ * The prompt for the one repair call: the built prompt, then the schema
+ * problems. The problems come from the model reply, so they are fenced and
+ * capped at 600 characters.
+ */
+export const repairPrompt = (original: BuiltPrompt, problems: string): BuiltPrompt =>
+  prompt`${trusted(original)}
+
+Your previous reply did not match the required JSON shape:
+${untrusted('schema problems', problems.slice(0, 600))}
+Reply again with JSON only, with exactly the keys asked for.`;
+
 export type PromptName = 'analysis' | 'referral' | 'note' | 'refine' | 'reply' | 'resume-import' | 'github-import';
 
 /**
@@ -128,7 +150,7 @@ export const PROMPT_VERSIONS: Record<PromptName, string> = {
   analysis: 'v1',
   referral: 'v2',
   note: 'v2',
-  refine: 'v2',
+  refine: 'v3',
   reply: 'v1',
   'resume-import': 'v1',
   'github-import': 'v1',

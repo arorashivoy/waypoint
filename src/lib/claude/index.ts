@@ -5,6 +5,7 @@ import { extractJson } from './json';
 import { ClaudeCallError, NoCredentialError, type AskRequest, type AskResult, type CallContext, type Credential, type Usage } from './types';
 import { recordUsage } from './usage';
 import { log } from '@/lib/log';
+import { repairPrompt } from '@/lib/prompts/builder';
 
 /**
  * The one way to call Claude.
@@ -70,7 +71,7 @@ async function askCliJson<T>(req: AskRequest<T>): Promise<AskResult<T>> {
   const a = tryParse(first.text);
   if (a.success) return { data: a.data as T, raw: first.text, usage: first.usage };
 
-  const repair = `${req.prompt}\n\nYour previous reply did not match the required JSON shape: ${String(a.error.message).slice(0, 600)}\nReply again with JSON only, with exactly the keys asked for.`;
+  const repair = repairPrompt(req.prompt, String(a.error.message));
   const second = await askCli(req.system, repair);
   const b = tryParse(second.text);
   const usage = addUsage(first.usage, second.usage);

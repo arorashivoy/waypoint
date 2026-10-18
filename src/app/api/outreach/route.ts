@@ -18,7 +18,6 @@ import { publishCv, type Published } from '@/lib/cv';
 
 export const maxDuration = 300;
 
-const ON_FILE = ['the CV', 'the job link', 'the job ID', 'the LinkedIn profile'];
 
 /** Outreach often continues after the application itself went in; moving an
  *  applied job back to "sent" would drop it out of the Applied column. */
@@ -223,7 +222,7 @@ export const POST = handle(async (req) => {
     const drafted =
       !cred
         ? { draft: `Thank you, ${name.split(' ')[0]}!`, certain: false, reason: 'Claude is not connected, so this reply was not checked. Read it before sending.' }
-        : (await askJson({ system: REPLY_SYSTEM, prompt: replyPrompt(profile, job, name, incoming, ON_FILE), schema: DraftReply, effort: 'medium' }, { userId: user.id, kind: 'reply' })).data;
+        : (await askJson({ system: REPLY_SYSTEM, prompt: replyPrompt(profile, job, name, incoming), schema: DraftReply, effort: 'medium' }, { userId: user.id, kind: 'reply' })).data;
 
     // The model is instructed to refuse manipulation and does. This does not
     // depend on that: a message shaped like an instruction to a model is
