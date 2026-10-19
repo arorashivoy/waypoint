@@ -65,11 +65,33 @@ function parseBbox(html: string): { lines: BboxLine[]; sizes: [number, number][]
   return { lines, sizes };
 }
 
-/** The text, the hidden phrases, and the pages with words that were not read because they are not in `pages`. */
-function readLines(lines: readonly BboxLine[], pages?: ReadonlyMap<number, CharCheck>): { text: string; hidden: string[]; skipped: number[] } {
+/**
+ * The characters that Waypoint reads from a PDF (after NFC): Basic Latin, Latin-1, Latin
+ * Extended-A and B, General Punctuation without the invisible and format characters,
+ * Currency Symbols, Letterlike Symbols, Arrows, and some bullets, a star and a check mark.
+ * A word with any other character (other scripts, astral code points, braille, tags,
+ * private use, circled or squared forms, combining marks) is hidden as a whole.
+ */
+const READ_CHAR = /^[\u0009\u0020-\u007e\u00a0-\u024f\u2000-\u200a\u2010-\u2029\u202f-\u205f\u20a0-\u20cf\u2100-\u214f\u2190-\u21ff\u2022\u25cf\u25aa\u25a0\u2605\u2713]$/u;
+
+export const UNREAD_WARNING = 'The PDF has words with characters that Waypoint does not read from PDFs (for example symbols or letters of other scripts). Waypoint left those words out.';
+
+/** The word in NFC. TeX writes "ï" as a dotless i with a combining diaeresis, so a dotless i before a mark becomes "i" first. */
+function nfc(word: string): string {
+  return word.replace(/\u0131(?=\p{M})/gu, 'i').normalize('NFC');
+}
+
+/** True when every character of the word (after NFC) is one that Waypoint reads from a PDF. */
+export function readableWord(word: string): boolean {
+  return [...nfc(word)].every((c) => READ_CHAR.test(c));
+}
+
+/** The text, the hidden phrases, the pages with words that were not read because they are not in `pages`, and if a word had characters that Waypoint does not read. */
+function readLines(lines: readonly BboxLine[], pages?: ReadonlyMap<number, CharCheck>): { text: string; hidden: string[]; skipped: number[]; unread: boolean } {
   const out: string[] = [];
   const hidden: string[] = [];
   const skipped = new Set<number>();
+  let unread = false;
   for (const { page, words } of lines) {
     if (!words.length) continue;
     const index = pages?.get(page);
@@ -84,9 +106,14 @@ function readLines(lines: readonly BboxLine[], pages?: ReadonlyMap<number, CharC
         tiny.push(w.text);
         continue;
       }
-      // Every word gets the colour check, also a word of symbols: circled or squared letters look like letters.
+      if (!readableWord(w.text)) {
+        unread = true;
+        tiny.push(w.text);
+        continue;
+      }
+      // Every word gets the colour check, also a word of symbols.
       if (!index) {
-        shown.push(w.text);
+        shown.push(nfc(w.text));
         continue;
       }
       const [s, h] = split([...w.text], index.charsShown(w));
@@ -96,14 +123,14 @@ function readLines(lines: readonly BboxLine[], pages?: ReadonlyMap<number, CharC
         tiny.push(w.text);
         continue;
       }
-      if (s) shown.push(s);
+      if (s) shown.push(nfc(s));
       if (h) tiny.push(h);
     }
     if (shown.length) out.push(shown.join(' '));
     const phrase = tiny.join(' ').slice(0, 200);
     if (/[\p{L}\p{N}]/u.test(phrase.normalize('NFKC')) && hidden.length < MAX_HIDDEN) hidden.push(phrase);
   }
-  return { text: out.join('\n').slice(0, MAX_TEXT), hidden, skipped: [...skipped].sort((a, b) => a - b) };
+  return { text: out.join('\n').slice(0, MAX_TEXT), hidden, skipped: [...skipped].sort((a, b) => a - b), unread };
 }
 
 /**
@@ -115,9 +142,13 @@ function readLines(lines: readonly BboxLine[], pages?: ReadonlyMap<number, CharC
  * The hidden text of a line becomes one hidden phrase.
  */
 export function wordsFromBbox(html: string, pages?: ReadonlyMap<number, CharCheck>): Extracted {
-  const r = readLines(parseBbox(html).lines, pages);
+  return withWarnings(readLines(parseBbox(html).lines, pages));
+}
+
+function withWarnings(r: { text: string; hidden: string[]; skipped: number[]; unread: boolean }): Extracted {
+  const warnings = [...(r.skipped.length ? [skippedWarning(r.skipped)] : []), ...(r.unread ? [UNREAD_WARNING] : [])];
   const out: Extracted = { text: r.text, hidden: r.hidden };
-  return r.skipped.length ? { ...out, warnings: [skippedWarning(r.skipped)] } : out;
+  return warnings.length ? { ...out, warnings } : out;
 }
 
 export const NOT_CHECKED = 'Waypoint could not check this PDF for hidden text. Export it again as a normal PDF, or upload the .tex source.';
@@ -217,8 +248,7 @@ export async function extractPdf(buf: Buffer): Promise<Extracted> {
     const res = readLines(lines, pages);
     const withText = new Set(lines.filter((l) => l.words.length).map((l) => l.page));
     if (res.skipped.length && res.skipped.length === withText.size) throw new HttpError(400, NOT_CHECKED);
-    const out: Extracted = { text: res.text, hidden: res.hidden };
-    return res.skipped.length ? { ...out, warnings: [skippedWarning(res.skipped)] } : out;
+    return withWarnings(res);
   } finally {
     rmSync(work, { recursive: true, force: true });
   }

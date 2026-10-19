@@ -25,6 +25,10 @@ const TOLERANCE = 24;
 export const INK_MIN_SHARE = 0.08;
 /** The share for a glyph with no letter or digit (a dash, a dot, a bullet). */
 export const MARK_MIN_SHARE = 0.02;
+/** A glyph whose advance is under 20% of its font size never shows (a zero-width glyph or a hairline). */
+const MIN_ADVANCE = 0.2;
+/** A letter or digit shows only when the box around its ink is at least 20% of its glyph box. */
+const MIN_INK_BOX = 0.2;
 /** The glyph box above and below the baseline, as a share of the font size. Accents and descenders fit in it. */
 const ASCENT = 0.95;
 const DESCENT = 0.3;
@@ -175,7 +179,9 @@ function roughWidth(c: string): number {
 function spanGlyphs(s: [number, number, number, number], size: number, chars: { b: [number, number, number, number]; c: string }[]): Omit<Glyph, 'span'>[] {
   const [sx, sy, ex, ey] = s;
   const L = Math.hypot(ex - sx, ey - sy);
-  if (!(L > 0) || !(size > 0) || !chars.length) return [];
+  if (!(size > 0) || !chars.length) return [];
+  // A span with no advance (for example a font with zero widths) still paints. Its glyphs are kept, with no advance, so that their ink is not given to another glyph.
+  if (!(L > 0)) return chars.map((ch) => ({ c: ch.c, x: sx, y: sy, dx: 1, dy: 0, len: 0, size, steep: false }));
   const dx = (ex - sx) / L;
   const dy = (ey - sy) / L;
   const across = Math.abs(ex - sx) >= Math.abs(ey - sy);
@@ -293,14 +299,14 @@ export function visibleGlyphs(glyphs: readonly Glyph[], normal: Raster, noText: 
     if (v || !g.steep || g.lead !== undefined) return v;
     return solid(i - 1) && solid(i + 1) && glyphs[i - 1].span === g.span && glyphs[i + 1].span === g.span && shows[i - 1] && shows[i + 1];
   });
-  return { shows: out, dup: r.dup };
+  return { shows: out, marks: r.mark.map((v) => v >= MARK_MIN_SHARE), dup: r.dup };
 }
 
 /** For each glyph: does it show, and is it a copy of an earlier glyph (the same character at almost the same place). */
-export type PageCheck = { shows: boolean[]; dup: boolean[] };
+export type PageCheck = { shows: boolean[]; dup: boolean[]; marks?: boolean[] };
 
 /** The share of each glyph box that is ink that only this glyph owns (0 to 1), or null when the page is too large to check. See visibleGlyphs. */
-export function glyphInk(glyphs: readonly Glyph[], normal: Raster, noText: Raster, k: number): { share: number[]; dup: boolean[] } | null {
+export function glyphInk(glyphs: readonly Glyph[], normal: Raster, noText: Raster, k: number): { share: number[]; mark: number[]; dup: boolean[] } | null {
   const { width: W, height: H } = normal;
   if (noText.width !== W || noText.height !== H) return null;
   const n = glyphs.length;
@@ -355,11 +361,27 @@ export function glyphInk(glyphs: readonly Glyph[], normal: Raster, noText: Raste
     if (bases.length === 1) follows[i] = bases[0];
   }
   // Pixel owners: -1 none, -2 more than one glyph, else the glyph index.
+  // A glyph with almost no advance (other than the second part of a pdflatex ligature) still
+  // paints ink. For the owners, its box is 1 font size wide around its place, so its ink is
+  // shared and no other glyph can take it.
   const owner = new Int32Array(W * H).fill(-1);
   let visits = 0;
   for (let i = 0; i < n; i++) {
-    if (follows[i] >= 0 || isSpace(glyphs[i].c) || glyphs[i].lead !== undefined) continue;
-    visits += eachPixel(glyphs[i], k, W, H, (o) => {
+    if (follows[i] >= 0 || isSpace(glyphs[i].c) || isLigaturePart(glyphs, i)) continue;
+    const g = glyphs[i];
+    if (g.len < MIN_ADVANCE * g.size) {
+      // A glyph with almost no advance: every pixel within 1 font size of its place, in any direction, is shared.
+      const r = g.size * k;
+      const px0 = Math.max(0, Math.floor(g.x * k - r));
+      const px1 = Math.min(W, Math.ceil(g.x * k + r));
+      const py0 = Math.max(0, Math.floor(g.y * k - r));
+      const py1 = Math.min(H, Math.ceil(g.y * k + r));
+      for (let y = py0; y < py1; y++) for (let x = px0; x < px1; x++) owner[y * W + x] = -2;
+      visits += Math.max(0, px1 - px0) * Math.max(0, py1 - py0);
+      if (visits > MAX_VISITS) return null;
+      continue;
+    }
+    visits += eachPixel(g, k, W, H, (o) => {
       owner[o] = owner[o] === -1 ? i : owner[o] === i ? i : -2;
     });
     if (visits > MAX_VISITS) return null;
@@ -367,20 +389,43 @@ export function glyphInk(glyphs: readonly Glyph[], normal: Raster, noText: Raste
   const a = normal.data;
   const b = noText.data;
   const shows = new Array<number>(n).fill(0);
+  const marks = new Array<number>(n).fill(0);
   for (let i = 0; i < n; i++) {
-    if (follows[i] >= 0 || isSpace(glyphs[i].c) || glyphs[i].lead !== undefined) continue;
+    const g = glyphs[i];
+    if (follows[i] >= 0 || isSpace(g.c) || g.lead !== undefined) continue;
+    // A zero-width glyph or a hairline never shows.
+    if (g.len < MIN_ADVANCE * g.size) continue;
     let area = 0;
     let ink = 0;
-    visits += eachPixel(glyphs[i], k, W, H, (o) => {
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    visits += eachPixel(g, k, W, H, (o) => {
       area++;
       if (owner[o] !== i) return;
-      if (isInk(a, b, o, W, H)) ink++;
+      if (!isInk(a, b, o, W, H)) return;
+      ink++;
+      const x = o % W;
+      const y = (o - x) / W;
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+      y0 = Math.min(y0, y);
+      y1 = Math.max(y1, y);
     });
     if (visits > MAX_VISITS) return null;
-    shows[i] = area > 0 ? ink / area : 0;
+    marks[i] = area > 0 ? ink / area : 0;
+    // The ink of a letter or digit fills a good part of the box of its font size and advance. A thin line or a dot does not.
+    const inkBox = ink ? (x1 - x0 + 1) * (y1 - y0 + 1) : 0;
+    if (/[\p{L}\p{N}]/u.test(g.c.normalize('NFKC')) && inkBox < MIN_INK_BOX * g.len * g.size * k * k) continue;
+    shows[i] = marks[i];
   }
-  for (let i = 0; i < n; i++) if (follows[i] >= 0) shows[i] = shows[follows[i]];
-  return { share: shows, dup };
+  for (let i = 0; i < n; i++) {
+    if (follows[i] < 0) continue;
+    shows[i] = shows[follows[i]];
+    marks[i] = marks[follows[i]];
+  }
+  return { share: shows, mark: marks, dup };
 }
 
 /** A text-ink pixel counts as stray when it is more than 2 pixels outside every glyph box. */
@@ -428,6 +473,14 @@ const ALNUM_CHAR = /^[\p{L}\p{N}]$/u;
 const LIGATURE_LETTER = /^[fil]$/;
 /** Ghostscript's text for the first glyph of an f ligature in a font with no Unicode map. */
 const LIGATURE_LEAD = '\u6600';
+/** Ghostscript's text for the second glyph of ff, fi, ffi and fl (no advance). */
+const LIGATURE_FOLLOWERS = ['\u6600', '\u6900', '\ucf00', '\u6c00'];
+
+/** True for the second glyph of a pdflatex ligature: no advance, after a U+6600 glyph, with a known text. */
+function isLigaturePart(glyphs: readonly Glyph[], i: number): boolean {
+  const g = glyphs[i];
+  return g.lead !== undefined && glyphs[g.lead].c === LIGATURE_LEAD && LIGATURE_FOLLOWERS.includes(g.c);
+}
 /** The most unknown glyphs (U+FFFD, private use) that one word may have. */
 const MAX_UNKNOWN = 2;
 
@@ -486,8 +539,10 @@ export class GlyphIndex implements CharCheck {
   private centres: [number, number][];
   private static CELL = 8;
   private shows: readonly boolean[];
+  private marks?: readonly boolean[];
   constructor(private glyphs: readonly Glyph[], check: PageCheck) {
     this.shows = check.shows;
+    this.marks = check.marks;
     this.centres = glyphs.map(centre);
     glyphs.forEach((g, i) => {
       // A copy of a glyph is not a character of its own (pdftotext also drops it).
@@ -519,16 +574,18 @@ export class GlyphIndex implements CharCheck {
     const tol = Math.max(2, 0.12 * Math.min(w.x1 - w.x0, w.y1 - w.y0));
     const found = this.near(w)
       .filter((i) => {
-        const g = this.glyphs[i];
-        const lead = g.lead;
+        const lead = this.glyphs[i].lead;
         if (opts.shown && !(lead === undefined ? this.shows[i] : this.shows[lead])) return false;
-        const thick = Math.abs(g.dx) >= Math.abs(g.dy) ? w.y1 - w.y0 : w.x1 - w.x0;
-        const height = (ASCENT + DESCENT) * g.size;
-        return height >= 0.6 * thick && height <= 1.6 * thick;
+        return this.sized(w, i);
       })
       .slice(0, 64);
-    // A word with no letter or digit (a bullet, an arrow, a dash) needs at least one glyph of its size at its place.
-    if (!want.some((c) => ALNUM_CHAR.test(c))) return found.length > 0;
+    // A word with no letter or digit (a bullet, an arrow, a dash) needs at least one glyph of its size at its place
+    // with ink (2%) and a normal advance. The ink-box rule for letters does not apply: a font with no Unicode
+    // map can give a dash the text "4".
+    if (!want.some((c) => ALNUM_CHAR.test(c))) {
+      if (!opts.shown) return found.length > 0;
+      return this.near(w).some((i) => (this.marks?.[i] ?? this.shows[i]) && this.sized(w, i));
+    }
     const cx = (w.x0 + w.x1) / 2;
     const cy = (w.y0 + w.y1) / 2;
     // Look for a run of glyphs, next to each other in text order, with the letters of the word.
@@ -548,6 +605,14 @@ export class GlyphIndex implements CharCheck {
     return false;
   }
 
+  /** True when the glyph height (font size × 1.25) is 0.6 to 1.6 times the thickness of the word box. */
+  private sized(w: WordBox, i: number): boolean {
+    const g = this.glyphs[i];
+    const thick = Math.abs(g.dx) >= Math.abs(g.dy) ? w.y1 - w.y0 : w.x1 - w.x0;
+    const height = (ASCENT + DESCENT) * g.size;
+    return height >= 0.6 * thick && height <= 1.6 * thick;
+  }
+
   /**
    * The letter tokens of a glyph run. A glyph with followers that have no advance
    * (a ligature with no Unicode map, for example U+6600 + U+6900 for "fi") is one
@@ -559,16 +624,13 @@ export class GlyphIndex implements CharCheck {
     for (const i of run) {
       const g = this.glyphs[i];
       const last = out[out.length - 1];
-      if (g.lead !== undefined && last?.kind === 'lig' && last.lead === g.lead) {
-        last.n++;
+      // Only Ghostscript's form of an f ligature with no Unicode map (U+6600, then U+6600, U+6900, U+CF00 or U+6C00) is a ligature token.
+      if (g.lead !== undefined && isLigaturePart(this.glyphs, i)) {
+        if (last?.kind === 'lig' && last.lead === g.lead) last.n++;
+        else out.push({ kind: 'lig', lead: g.lead, n: 1 });
         continue;
       }
-      // Only Ghostscript's form of an f ligature with no Unicode map (U+6600 first) is a ligature token.
-      if (g.lead !== undefined && this.glyphs[g.lead].c === LIGATURE_LEAD) {
-        out.push({ kind: 'lig', lead: g.lead, n: 1 });
-        continue;
-      }
-      if (g.c === LIGATURE_LEAD && run.some((j) => this.glyphs[j].lead === i)) {
+      if (g.c === LIGATURE_LEAD && run.some((j) => this.glyphs[j].lead === i && isLigaturePart(this.glyphs, j))) {
         out.push({ kind: 'lig', lead: i, n: 1 });
         continue;
       }
@@ -649,7 +711,8 @@ export class GlyphIndex implements CharCheck {
     // A glyph with no advance shows only as the second or third letter of an ff, fi, fl, ffi or ffl ligature whose first glyph shows.
     const shown = (i: number, j: number) => {
       const lead = this.glyphs[i].lead;
-      if (lead === undefined) return this.shows[i];
+      // A character of the word that is not a letter or digit (a dash) needs only the mark rule.
+      if (lead === undefined) return ALNUM_CHAR.test(chars[j] ?? '') ? this.shows[i] : (this.marks?.[i] ?? this.shows[i]);
       return this.shows[lead] && /^[fil]$/.test(chars[j] ?? '') && (chars[j - 1] === 'f' || (chars[j - 2] === 'f' && chars[j - 1] === 'f'));
     };
     if (slots.length === chars.length) return slots.map((i, j) => shown(i, j));
