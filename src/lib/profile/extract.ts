@@ -84,8 +84,8 @@ function readLines(lines: readonly BboxLine[], pages?: ReadonlyMap<number, CharC
         tiny.push(w.text);
         continue;
       }
-      // A word with no letter or digit (a dash, a bullet) cannot carry an instruction, so it is not checked.
-      if (!index || !ALNUM.test(w.text)) {
+      // Every word gets the colour check, also a word of symbols: circled or squared letters look like letters.
+      if (!index) {
         shown.push(w.text);
         continue;
       }
@@ -101,7 +101,7 @@ function readLines(lines: readonly BboxLine[], pages?: ReadonlyMap<number, CharC
     }
     if (shown.length) out.push(shown.join(' '));
     const phrase = tiny.join(' ').slice(0, 200);
-    if (/[A-Za-z]/.test(phrase) && hidden.length < MAX_HIDDEN) hidden.push(phrase);
+    if (/[\p{L}\p{N}]/u.test(phrase.normalize('NFKC')) && hidden.length < MAX_HIDDEN) hidden.push(phrase);
   }
   return { text: out.join('\n').slice(0, MAX_TEXT), hidden, skipped: [...skipped].sort((a, b) => a - b) };
 }

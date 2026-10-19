@@ -23,6 +23,8 @@ const TOLERANCE = 24;
  * 8% keeps a margin on both sides.
  */
 export const INK_MIN_SHARE = 0.08;
+/** The share for a glyph with no letter or digit (a dash, a dot, a bullet). */
+export const MARK_MIN_SHARE = 0.02;
 /** The glyph box above and below the baseline, as a share of the font size. Accents and descenders fit in it. */
 const ASCENT = 0.95;
 const DESCENT = 0.3;
@@ -281,7 +283,9 @@ const near = (a: Glyph, b: Glyph) => Math.hypot(a.x - b.x, a.y - b.y) < 0.15 * M
 export function visibleGlyphs(glyphs: readonly Glyph[], normal: Raster, noText: Raster, k: number): PageCheck | null {
   const r = glyphInk(glyphs, normal, noText, k);
   if (!r) return null;
-  const shows = r.share.map((v) => v >= INK_MIN_SHARE);
+  // A dash or a dot has little ink, so a glyph with no letter or digit (after NFKC) needs only 2%.
+  // Circled and squared letters open to letters under NFKC, so they need 8% like a letter.
+  const shows = r.share.map((v, i) => v >= (/[\p{L}\p{N}]/u.test(glyphs[i].c.normalize('NFKC')) ? INK_MIN_SHARE : MARK_MIN_SHARE));
   // In a steep span the glyph places are estimates, so a glyph between 2 glyphs of its span that show also shows.
   const solid = (i: number) => i >= 0 && i < glyphs.length && !isSpace(glyphs[i].c);
   const out = shows.map((v, i) => {
@@ -422,13 +426,18 @@ function letters(s: string): string {
 }
 const ALNUM_CHAR = /^[\p{L}\p{N}]$/u;
 const LIGATURE_LETTER = /^[fil]$/;
+/** Ghostscript's text for the first glyph of an f ligature in a font with no Unicode map. */
+const LIGATURE_LEAD = '\u6600';
+/** The most unknown glyphs (U+FFFD, private use) that one word may have. */
+const MAX_UNKNOWN = 2;
 
 type Token = { kind: 'text'; t: string[] } | { kind: 'unknown' } | { kind: 'lig'; lead: number; n: number };
 
 /**
  * True when the tokens spell the word `want` (an array of characters). A text token
  * must match its characters exactly. A ligature token of n glyphs stands for n or n + 1
- * of the letters f, i and l (ff, fi, fl, ffi, ffl). An unknown token stands for one character.
+ * of the letters f, i and l (ff, fi, fl, ffi, ffl), at most 3. An unknown token stands for
+ * one character, and a word may have at most 2 unknown tokens.
  * A character of the word that is not a letter or digit (a dash) may take one glyph of any
  * text, or none; a text token with no letter or digit may be left out.
  */
@@ -450,11 +459,12 @@ export function matchLetters(want: readonly string[], tokens: readonly Token[]):
       return false;
     }
     if (tk.kind === 'unknown') return i < want.length && go(i + 1, j + 1);
-    for (const k of [tk.n, tk.n + 1]) {
+    for (const k of [tk.n, tk.n + 1].filter((x) => x <= 3)) {
       if (k >= 2 && i + k <= want.length && want.slice(i, i + k).every((c) => LIGATURE_LETTER.test(c)) && go(i + k, j + 1)) return true;
     }
     return false;
   };
+  if (tokens.filter((t) => t.kind === 'unknown').length > MAX_UNKNOWN) return false;
   return want.length < 1000 && tokens.length < 1000 && go(0, 0);
 }
 
@@ -505,7 +515,7 @@ export class GlyphIndex implements CharCheck {
   lineUp(w: WordBox, opts: { shown?: boolean; part?: string } = {}): boolean {
     const part = opts.part;
     const want = [...letters(part ?? w.text)];
-    if (!want.some((c) => ALNUM_CHAR.test(c))) return true;
+    if (!want.length) return true;
     const tol = Math.max(2, 0.12 * Math.min(w.x1 - w.x0, w.y1 - w.y0));
     const found = this.near(w)
       .filter((i) => {
@@ -517,6 +527,8 @@ export class GlyphIndex implements CharCheck {
         return height >= 0.6 * thick && height <= 1.6 * thick;
       })
       .slice(0, 64);
+    // A word with no letter or digit (a bullet, an arrow, a dash) needs at least one glyph of its size at its place.
+    if (!want.some((c) => ALNUM_CHAR.test(c))) return found.length > 0;
     const cx = (w.x0 + w.x1) / 2;
     const cy = (w.y0 + w.y1) / 2;
     // Look for a run of glyphs, next to each other in text order, with the letters of the word.
@@ -551,11 +563,12 @@ export class GlyphIndex implements CharCheck {
         last.n++;
         continue;
       }
-      if (g.lead !== undefined) {
+      // Only Ghostscript's form of an f ligature with no Unicode map (U+6600 first) is a ligature token.
+      if (g.lead !== undefined && this.glyphs[g.lead].c === LIGATURE_LEAD) {
         out.push({ kind: 'lig', lead: g.lead, n: 1 });
         continue;
       }
-      if (run.some((j) => this.glyphs[j].lead === i)) {
+      if (g.c === LIGATURE_LEAD && run.some((j) => this.glyphs[j].lead === i)) {
         out.push({ kind: 'lig', lead: i, n: 1 });
         continue;
       }

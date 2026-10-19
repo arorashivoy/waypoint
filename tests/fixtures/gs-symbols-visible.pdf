@@ -1,0 +1,70 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 10 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 344 >>
+stream
+BT 0 0 0 rg /F2 12 Tf 72 700 Td (Visible line here) Tj ET
+BT 0 0 0 rg /F1 12 Tf 72 650 Td (A) Tj ET
+BT 0 0 0 rg /F2 12 Tf 90 650 Td (Built a ledger) Tj ET
+BT 0 0 0 rg /F1 12 Tf 72 630 Td (B) Tj ET
+BT 0 0 0 rg /F2 12 Tf 90 630 Td (Led the team) Tj ET
+BT 0 0 0 rg /F1 12 Tf 72 610 Td (C) Tj ET
+BT 0 0 0 rg /F2 12 Tf 90 610 Td (Award winner) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type3 /FontBBox [0 0 600 700] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs << /g65 6 0 R /g66 7 0 R /g67 8 0 R >> /Encoding << /Type /Encoding /Differences [65 /g65 66 /g66 67 /g67] >> /FirstChar 65 /LastChar 67 /Widths [600 600 600] /ToUnicode 9 0 R /Resources << >> >>
+endobj
+6 0 obj
+<< /Length 27 >>
+stream
+600 0 d0 50 50 500 600 re f
+endstream
+endobj
+7 0 obj
+<< /Length 27 >>
+stream
+600 0 d0 50 50 500 600 re f
+endstream
+endobj
+8 0 obj
+<< /Length 27 >>
+stream
+600 0 d0 50 50 500 600 re f
+endstream
+endobj
+9 0 obj
+<< /Length 250 >>
+stream
+/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /T3 def 1 begincodespacerange <00> <FF> endcodespacerange 3 beginbfchar <41> <2022> <42> <2192> <43> <2605> endbfchar endcmap CMapName currentdict /CMap defineresource pop end end
+endstream
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000252 00000 n 
+0000000647 00000 n 
+0000000958 00000 n 
+0000001035 00000 n 
+0000001112 00000 n 
+0000001189 00000 n 
+0000001490 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R >>
+startxref
+1561
+%%EOF

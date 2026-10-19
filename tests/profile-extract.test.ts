@@ -176,6 +176,15 @@ describe('extractPdf', () => {
       }
     });
 
+    it('checks words of symbols: white circled or squared letters are hidden, visible bullets and arrows stay', async () => {
+      const white = await fixture('gs-symbols-white.pdf');
+      expect(white.text).toBe('Visible line here');
+      expect(white.hidden).toEqual(['\u24d8\u24d6\u24dd\u24de\u24e1\u24d4', '\u{1f130}\u{1f13b}\u{1f13b}']);
+      const visible = await fixture('gs-symbols-visible.pdf');
+      expect(visible.text).toBe('Visible line here\n\u2022 Built a ledger\n\u2192 Led the team\n\u2605 Award winner');
+      expect(visible.hidden).toEqual([]);
+    });
+
     it('reads a page with a /UserUnit at the normal size', async () => {
       for (const f of ['userunit', 'userunit-big']) {
         const r = await fixture(`gs-r5-${f}.pdf`);
@@ -430,6 +439,11 @@ describe('matchLetters', () => {
     expect(matchLetters([...'fine'], [lig, t('n'), t('e')])).toBe(true);
     expect(matchLetters([...'oxyzce'], [t('o'), lig, t('c'), t('e')])).toBe(false);
     expect(matchLetters([...'cafe'], [t('c'), t('a'), { kind: 'unknown' }, t('e')])).toBe(true);
+    // A ligature stands for at most 3 letters, and a word has at most 2 unknown glyphs.
+    expect(matchLetters([...'ffffi'], [{ kind: 'lig', lead: 0, n: 4 }])).toBe(false);
+    expect(matchLetters([...'ffi'], [{ kind: 'lig', lead: 0, n: 3 }])).toBe(true);
+    expect(matchLetters([...'abc'], [{ kind: 'unknown' }, { kind: 'unknown' }, t('c')])).toBe(true);
+    expect(matchLetters([...'abc'], [{ kind: 'unknown' }, { kind: 'unknown' }, { kind: 'unknown' }])).toBe(false);
   });
   it('lets a dash of the word take one glyph of any text (a font with no Unicode map)', () => {
     expect(matchLetters([...'2023–2024'], [...'202332024'].map(t))).toBe(true);
@@ -494,6 +508,19 @@ describe('GlyphIndex', () => {
     expect(index.lineUp(box('Python', 30), { shown: true })).toBe(true);
     expect(index.lineUp(box('Python', 30), { shown: true, part: 'Pyt' })).toBe(true);
   });
+  it('takes a glyph with no advance as a ligature part only after U+6600', () => {
+    const lig = [g('\u6600', 0), g('\u6900', 5, { len: 0.05, lead: 0 }), g('n', 5), g('e', 10)];
+    const ok = new GlyphIndex(lig, { shows: [true, false, true, true], dup: lig.map(() => false) });
+    expect(ok.lineUp(box('fine', 15), { shown: true })).toBe(true);
+    const other = [g('x', 0), g('\u6900', 5, { len: 0.05, lead: 0 }), g('n', 5), g('e', 10)];
+    const bad = new GlyphIndex(other, { shows: [true, false, true, true], dup: other.map(() => false) });
+    expect(bad.lineUp(box('fine', 15), { shown: true })).toBe(false);
+  });
+  it('needs a glyph that shows for a word with no letter or digit', () => {
+    const dot = [g('\u2022', 0)];
+    expect(new GlyphIndex(dot, { shows: [true], dup: [false] }).lineUp(box('\u2022', 5), { shown: true })).toBe(true);
+    expect(new GlyphIndex(dot, { shows: [false], dup: [false] }).lineUp(box('\u2022', 5), { shown: true })).toBe(false);
+  });
   it('shows no character where there is no glyph', () => {
     const index = new GlyphIndex([], { shows: [], dup: [] });
     expect(index.charsShown(box('secret', 30))).toEqual(Array(6).fill(false));
@@ -507,11 +534,11 @@ describe('wordsFromBbox with a colour check', () => {
   const dots: CharCheck = { charsShown: (w) => [...w.text].map((c) => c !== '.'), lineUp: () => true };
   // Every character shows, but no word lines up with glyphs that show (the 2 frames disagree).
   const apart: CharCheck = { charsShown: (w) => [...w.text].map(() => true), lineUp: (w, o) => !o?.shown };
-  it('hides the characters that do not show and keeps a word with no letter', () => {
-    expect(wordsFromBbox(html, new Map([[1, left]]))).toEqual({ text: 'Node.js -', hidden: ['hireme'] });
+  it('hides the characters that do not show, also in a word with no letter', () => {
+    expect(wordsFromBbox(html, new Map([[1, left]]))).toEqual({ text: 'Node.js', hidden: ['hireme -'] });
   });
   it('hides every word that does not line up with glyphs that show', () => {
-    expect(wordsFromBbox(html, new Map([[1, apart]]))).toEqual({ text: '-', hidden: ['Node.js hireme'] });
+    expect(wordsFromBbox(html, new Map([[1, apart]]))).toEqual({ text: '', hidden: ['Node.js hireme -'] });
   });
   it('keeps a dot next to a letter that shows', () => {
     expect(wordsFromBbox(html, new Map([[1, dots]]))).toEqual({ text: 'Node.js hireme -', hidden: [] });
