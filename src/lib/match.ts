@@ -52,7 +52,6 @@ export function levelFit(jobLevel: string, profileLevels: string[]): number {
 
 export function fieldFit(jobField: string, strongFields: string[]): number {
   if (strongFields.includes(jobField)) return 1;
-  if (jobField === 'Backend') return 0.6; // Backend overlaps almost everything the profile has
   if (jobField === 'Other') return 0; // not a software role at all
   return 0.3;
 }

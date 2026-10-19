@@ -55,24 +55,26 @@ function normalise(a: any, by: StoredAnalysis['by'] = a.by): StoredAnalysis {
 
 const parseAnalysis = (raw: string) => normalise(JSON.parse(raw));
 
-/** The two fields claims.yml has the strongest job or project evidence for. Without
- *  a claims file, Backend: every software profile overlaps it. */
-function strongFields(doc: ClaimsDoc | null): string[] {
-  if (!doc) return ['Backend'];
-  return FIELD_QUERIES.map((q) => ({ field: q.field, score: rankEvidence(doc, q.query).find((p) => p.kind === 'project' || p.kind === 'position')?.score || 0 }))
-    .filter((f) => f.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 2)
-    .map((f) => f.field);
+/** The fields that the user chose in Settings, and the two fields claims.yml has the strongest
+ *  job or project evidence for. A user with neither has no strong field. */
+function strongFields(doc: ClaimsDoc | null, saved: string[]): string[] {
+  const fromClaims = doc
+    ? FIELD_QUERIES.map((q) => ({ field: q.field, score: rankEvidence(doc, q.query).find((p) => p.kind === 'project' || p.kind === 'position')?.score || 0 }))
+        .filter((f) => f.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 2)
+        .map((f) => f.field)
+    : [];
+  return [...new Set([...saved, ...fromClaims])];
 }
 
-/** What claims.yml says about fit in each field. Scoring it runs the claim
- *  graph once per field, so it is built once per load and shared by every job
+/** What claims.yml and the Settings of the user say about fit in each field. Scoring it runs the
+ *  claim graph once per field, so it is built once per load and shared by every job
  *  in the list, not recomputed per job. */
-type Fit = { claims: ClaimsDoc | null; strong: string[]; picks: ProjectPick[] };
+type Fit = { claims: ClaimsDoc | null; strong: string[]; picks: ProjectPick[]; visaStatus: string };
 
-function fitFromClaims(claims: ClaimsDoc | null): Fit {
-  return { claims, strong: strongFields(claims), picks: projectPicks(claims) };
+function fitFromClaims(claims: ClaimsDoc | null, settings: { fields: string[]; visaStatus: string }): Fit {
+  return { claims, strong: strongFields(claims, settings.fields), picks: projectPicks(claims), visaStatus: settings.visaStatus.trim() };
 }
 
 /** Keyword overlap, used when Claude is not reachable so the app still works. */
@@ -148,9 +150,8 @@ function cvHints(job: Job, profile: Profile, fit: Fit) {
     .sort((a, b) => (a.n === lead ? -1 : b.n === lead ? 1 : 0))
     .slice(0, 3);
   const must = [
-    job.cc === 'IN'
-      ? 'A notice period line'
-      : `A work authorisation line: "Will require ${job.visa === 'Sponsorship not stated' ? 'sponsorship' : job.visa} sponsorship"`,
+    // Only a user who stated a visa status gets this line. For anyone else it can be wrong advice.
+    fit.visaStatus ? `A work authorisation line: "${fit.visaStatus}"` : '',
     ...(CV_COUNTRY_RULES[job.cc] || []).slice(0, 1),
   ].filter(Boolean);
   return { must, projects };
@@ -184,8 +185,8 @@ export const MAX_ANALYSIS_TRIES = 3;
  */
 export async function analyseJob(job: Job, userId: string, force = false): Promise<Analysis> {
   const row = await db.jobAnalysis.findUnique({ where: { userId_jobId: { userId, jobId: job.id } } });
-  const [profile, claims] = await Promise.all([profileSummary(userId), claimsFor(userId)]);
-  const fit = fitFromClaims(claims);
+  const [profile, claims, settings] = await Promise.all([profileSummary(userId), claimsFor(userId), getSettings(userId)]);
+  const fit = fitFromClaims(claims, settings);
   if (row?.analysedAt && !force) return scored(parseAnalysis(row.analysis), profile, fit);
 
   let stored: StoredAnalysis;
@@ -195,7 +196,7 @@ export async function analyseJob(job: Job, userId: string, force = false): Promi
     stored = heuristicAnalysis(job, profile, fit);
   } else {
     try {
-      const [settings, prefs] = await Promise.all([getSettings(userId), db.countryPref.findMany({ where: { userId, on: true }, orderBy: { rank: 'asc' } })]);
+      const prefs = await db.countryPref.findMany({ where: { userId, on: true }, orderBy: { rank: 'asc' } });
       const fields = fieldChoices(settings.fields);
       const out = await askJsonCached(
         'job-check',
@@ -268,14 +269,15 @@ function viewOf(job: Job, profile: Profile, contacts: { company: string | null; 
  * queries per page load.
  */
 export async function makeJobViewer(userId: string) {
-  const [profile, claims, contacts, rows] = await Promise.all([
+  const [profile, claims, contacts, rows, settings] = await Promise.all([
     profileSummary(userId),
     claimsFor(userId),
     db.contact.findMany({ where: { userId } }),
     db.jobAnalysis.findMany({ where: { userId } }),
+    getSettings(userId),
   ]);
   const stored = new Map(rows.map((r) => [r.jobId, r.analysis]));
-  const fit = fitFromClaims(claims);
+  const fit = fitFromClaims(claims, settings);
   return (job: Job) => {
     const raw = stored.get(job.id);
     return viewOf(job, profile, contacts, raw ? parseAnalysis(raw) : heuristicAnalysis(job, profile, fit), fit);
@@ -283,14 +285,15 @@ export async function makeJobViewer(userId: string) {
 }
 
 export async function jobView(job: Job, userId: string, opts: { analyse?: boolean } = {}) {
-  const [profile, claims, contacts, row] = await Promise.all([
+  const [profile, claims, contacts, row, settings] = await Promise.all([
     profileSummary(userId),
     claimsFor(userId),
     db.contact.findMany({ where: { userId } }),
     db.jobAnalysis.findUnique({ where: { userId_jobId: { userId, jobId: job.id } } }),
+    getSettings(userId),
   ]);
 
-  const fit = fitFromClaims(claims);
+  const fit = fitFromClaims(claims, settings);
   const analysis: StoredAnalysis = row
     ? parseAnalysis(row.analysis)
     : opts.analyse
