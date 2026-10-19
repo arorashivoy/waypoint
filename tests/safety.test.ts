@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // --- Spies. Each one passes the call to the real code and records it.
-const probe = vi.hoisted(() => ({ reads: [] as string[], logs: [] as string[], prompts: [] as string[], reply: null as unknown, claudeCalls: 0 }));
+const probe = vi.hoisted(() => ({ reads: [] as string[], logs: [] as string[], prompts: [] as string[], reply: null as unknown, claudeCalls: 0, fail: null as Error | null }));
 
 vi.mock('node:fs', async (orig) => {
   const real = await orig<typeof import('node:fs')>();
@@ -44,6 +44,7 @@ vi.mock('@/lib/claude', async (orig) => ({
   askJson: vi.fn(async (req: { prompt: string; schema: { parse: (v: unknown) => unknown } }) => {
     probe.prompts.push(req.prompt);
     probe.claudeCalls++;
+    if (probe.fail) throw probe.fail;
     return { data: req.schema.parse(probe.reply), raw: JSON.stringify(probe.reply), usage: { model: 'claude-sonnet-test', inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 } };
   }),
 }));
@@ -52,6 +53,7 @@ vi.mock('@/lib/cache', async (orig) => ({
   askJsonCached: vi.fn(async (_kind: string, _version: string, req: { prompt: string; schema: { parse: (v: unknown) => unknown } }) => {
     probe.prompts.push(req.prompt);
     probe.claudeCalls++;
+    if (probe.fail) throw probe.fail;
     return req.schema.parse(probe.reply);
   }),
 }));
@@ -95,6 +97,7 @@ import * as resumeImport from '@/app/api/profile/resume-import/route';
 import * as githubImport from '@/app/api/profile/github/import/route';
 import * as yamlImport from '@/app/api/profile/yaml/route';
 import * as itemRoute from '@/app/api/profile/items/[kind]/route';
+import * as taskRoute from '@/app/api/tasks/[id]/route';
 import { makePdf } from './helpers/pdf';
 import { ctx, formRequest, makeUser, request } from './helpers/http';
 
@@ -103,6 +106,8 @@ import { ctx, formRequest, makeUser, request } from './helpers/http';
 /** The programs that these inputs may start. `exec.ts` also knows rclone and systemctl (backup and units); no input here can reach them. */
 const ALLOWED_PROGRAMS = ['claude', 'pdflatex', 'xelatex', 'lualatex', 'tectonic', 'pdftotext', 'gs'];
 const FAKE_API_KEY = 'sk-ant-api03-SAFETYTESTFAKEKEY0123456789abcdef';
+/** A key that does not start with sk-ant-, so only the name around it can find it. */
+const PLAIN_KEY = 'plainkey0123456789abcdefghijklmnop';
 const SECRET_KEY = process.env.WAYPOINT_SECRET_KEY!;
 
 /** Everything that a user could read as an answer in the current test. */
@@ -132,6 +137,7 @@ function expectContained() {
   for (const text of [...shown, ...probe.logs]) {
     expect(text).not.toContain(SECRET_KEY);
     expect(text).not.toContain(FAKE_API_KEY);
+    expect(text).not.toContain(PLAIN_KEY);
   }
 }
 
@@ -159,6 +165,7 @@ beforeEach(() => {
   probe.prompts.length = 0;
   probe.claudeCalls = 0;
   probe.reply = null;
+  probe.fail = null;
   vi.mocked(runProgram).mockClear();
   vi.stubEnv('ANTHROPIC_API_KEY', FAKE_API_KEY);
   vi.spyOn(dns, 'lookup').mockResolvedValue([{ address: '18.205.1.1', family: 4 }] as never);
@@ -235,6 +242,31 @@ describe('refine request', () => {
       const steer = JSON.parse(app.cvSteer!);
       expect(steer).toEqual({ projects: ['parser'], skills: ['java'] });
     }
+    expectContained();
+  });
+});
+
+// ============================================================ a failed model call
+
+describe('a failed model call', () => {
+  it.each([
+    ['a key with the sk-ant- prefix', `401 invalid x-api-key ${FAKE_API_KEY}`],
+    ['a key after a header name', `401 invalid x-api-key: ${PLAIN_KEY}`],
+    ['a key in a URL', `request to https://api.test/v1?api_key=${PLAIN_KEY}&n=1 failed`],
+    ['a key in JSON text', `bad request {"apiKey":"${PLAIN_KEY}"}`],
+  ])('%s: the task row, the task reply and the log hold no key', async (_name, message) => {
+    const { user, cookie } = await userWithProfile();
+    const job = await newJob();
+    probe.fail = Object.assign(new Error(message), { response: { headers: { 'x-api-key': PLAIN_KEY, authorization: `Bearer ${PLAIN_KEY}` } }, config: { apiKey: PLAIN_KEY } });
+    const res = await show(await refineRoute.POST(request(`/api/jobs/${job.id}/resume/refine`, { method: 'POST', cookie, body: { message: 'Shorten the second bullet.' } }), ctx({ id: job.id })));
+    const { taskId } = await res.json();
+    await runOnce(undefined, { userId: user.id });
+    const task = await showTask(taskId);
+    expect(task.status).toBe('queued');
+    expect(task.lastError).toContain('[removed]');
+    shown.push(await (await taskRoute.GET(request(`/api/tasks/${taskId}`, { cookie }), ctx({ id: taskId }))).text());
+    // The log has the line of the failed attempt, so the check below is not empty.
+    expect(probe.logs.some((l) => l.includes('task attempt failed'))).toBe(true);
     expectContained();
   });
 });
@@ -540,10 +572,19 @@ describe('profile field save', () => {
     expectContained();
   });
 
-  it('a macro in the LaTeX field is refused', async () => {
+  it('a macro in the LaTeX field is refused by the text check', async () => {
     const { cookie } = await userWithProfile();
     const res = await save(cookie, { id: 'raw', title: 'Raw', tex: `\\item ${ATTACKS.write18}` });
     expect(res.status).toBe(422);
+    expectContained();
+  });
+
+  // The text check is a list of known forms, so an alias passes it. The guard for this form is the compile:
+  // -no-shell-escape and openin_any=p / openout_any=p (latex.test.ts), not this check.
+  it('an alias of \\write passes the text check; the compile sandbox is the guard', async () => {
+    const { cookie } = await userWithProfile();
+    const res = await save(cookie, { id: 'alias', title: 'Alias', tex: '\\item \\let\\w\\write \\immediate\\w18{curl http://x}' });
+    expect(res.status).toBe(200);
     expectContained();
   });
 });

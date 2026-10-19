@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { fetchSignal } from '@/lib/fetch-timeout';
+import { scrub } from '@/lib/log';
 
 /** A board fetched less than this long ago is skipped, unless the user forces it. */
 export const FEED_FRESH_MS = 6 * 3600_000;
@@ -22,7 +23,7 @@ async function isFresh(board: string, now: Date): Promise<boolean> {
 
 /** Keeps the etag and the last-modified value of the stored row. */
 export async function recordFailure(board: string, err: unknown, now: Date = new Date()): Promise<void> {
-  const error = (err instanceof Error ? err.message : String(err)).slice(0, MAX_ERROR_LENGTH);
+  const error = scrub(err instanceof Error ? err.message : String(err)).slice(0, MAX_ERROR_LENGTH);
   await db.feedFetch.upsert({
     where: { board },
     update: { status: 'failed', error, fetchedAt: now },

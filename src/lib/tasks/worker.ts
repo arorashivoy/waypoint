@@ -10,7 +10,7 @@ import {
   requeueStale,
   USER_ERROR,
 } from '@/lib/tasks/queue';
-import { log } from '@/lib/log';
+import { log, scrub } from '@/lib/log';
 
 /** A handler throws this to run the task again later. The deferral uses no attempt. */
 export class TaskDeferred extends Error {
@@ -54,7 +54,7 @@ function errorText(err: unknown): string {
 }
 
 async function failAtOnce(id: string, error: string): Promise<void> {
-  await db.task.update({ where: { id }, data: { status: 'failed', lastError: error.slice(0, MAX_ERROR_LENGTH) } });
+  await db.task.update({ where: { id }, data: { status: 'failed', lastError: scrub(error).slice(0, MAX_ERROR_LENGTH) } });
 }
 
 /**

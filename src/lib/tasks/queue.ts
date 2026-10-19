@@ -1,5 +1,6 @@
 import type { Task } from '@prisma/client';
 import { db } from '@/lib/db';
+import { scrub } from '@/lib/log';
 
 export type TaskKind = 'refresh' | 'analysis' | 'cv' | 'resume-import' | 'github-import' | 'maintenance' | 'outreach' | 'paste';
 export type TaskStatus = 'queued' | 'running' | 'done' | 'failed';
@@ -102,7 +103,8 @@ export async function failTask(id: string, error: string, now: Date = new Date()
     where: { id },
     select: { attempts: true },
   });
-  const lastError = error.slice(0, MAX_ERROR_LENGTH);
+  // A key in an error text must not reach the database or a backup.
+  const lastError = scrub(error).slice(0, MAX_ERROR_LENGTH);
   const delay = RETRY_DELAYS_MS[row.attempts - 1];
   if (delay === undefined) {
     await db.task.update({
