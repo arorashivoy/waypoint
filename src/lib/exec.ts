@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
  * importing child_process.
  */
 
-export type Program = 'claude' | 'pdflatex' | 'xelatex' | 'lualatex' | 'tectonic' | 'pdftotext' | 'pdfinfo' | 'pdftoppm' | 'rclone' | 'systemctl';
+export type Program = 'claude' | 'pdflatex' | 'xelatex' | 'lualatex' | 'tectonic' | 'pdftotext' | 'gs' | 'rclone' | 'systemctl';
 export const LATEX_ENGINES: readonly Program[] = ['pdflatex', 'xelatex', 'lualatex', 'tectonic'];
 
 export type RunOptions = {
@@ -123,27 +123,42 @@ function checkPdftotext(args: readonly string[], opts: RunOptions): string | nul
     const cwd = resolve(opts.cwd);
     if (inside(cwd, resolve(tmpdir())) && inside(resolve(args[1]), cwd) && inside(resolve(args[2]), cwd)) return null;
   }
-  return 'pdftotext takes only -v, or -layout or -bbox-layout <in> <out> with both files inside a work folder in the temp folder';
+  // -cropbox puts the word boxes in the frame of the crop box, as Ghostscript -dUseCropBox does.
+  if (args.length === 4 && args[0] === '-cropbox' && args[1] === '-bbox-layout') {
+    const cwd = resolve(opts.cwd);
+    if (inside(cwd, resolve(tmpdir())) && inside(resolve(args[2]), cwd) && inside(resolve(args[3]), cwd)) return null;
+  }
+  return 'pdftotext takes only -v, or -layout, -bbox-layout or -cropbox -bbox-layout <in> <out> with both files inside a work folder in the temp folder';
 }
 
-// pdfinfo reports the rotation of the first 10 pages.
-function checkPdfinfo(args: readonly string[], opts: RunOptions): string | null {
-  const want = ['-f', '1', '-l', '10'];
-  if (args.length === 5 && want.every((f, i) => args[i] === f)) {
-    const cwd = resolve(opts.cwd);
-    if (inside(cwd, resolve(tmpdir())) && inside(resolve(args[4]), cwd)) return null;
-  }
-  return 'pdfinfo takes only -f 1 -l 10 <in> with the file inside a work folder in the temp folder';
+// Ghostscript draws the first 10 pages normally and with no text, and writes the glyph positions (txtwrite),
+// to find text that a person cannot see. The templates are fixed; only the resolution is a number that
+// Waypoint computes from the page size, so that the long side of a picture is at most 1000 pixels.
+export const GS_COMMON = ['-dSAFER', '-dNOPAUSE', '-dBATCH', '-dQUIET', '-dFirstPage=1', '-dLastPage=10', '-dUseCropBox'] as const;
+export const GS_MAX_DPI = 300;
+export type GsJob = 'render' | 'no-text' | 'text';
+export const GS_OUTPUT: Record<GsJob, string> = { render: 'n-%02d.ppm', 'no-text': 'f-%02d.ppm', text: 'text.xml' };
+
+/** The arguments for one Ghostscript job. `dpi` is used for the 2 pictures; txtwrite always runs at 720 dpi. */
+export function gsArgs(job: GsJob, dpi: number, input: string, cwd: string): string[] {
+  const out = `-sOutputFile=${join(resolve(cwd), GS_OUTPUT[job])}`;
+  if (job === 'text') return [...GS_COMMON, '-r720', '-sDEVICE=txtwrite', '-dTextFormat=0', out, input];
+  return [...GS_COMMON, `-r${dpi}`, '-dTextAlphaBits=4', '-dGraphicsAlphaBits=4', ...(job === 'no-text' ? ['-dFILTERTEXT'] : []), '-sDEVICE=ppmraw', out, input];
 }
 
-// pdftoppm draws pictures of the first 10 pages (PPM files, the long side at most 1000 pixels), to find text that has the colour of its background.
-function checkPdftoppm(args: readonly string[], opts: RunOptions): string | null {
-  const want = ['-scale-to', '1000', '-l', '10'];
-  if (args.length === 6 && want.every((f, i) => args[i] === f)) {
-    const cwd = resolve(opts.cwd);
-    if (inside(cwd, resolve(tmpdir())) && inside(resolve(args[4]), cwd) && inside(resolve(args[5]), cwd)) return null;
-  }
-  return 'pdftoppm takes only -scale-to 1000 -l 10 <in> <out prefix> with both inside a work folder in the temp folder';
+function checkGs(args: readonly string[], opts: RunOptions): string | null {
+  const why = 'gs takes only the 3 fixed templates (render, no-text, text) with a resolution from 1 to 300 and the files inside a work folder in the temp folder';
+  const cwd = resolve(opts.cwd);
+  if (!inside(cwd, resolve(tmpdir())) || cwd.includes('%')) return why;
+  const input = args[args.length - 1];
+  if (typeof input !== 'string' || !isAbsolute(input) || resolve(input) !== input || !inside(input, cwd)) return why;
+  const same = (want: string[]) => args.length === want.length && want.every((w, i) => args[i] === w);
+  if (same(gsArgs('text', 0, input, cwd))) return null;
+  const m = /^-r([1-9]\d{0,2})$/.exec(args[GS_COMMON.length] ?? '');
+  const dpi = m ? Number(m[1]) : 0;
+  if (dpi < 1 || dpi > GS_MAX_DPI) return why;
+  if (same(gsArgs('render', dpi, input, cwd)) || same(gsArgs('no-text', dpi, input, cwd))) return null;
+  return why;
 }
 
 export const RCLONE_REMOTE = /^[A-Za-z0-9][A-Za-z0-9_-]*:[A-Za-z0-9._\/-]*$/;
@@ -175,8 +190,7 @@ const CHECKS: Record<Program, (args: readonly string[], opts: RunOptions) => str
   lualatex: (a, o) => checkLatex('lualatex', a, o),
   tectonic: (a, o) => checkLatex('tectonic', a, o),
   pdftotext: checkPdftotext,
-  pdfinfo: checkPdfinfo,
-  pdftoppm: checkPdftoppm,
+  gs: checkGs,
   rclone: (a) => checkRclone(a),
   systemctl: (a) => checkSystemctl(a),
 };
@@ -190,8 +204,7 @@ const ENV_KEYS: Record<Program, readonly string[]> = {
   lualatex: LATEX_KEYS,
   tectonic: LATEX_KEYS,
   pdftotext: BASE_KEYS,
-  pdfinfo: BASE_KEYS,
-  pdftoppm: BASE_KEYS,
+  gs: BASE_KEYS,
   rclone: ['HOME', 'PATH', 'RCLONE_CONFIG'],
   systemctl: ['HOME', 'PATH', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS'],
 };

@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { homedir, tmpdir } from 'node:os';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { baseEnv, findOnPath, runProgram, ExecError } from '@/lib/exec';
+import { baseEnv, findOnPath, gsArgs, runProgram, ExecError } from '@/lib/exec';
 
 describe('runProgram', () => {
   it('refuses a program that is not on the list', async () => {
@@ -170,52 +170,52 @@ describe('LaTeX template', () => {
   });
 });
 
-describe('pdfinfo template', () => {
-  it.skipIf(!findOnPath('pdfinfo'))('accepts the fixed template inside a temp work folder (the check passes, the run fails)', async () => {
+describe('gs templates', () => {
+  const pdf = (d: string) => `${d}/in.pdf`;
+  it.skipIf(!findOnPath('gs'))('accepts the 3 fixed templates inside a temp work folder (the check passes, the run fails)', async () => {
     const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
     try {
-      const r = await runProgram('pdfinfo', ['-f', '1', '-l', '10', `${d}/missing.pdf`], T(d));
-      expect(r.code).not.toBe(0);
+      for (const job of ['render', 'no-text', 'text'] as const) {
+        const r = await runProgram('gs', gsArgs(job, 90, pdf(d), d), T(d));
+        expect(r.code, job).not.toBe(0);
+      }
     } finally {
       rmSync(d, { recursive: true, force: true });
     }
   });
-  it('refuses another page range, another flag, and paths outside the work folder', async () => {
-    const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
-    try {
-      await expect(runProgram('pdfinfo', ['-f', '1', '-l', '99', `${d}/a.pdf`], T(d))).rejects.toThrow(/pdfinfo/);
-      await expect(runProgram('pdfinfo', ['-f', '2', '-l', '10', `${d}/a.pdf`], T(d))).rejects.toThrow(/pdfinfo/);
-      await expect(runProgram('pdfinfo', ['-box', '-f', '1', '-l', '10', `${d}/a.pdf`], T(d))).rejects.toThrow(/pdfinfo/);
-      await expect(runProgram('pdfinfo', ['-f', '1', '-l', '10', '/etc/passwd'], T(d))).rejects.toThrow(/pdfinfo/);
-      await expect(runProgram('pdfinfo', ['-f', '1', '-l', '10', `${d}/../x.pdf`], T(d))).rejects.toThrow(/pdfinfo/);
-      await expect(runProgram('pdfinfo', ['-f', '1', '-l', '10', `${d}/a.pdf`], { ...T(d), env: { PATH: '/usr/bin', FOO: 'x' } })).rejects.toThrow(/environment key FOO is not allowed for pdfinfo/);
-    } finally {
-      rmSync(d, { recursive: true, force: true });
+  it('has -dSAFER, the page range 1 to 10, the crop box and an output file in the work folder', () => {
+    const d = join(tmpdir(), 'exec-test-x');
+    for (const job of ['render', 'no-text', 'text'] as const) {
+      const a = gsArgs(job, 90, pdf(d), d);
+      expect(a.slice(0, 7)).toEqual(['-dSAFER', '-dNOPAUSE', '-dBATCH', '-dQUIET', '-dFirstPage=1', '-dLastPage=10', '-dUseCropBox']);
+      expect(a.filter((x) => x.startsWith('-sOutputFile=')).length).toBe(1);
+      expect(a.find((x) => x.startsWith('-sOutputFile='))!.startsWith(`-sOutputFile=${d}/`)).toBe(true);
     }
+    expect(gsArgs('no-text', 90, pdf(d), d)).toContain('-dFILTERTEXT');
+    expect(gsArgs('render', 90, pdf(d), d)).not.toContain('-dFILTERTEXT');
+    expect(gsArgs('text', 90, pdf(d), d)).toEqual(expect.arrayContaining(['-r720', '-sDEVICE=txtwrite', '-dTextFormat=0']));
   });
-});
-
-describe('pdftoppm template', () => {
-  it.skipIf(!findOnPath('pdftoppm'))('accepts the fixed template inside a temp work folder (the check passes, the run fails)', async () => {
+  it('refuses another resolution, another flag, another device, other files and other env keys', async () => {
     const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
     try {
-      const r = await runProgram('pdftoppm', ['-scale-to', '1000', '-l', '10', `${d}/missing.pdf`, `${d}/pg`], T(d));
-      expect(r.code).not.toBe(0);
-    } finally {
-      rmSync(d, { recursive: true, force: true });
-    }
-  });
-  it('refuses another resolution or size, another page range, another flag, and paths outside the work folder', async () => {
-    const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
-    try {
-      await expect(runProgram('pdftoppm', ['-r', '36', '-l', '10', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
-      await expect(runProgram('pdftoppm', ['-scale-to', '9000', '-l', '10', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
-      await expect(runProgram('pdftoppm', ['-r', '300', '-l', '10', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
-      await expect(runProgram('pdftoppm', ['-scale-to', '1000', '-l', '99', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
-      await expect(runProgram('pdftoppm', ['-scale-to', '1000', '-png', `${d}/a.pdf`, `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
-      await expect(runProgram('pdftoppm', ['-scale-to', '1000', '-l', '10', `${d}/a.pdf`], T(d))).rejects.toThrow(/pdftoppm/);
-      await expect(runProgram('pdftoppm', ['-scale-to', '1000', '-l', '10', '/etc/passwd', `${d}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
-      await expect(runProgram('pdftoppm', ['-scale-to', '1000', '-l', '10', `${d}/a.pdf`, `${homedir()}/pg`], T(d))).rejects.toThrow(/pdftoppm/);
+      const good = gsArgs('render', 90, pdf(d), d);
+      const bad: string[][] = [
+        gsArgs('render', 301, pdf(d), d),
+        gsArgs('render', 0, pdf(d), d),
+        good.map((x) => (x === '-r90' ? '-r90.5' : x)),
+        good.map((x) => (x === '-dSAFER' ? '-dNOSAFER' : x)),
+        good.map((x) => (x === '-dLastPage=10' ? '-dLastPage=99' : x)),
+        good.map((x) => (x === '-sDEVICE=ppmraw' ? '-sDEVICE=pdfwrite' : x)),
+        [...good.slice(0, -1), '-dNOINTERPOLATE', pdf(d)],
+        [...good.slice(0, -1), '/etc/passwd'],
+        [...good.slice(0, -1), `${d}/../x.pdf`],
+        good.map((x) => (x.startsWith('-sOutputFile=') ? `-sOutputFile=${homedir()}/n-%02d.ppm` : x)),
+        good.map((x) => (x.startsWith('-sOutputFile=') ? '-sOutputFile=%pipe%id' : x)),
+        gsArgs('text', 90, pdf(d), d).map((x) => (x === '-r720' ? '-r72' : x)),
+      ];
+      for (const a of bad) await expect(runProgram('gs', a, T(d)), a.join(' ')).rejects.toThrow(/gs takes only/);
+      await expect(runProgram('gs', good, T(tmpdir()))).rejects.toThrow(/gs takes only/);
+      await expect(runProgram('gs', good, { ...T(d), env: { PATH: '/usr/bin', GS_OPTIONS: '-dNOSAFER' } })).rejects.toThrow(/environment key GS_OPTIONS is not allowed for gs/);
     } finally {
       rmSync(d, { recursive: true, force: true });
     }
@@ -228,6 +228,8 @@ describe('pdftotext paths', () => {
     try {
       const r = await runProgram('pdftotext', ['-bbox-layout', `${d}/missing.pdf`, `${d}/o.html`], T(d));
       expect(r.code).not.toBe(0);
+      const c = await runProgram('pdftotext', ['-cropbox', '-bbox-layout', `${d}/missing.pdf`, `${d}/o.html`], T(d));
+      expect(c.code).not.toBe(0);
     } finally {
       rmSync(d, { recursive: true, force: true });
     }
@@ -237,6 +239,8 @@ describe('pdftotext paths', () => {
     try {
       await expect(runProgram('pdftotext', ['-bbox-layout', '/etc/passwd', `${d}/o.html`], T(d))).rejects.toThrow(/pdftotext/);
       await expect(runProgram('pdftotext', ['-htmlmeta', `${d}/a.pdf`, `${d}/o.html`], T(d))).rejects.toThrow(/pdftotext/);
+      await expect(runProgram('pdftotext', ['-cropbox', '-bbox-layout', '/etc/passwd', `${d}/o.html`], T(d))).rejects.toThrow(/pdftotext/);
+      await expect(runProgram('pdftotext', ['-cropbox', '-layout', `${d}/a.pdf`, `${d}/o.html`], T(d))).rejects.toThrow(/pdftotext/);
     } finally {
       rmSync(d, { recursive: true, force: true });
     }

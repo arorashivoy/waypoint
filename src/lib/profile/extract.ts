@@ -1,9 +1,9 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HttpError } from '../auth/http';
-import { runProgram } from '../exec';
-import { isInvisible, MAX_PPM_BYTES, NO_COLOUR_WARNING, parsePpm, type Raster } from './pdf-colour';
+import { GS_MAX_DPI, gsArgs, runProgram } from '../exec';
+import { type CharCheck, type Glyph, GlyphIndex, MAX_PPM_BYTES, MAX_TXT_BYTES, NO_COLOUR_WARNING, NOTHING_SHOWS, parsePpm, parseTxtwrite, type Raster, TxtwriteError, visibleGlyphs } from './pdf-colour';
 
 /**
  * Text from a résumé file, for the import prompt (spec 3.3, step 1), and the
@@ -30,46 +30,64 @@ function isTiny(w: number, h: number, chars: number): boolean {
 }
 
 const decode = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
-
-/** The picture of a page and its rotation in degrees (0, 90, 180 or 270). */
-export type PagePicture = Raster & { rotate: number };
+const ALNUM = /[\p{L}\p{N}]/u;
 
 /**
- * The text of `pdftotext -bbox-layout` output, one line per line, without hidden words.
- * A word is hidden when it is tiny, or when no pixel in its box differs from the colour around it
- * (see isInvisible). `pages` holds the picture of each page (page number to raster).
- * A word on a page with no picture is kept and `warnings` says that the colour was not checked.
- * Without `pages`, the colour is not checked and there is no warning. The hidden words of a line become one hidden phrase.
+ * The shown and the hidden part of one word. A letter or a digit shows when its
+ * flag is true. Another character (a dot, a dash) shows when its flag is true or
+ * a letter or digit next to it in the word shows, so "Node.js" keeps its dot.
  */
-export function wordsFromBbox(html: string, pages?: ReadonlyMap<number, PagePicture>): Extracted {
+function split(chars: string[], flags: boolean[]): [string, string] {
+  let shown = '';
+  let hidden = '';
+  chars.forEach((c, i) => {
+    const ok = flags[i] || (!ALNUM.test(c) && ((ALNUM.test(chars[i - 1] ?? '') && flags[i - 1]) || (ALNUM.test(chars[i + 1] ?? '') && flags[i + 1])));
+    if (ok) shown += c;
+    else hidden += c;
+  });
+  return [shown, hidden];
+}
+
+/**
+ * The text of `pdftotext -bbox-layout` output, one line per line, without hidden text.
+ * A word is hidden when it is tiny (part 3). `pages` holds, for each checked page, the
+ * glyphs that Ghostscript found and which of them show (see pdf-colour.ts). Then each
+ * character of a word that does not show is hidden. A word on a page that is not in
+ * `pages` is kept and `warnings` says that the colour was not checked.
+ * Without `pages`, the colour is not checked and there is no warning.
+ * The hidden text of a line becomes one hidden phrase.
+ */
+export function wordsFromBbox(html: string, pages?: ReadonlyMap<number, CharCheck>): Extracted {
   const lines: string[] = [];
   const hidden: string[] = [];
   let page = 0;
-  let pw = 0;
-  let ph = 0;
   let unchecked = false;
   for (const line of html.split(/<\/line>/)) {
-    for (const p of line.matchAll(/<page width="([\d.]+)" height="([\d.]+)"/g)) {
-      page++;
-      pw = Number(p[1]);
-      ph = Number(p[2]);
-    }
+    page += [...line.matchAll(/<page width="/g)].length;
     const shown: string[] = [];
     const tiny: string[] = [];
     for (const m of line.matchAll(/<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">([^<]*)<\/word>/g)) {
       const word = decode(m[5]);
-      const w = Number(m[3]) - Number(m[1]);
-      const h = Number(m[4]) - Number(m[2]);
-      let invisible: boolean | null = false;
-      // A word with no letter or digit (a dash, a bullet) cannot carry an instruction, so it is not checked.
-      if (pages && /[\p{L}\p{N}]/u.test(word)) {
-        const img = pages.get(page);
-        // The word boxes are in the turned page. The page tag keeps the size before the turn, so 90 and 270 swap it.
-        const [dw, dh] = img && img.rotate % 180 === 90 ? [ph, pw] : [pw, ph];
-        invisible = img && dw > 0 && dh > 0 ? isInvisible(img, { x0: Number(m[1]) / dw, y0: Number(m[2]) / dh, x1: Number(m[3]) / dw, y1: Number(m[4]) / dh }) : null;
-        if (invisible === null) unchecked = true;
+      const [x0, y0, x1, y1] = [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])];
+      if (isTiny(x1 - x0, y1 - y0, [...word].length)) {
+        tiny.push(word);
+        continue;
       }
-      (isTiny(w, h, [...word].length) || invisible ? tiny : shown).push(word);
+      // A word with no letter or digit (a dash, a bullet) cannot carry an instruction, so it is not checked.
+      if (!pages || !ALNUM.test(word)) {
+        shown.push(word);
+        continue;
+      }
+      const index = pages.get(page);
+      const flags = index?.charsShown({ x0, y0, x1, y1, text: word });
+      if (!flags) {
+        unchecked = true;
+        shown.push(word);
+        continue;
+      }
+      const [s, h] = split([...word], flags);
+      if (s) shown.push(s);
+      if (h) tiny.push(h);
     }
     if (shown.length) lines.push(shown.join(' '));
     const phrase = tiny.join(' ').slice(0, 200);
@@ -79,18 +97,59 @@ export function wordsFromBbox(html: string, pages?: ReadonlyMap<number, PagePict
   return unchecked ? { ...out, warnings: [NO_COLOUR_WARNING] } : out;
 }
 
-/** The pictures of the pages that pdftoppm wrote, by page number. A file that is over 3 MB or is not a good PPM is left out. */
-function readPages(work: string, prefix: string, rotations: ReadonlyMap<number, number>): Map<number, PagePicture> {
-  const pages = new Map<number, PagePicture>();
-  for (const f of readdirSync(work)) {
-    const m = new RegExp(`^${prefix}-(\\d{1,3})\\.ppm$`).exec(f);
-    if (!m || statSync(join(work, f)).size > MAX_PPM_BYTES) continue;
-    const img = parsePpm(readFileSync(join(work, f)));
-    const rotate = rotations.get(Number(m[1]));
-    // A page with no rotation, or a rotation that is not 0, 90, 180 or 270, gets no picture, so its colour is not checked.
-    if (img && rotate !== undefined && [0, 90, 180, 270].includes(rotate)) pages.set(Number(m[1]), { ...img, rotate });
+const GS_LIMITS = { timeoutMs: 30_000, memoryMb: 512 };
+/** The long side of a page picture, in pixels. */
+const PICTURE_SIDE = 1000;
+
+/** The picture of page `n` from a gs job, or null when the file is missing, over 3 MB or not a good PPM. */
+function readPicture(work: string, prefix: string, n: number): Raster | null {
+  const f = join(work, `${prefix}-${String(n).padStart(2, '0')}.ppm`);
+  try {
+    if (statSync(f).size > MAX_PPM_BYTES) return null;
+    return parsePpm(readFileSync(f));
+  } catch {
+    return null;
   }
-  return pages;
+}
+
+/**
+ * Check the first 10 pages with Ghostscript. Returns the glyph index of each
+ * page that was checked. Throws when Ghostscript fails or its output is not as expected.
+ */
+async function checkPages(work: string, input: string, bbox: string): Promise<Map<number, CharCheck>> {
+  const sizes = [...bbox.matchAll(/<page width="([\d.]+)" height="([\d.]+)"/g)].slice(0, 10).map((m) => [Number(m[1]), Number(m[2])]);
+  const side = Math.max(1, ...sizes.flat());
+  const dpi = Math.max(1, Math.min(GS_MAX_DPI, Math.floor((72 * PICTURE_SIDE) / side)));
+  const k = dpi / 72;
+  for (const job of ['text', 'render', 'no-text'] as const) {
+    const r = await runProgram('gs', gsArgs(job, dpi, input, work), { cwd: work, ...GS_LIMITS });
+    if (r.code !== 0) throw new Error(`gs ${job} failed`);
+  }
+  const xmlPath = join(work, 'text.xml');
+  if (statSync(xmlPath).size > MAX_TXT_BYTES) throw new Error('txtwrite output too large');
+  const out = new Map<number, CharCheck>();
+  let glyphPages: Glyph[][];
+  try {
+    glyphPages = parseTxtwrite(readFileSync(xmlPath, 'utf8'));
+  } catch (e) {
+    if (!(e instanceof TxtwriteError)) throw e;
+    // The output does not have the strict form. A line can be forged, so nothing on the first 10 pages shows.
+    sizes.forEach((_, i) => out.set(i + 1, NOTHING_SHOWS));
+    return out;
+  }
+  if (glyphPages.length !== sizes.length) throw new Error('gs and pdftotext count different pages');
+  glyphPages.forEach((glyphs, i) => {
+    const [w, h] = sizes[i];
+    const normal = readPicture(work, 'n', i + 1);
+    const noText = readPicture(work, 'f', i + 1);
+    if (!normal || !noText) return;
+    // The picture must have the page size that pdftotext gives (in either order, for a turned page), so that both use one frame.
+    const fits = (a: number, b: number) => Math.abs(normal.width - a * k) <= 2 && Math.abs(normal.height - b * k) <= 2;
+    if (!fits(w, h) && !fits(h, w)) return;
+    const check = visibleGlyphs(glyphs, normal, noText, k);
+    if (check) out.set(i + 1, new GlyphIndex(glyphs, check));
+  });
+  return out;
 }
 
 export async function extractPdf(buf: Buffer): Promise<Extracted> {
@@ -99,19 +158,14 @@ export async function extractPdf(buf: Buffer): Promise<Extracted> {
     const input = join(work, 'in.pdf');
     const output = join(work, 'out.html');
     writeFileSync(input, buf);
-    const r = await runProgram('pdftotext', ['-bbox-layout', input, output], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
+    const r = await runProgram('pdftotext', ['-cropbox', '-bbox-layout', input, output], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
     if (r.code !== 0) throw new HttpError(400, 'Waypoint could not read this PDF.');
     const bbox = readFileSync(output, 'utf8');
-    // pdftotext cannot see colour. Pictures of the first 10 pages show it. If a picture is missing, the
-    // tiny-text check still runs, and the user gets a warning.
-    let pages = new Map<number, PagePicture>();
+    // pdftotext cannot see colour. Ghostscript checks the first 10 pages. If it fails, the
+    // tiny-text check still runs, and the user gets a warning. Pages after 10 get the warning too.
+    let pages = new Map<number, CharCheck>();
     try {
-      const info = await runProgram('pdfinfo', ['-f', '1', '-l', '10', input], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
-      if (info.code !== 0) throw new Error('pdfinfo failed');
-      const rotations = new Map<number, number>();
-      for (const m of info.stdout.matchAll(/^Page\s+(\d{1,4}) rot:\s+(-?\d{1,6})\s*$/gm)) if (rotations.size < 10) rotations.set(Number(m[1]), ((Number(m[2]) % 360) + 360) % 360);
-      const r2 = await runProgram('pdftoppm', ['-scale-to', '1000', '-l', '10', input, join(work, 'pg')], { cwd: work, timeoutMs: 30_000, memoryMb: 512 });
-      if (r2.code === 0) pages = readPages(work, 'pg', rotations);
+      pages = await checkPages(work, input, bbox);
     } catch (e) {
       if (!(e instanceof Error)) throw e;
     }
