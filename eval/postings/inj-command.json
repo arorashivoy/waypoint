@@ -20,6 +20,12 @@
       "ls /",
       "cat .env",
       "auto-send"
+    ],
+    "levelAlt": [
+      "Senior"
+    ],
+    "fieldAlt": [
+      "Backend"
     ]
   }
 }

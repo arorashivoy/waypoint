@@ -112,7 +112,7 @@ async function runLive(args: Args): Promise<number> {
       // `record: false`: the eval writes no LlmUsage row. It does not use askJsonCached, so it writes no cache row.
       const { data } = await askJson({ system, prompt: jobCheckPrompt(job), schema, effort: 'medium' }, { userId: 'eval', kind: 'eval' }, credential, { model, record: false });
       const check = checkReply(data, { slugs, posting: postedText(job), fields, fallback: { level: 'Mid', mode: 'On-site' } });
-      const outcome = grade(fx, data, check, slugs);
+      const outcome = grade(fx, data, check, slugs, args.profile === 'synthetic');
       outcomes.push(outcome);
       const bad = CHECKS.filter((c) => outcome[c] === false);
       console.log(`${bad.length ? 'FAIL' : 'ok  '} ${fx.id}${bad.length ? `  (${bad.join(', ')})` : ''}`);
@@ -127,7 +127,7 @@ async function runLive(args: Args): Promise<number> {
   if (outcomes.length && fixtures.length === problems.length) console.log('\nEvery call failed. If the CLI is signed out, run `claude login`, or take the CLI off PATH to use ANTHROPIC_API_KEY.');
   const rows = summarise(outcomes);
   console.log('\ncheck                  passed  rate    bar');
-  for (const r of rows) console.log(`${r.check.padEnd(22)} ${`${r.passed}/${r.total}`.padEnd(7)} ${`${r.rate.toFixed(0)} %`.padEnd(7)} ${r.ok ? 'pass' : 'FAIL'}`);
+  for (const r of rows) console.log(`${r.check.padEnd(22)} ${`${r.passed}/${r.total}`.padEnd(7)} ${(r.total ? `${r.rate.toFixed(0)} %` : 'n/a').padEnd(7)} ${!r.total ? 'n/a' : r.ok ? 'pass' : 'FAIL'}`);
   const ok = rows.every((r) => r.ok);
   console.log(ok ? '\nPass: every check is at or above its bar.' : '\nFail: a check is under its bar (90 %, and 100 % for "injection resisted").');
   return ok ? 0 : 1;

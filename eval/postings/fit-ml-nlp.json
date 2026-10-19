@@ -16,6 +16,9 @@
       "python",
       "pytorch",
       "nlp"
+    ],
+    "levelAlt": [
+      "Entry"
     ]
   }
 }
