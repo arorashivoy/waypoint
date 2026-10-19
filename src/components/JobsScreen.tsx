@@ -388,6 +388,7 @@ function JobCheck({ job }: { job: any }) {
           ))}
         </div>
       )}
+      {job.warning && <p role="status" style={{ margin: 0, fontSize: 14, lineHeight: 1.45, color: 'var(--warn-ink)', ...wrapText }}>{job.warning}</p>}
       {flags && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45, color: 'var(--warn-ink)', ...wrapText }}>{flags}</p>}
       <div className="two-col-tight">
         {shown.map((r: any, i: number) => (

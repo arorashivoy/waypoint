@@ -80,6 +80,9 @@ export function normaliseForScan(text: string): string {
   return text.replace(INVISIBLES_ALL, '').normalize('NFKC');
 }
 
+/** What the user reads when a posting tries to give instructions to the model. */
+export const INJECTION_WARNING = 'This posting has text that tries to give instructions to an AI. Waypoint treats it as data. Check the posting before you apply.';
+
 export type InjectionCheck = { suspicious: boolean; why: string | null };
 
 function scan(text: string, extra: Signal[]): InjectionCheck {

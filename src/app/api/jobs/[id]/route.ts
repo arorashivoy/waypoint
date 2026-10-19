@@ -8,6 +8,7 @@ import { MAX_ANALYSIS_TRIES, jobView } from '@/lib/analysis';
 import { credentialFor } from '@/lib/claude';
 import { queueJobAnalysis } from '@/lib/queue';
 import { alumniSearch, isAlumniRequest } from '@/lib/match';
+import { checkForInjection, INJECTION_WARNING } from '@/lib/injection';
 import { readChat } from '@/lib/cv';
 import { claimsFor } from '@/lib/user';
 import { wordingView } from '@/lib/resume/suggest';
@@ -61,6 +62,8 @@ async function detail(jobId: string, userId: string, analysing: string | null) {
     match: view.match,
     // The task that reads this job now, or null. The screen waits for it and then loads the job again.
     analysing,
+    // Set when the posting tries to give instructions to the model. The check is cheap, so it runs here.
+    warning: checkForInjection(`${fresh.role}\n${fresh.description}`).suspicious ? INJECTION_WARNING : null,
     // So the message can be copied again after a reload, or when the browser
     // blocked the clipboard the first time.
     referral: referral && { copy: referral.body, open: referral.contactUrl, name: referral.contactName, alumni: isAlumniRequest(referral) },

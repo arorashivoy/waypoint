@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { checkForInjection } from '@/lib/injection';
+import { checkForInjection, INJECTION_WARNING } from '@/lib/injection';
 import { safeFetch, SafeFetchError } from '@/lib/net/safe-fetch';
 import { queueJobAnalysis } from '@/lib/queue';
 import { countryByCc } from '@/lib/countries';
@@ -91,8 +91,6 @@ export const PasteTaskPayload = z.object({
   jobId: z.string().regex(SLUG).refine((s) => !/^\.+$/.test(s)),
   region: z.enum(['eu']).nullable(),
 });
-
-export const INJECTION_WARNING = 'This posting has text that tries to give instructions to an AI. Waypoint treats it as data. Check the posting before you apply.';
 
 export type PasteResult = { jobId: string; added: boolean; cc: string; warning: string | null; note: string | null };
 
