@@ -35,6 +35,8 @@ const built = { path: '', tailored: false, order: [], experience: [], skillsLead
 
 describe('a retried refine', () => {
   it('makes one Claude call and one chat turn when the CV build fails after the chat write', async () => {
+    // The admin with RESUME_TEX keeps the .tex flow. Set it here, so the test does not depend on the shell of the host.
+    vi.stubEnv('RESUME_TEX', '/nonexistent/waypoint-test.tex');
     const { user } = await makeUser('admin');
     const job = await db.job.create({
       data: { externalId: `retry-${randomBytes(6).toString('hex')}`, source: 'Test', role: 'Engineer', company: 'Acme', city: 'Berlin', cc: 'DE', url: 'https://x.test' },
