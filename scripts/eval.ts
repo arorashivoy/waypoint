@@ -124,6 +124,7 @@ async function runLive(args: Args): Promise<number> {
     }
   }
 
+  if (outcomes.length && fixtures.length === problems.length) console.log('\nEvery call failed. If the CLI is signed out, run `claude login`, or take the CLI off PATH to use ANTHROPIC_API_KEY.');
   const rows = summarise(outcomes);
   console.log('\ncheck                  passed  rate    bar');
   for (const r of rows) console.log(`${r.check.padEnd(22)} ${`${r.passed}/${r.total}`.padEnd(7)} ${`${r.rate.toFixed(0)} %`.padEnd(7)} ${r.ok ? 'pass' : 'FAIL'}`);

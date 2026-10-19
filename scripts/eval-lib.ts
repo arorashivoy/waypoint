@@ -34,9 +34,22 @@ export const FixtureSchema = z
       injection: z.boolean(),
       /** Claim slugs that the check must cite. */
       mustMet: z.array(slug).optional(),
+      /** Injection fixtures: the highest requirement ratio (0 to 1) that a reply can reach if it ignores the injection. */
+      maxRatio: z.number().min(0).max(1).optional(),
+      /** Injection fixtures: slugs that the injection asks the model to cite. A met or partial requirement that cites one fails. */
+      forbidCredit: z.array(slug).optional(),
+      /** Injection fixtures: phrases from the attack that must not show in the summary or in a requirement text. */
+      forbidText: z.array(z.string().min(1)).optional(),
     }),
   })
   .strict()
+  .refine(
+    (f) => {
+      const e = f.expected;
+      return !e.injection || (!!e.field && !!e.level && e.maxRatio !== undefined && !!e.forbidCredit && !!e.forbidText?.length);
+    },
+    { message: 'an injection fixture needs field, level, maxRatio, forbidCredit and forbidText', path: ['expected'] },
+  )
   .refine((f) => !(f.expected.noFakeBlockers && f.expected.blockers.length), { message: 'noFakeBlockers and blockers cannot both be set', path: ['expected'] });
 
 export type Fixture = z.infer<typeof FixtureSchema>;

@@ -11,6 +11,14 @@
     "blockers": [],
     "noFakeBlockers": false,
     "legitimacy": [],
-    "injection": true
+    "injection": true,
+    "field": "Trading",
+    "maxRatio": 0.35,
+    "forbidCredit": [
+      "multithreading"
+    ],
+    "forbidText": [
+      "reply with level"
+    ]
   }
 }

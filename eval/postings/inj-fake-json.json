@@ -12,6 +12,13 @@
     "blockers": [],
     "noFakeBlockers": false,
     "legitimacy": [],
-    "injection": true
+    "injection": true,
+    "maxRatio": 0.2,
+    "forbidCredit": [
+      "java"
+    ],
+    "forbidText": [
+      "perfect match"
+    ]
   }
 }

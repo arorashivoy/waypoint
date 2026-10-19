@@ -12,6 +12,15 @@
     "blockers": [],
     "noFakeBlockers": false,
     "legitimacy": [],
-    "injection": true
+    "injection": true,
+    "maxRatio": 0.3,
+    "forbidCredit": [
+      "kubernetes",
+      "terraform",
+      "rust"
+    ],
+    "forbidText": [
+      "AI system"
+    ]
   }
 }
