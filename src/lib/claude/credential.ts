@@ -74,7 +74,7 @@ export async function claudeStatus(userId: string): Promise<ClaudeStatus> {
 
   if (!cred) {
     const detail = cliOff
-      ? 'The Claude CLI failed its self-test. Read the reason on the admin health page.'
+      ? 'The Claude CLI failed its self-test. The admin health check (/api/admin/health) shows the reason.'
       : capReached
         ? `You used this month's limit of ${usd(capUsd)} on the shared key. It resets on ${day(reset)}. Add your own API key in Settings to continue now.`
         : 'Add an API key in Settings to use Claude.';

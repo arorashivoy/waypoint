@@ -4,6 +4,8 @@ import { z } from 'zod';
 
 vi.mock('@/lib/claude/cli', () => ({ askCli: vi.fn(), cliBinary: vi.fn(() => '/usr/bin/claude') }));
 vi.mock('@/lib/claude/api', () => ({ askApi: vi.fn() }));
+// credentialFor reads the global cliDisabled row. claude-selftest.test.ts writes that row, and it can run at the same time.
+vi.mock('@/lib/claude/selftest', () => ({ cliDisabled: vi.fn(async () => null), runCliSelfTestAtStart: vi.fn() }));
 
 import { prompt } from '@/lib/prompts';
 
