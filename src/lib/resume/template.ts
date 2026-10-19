@@ -214,6 +214,8 @@ export function renderTemplate(doc: ClaimsDoc, steer: Steer, order: Order): stri
   return [
     '\\documentclass{resume}',
     '\\usepackage[T1]{fontenc}',
+    // A scalable T1 font. Without it, pdflatex embeds bitmap fonts and the PDF text loses fi, ff and fl.
+    '\\usepackage{lmodern}',
     '\\usepackage[utf8]{inputenc}',
     '\\usepackage[left=0.5in, top=0.4in, right=0.5in, bottom=0.4in]{geometry}',
     '\\def\\sectionlineskip{\\smallskip}',

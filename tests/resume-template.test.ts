@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -27,7 +27,7 @@ import { baseOrder, bestProjects, escapeLatex, renderTemplate, templateAssetsDir
 import { buildResume, resumeConfig } from '@/lib/resume';
 import { checkDoc, type ClaimsDoc } from '@/lib/profile/doc';
 import { saveProfile } from '@/lib/profile/store';
-import { findOnPath } from '@/lib/exec';
+import { findOnPath, runProgram } from '@/lib/exec';
 import { makeUser } from './helpers/http';
 
 let dir: string;
@@ -361,5 +361,23 @@ describe('a real compile', () => {
       latex.real = false;
     }
     expect(existsSync(out)).toBe(true);
+  }, 90_000);
+
+  it.skipIf(!have || !findOnPath('pdftotext'))('gives back the ligature words of the base résumé in full', async () => {
+    const doc = sampleDoc();
+    doc.targets.projects[1].description = 'Efficient office first fluffy workflow configuration';
+    const out = join(dir, 'real-lig', 'base.pdf');
+    latex.real = true;
+    try {
+      const { compileLatex: real, findEngine } = await import('@/lib/latex');
+      await real({ source: renderTemplate(doc, {}, baseOrder(doc)), assetsDir: templateAssetsDir(), outPdf: out, engine: findEngine('pdflatex')!, timeoutMs: 60_000 });
+    } finally {
+      latex.real = false;
+    }
+    const txt = join(dir, 'real-lig', 'base.txt');
+    const r = await runProgram('pdftotext', ['-layout', out, txt], { cwd: dirname(out), timeoutMs: 30_000, memoryMb: 512 });
+    expect(r.code).toBe(0);
+    const text = readFileSync(txt, 'utf8');
+    for (const word of ['Efficient', 'office', 'first', 'fluffy', 'workflow', 'configuration']) expect(text).toContain(word);
   }, 90_000);
 });
