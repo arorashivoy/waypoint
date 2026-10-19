@@ -452,7 +452,7 @@ function centre(g: Glyph): [number, number] {
 export type WordBox = { x0: number; y0: number; x1: number; y1: number; text: string };
 
 /** Says, for each character of a pdftotext word, if it shows. */
-export type CharCheck = { charsShown(w: WordBox): boolean[] };
+export type CharCheck = { charsShown(w: WordBox): boolean[]; lineUp(w: WordBox, opts?: { shown?: boolean; part?: string }): boolean };
 
 /** A page index of glyph centres, to find the glyphs of a pdftotext word. */
 export class GlyphIndex implements CharCheck {
@@ -480,12 +480,17 @@ export class GlyphIndex implements CharCheck {
    * box thickness, for a big font) of the centre of the word box, and the plain
    * letters agree. A word of 3 plain letters or fewer must be equal; a longer word
    * can miss 1 letter in 3 (ligatures and dashes of fonts with no Unicode map).
+   * With `shown`, only glyphs that show count, so a hidden glyph cannot make the word
+   * line up; the per-word check uses this. The page gate uses all glyphs, because it
+   * checks that the 2 frames agree. `part` is the shown part of the word when some
+   * characters are hidden: then its run must be inside the word box, and its centre is not compared.
    */
-  lineUp(w: WordBox): boolean {
-    const want = plain(w.text);
+  lineUp(w: WordBox, opts: { shown?: boolean; part?: string } = {}): boolean {
+    const part = opts.part;
+    const want = plain(part ?? w.text);
     if (!want) return true;
     const tol = Math.max(2, 0.12 * Math.min(w.x1 - w.x0, w.y1 - w.y0));
-    const found = this.near({ x0: w.x0 - tol, y0: w.y0 - tol, x1: w.x1 + tol, y1: w.y1 + tol }).slice(0, 64);
+    const found = this.near({ x0: w.x0 - tol, y0: w.y0 - tol, x1: w.x1 + tol, y1: w.y1 + tol }).filter((i) => !opts.shown || this.shows[i]).slice(0, 64);
     const cx = (w.x0 + w.x1) / 2;
     const cy = (w.y0 + w.y1) / 2;
     const slack = Math.floor(want.length / 3);
@@ -501,7 +506,7 @@ export class GlyphIndex implements CharCheck {
         const up = ((ASCENT - DESCENT) / 2) * g.size;
         const mx = (g.x + h.x + h.len * h.dx) / 2 + up * g.dy;
         const my = (g.y + h.y + h.len * h.dy) / 2 - up * g.dx;
-        if (Math.abs(mx - cx) <= tol && Math.abs(my - cy) <= tol) return true;
+        if (part !== undefined || (Math.abs(mx - cx) <= tol && Math.abs(my - cy) <= tol)) return true;
       }
     }
     return false;

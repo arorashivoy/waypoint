@@ -90,6 +90,12 @@ function readLines(lines: readonly BboxLine[], pages?: ReadonlyMap<number, CharC
         continue;
       }
       const [s, h] = split([...w.text], index.charsShown(w));
+      // The shown part must line up with glyphs that show at this place. If not (the 2 readers
+      // do not agree on this word, for example a page that only gs turns), the whole word is hidden.
+      if (s && !index.lineUp(w, { shown: true, part: s === w.text ? undefined : s })) {
+        tiny.push(w.text);
+        continue;
+      }
       if (s) shown.push(s);
       if (h) tiny.push(h);
     }
