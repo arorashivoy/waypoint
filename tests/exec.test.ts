@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { homedir, tmpdir } from 'node:os';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { baseEnv, findOnPath, gsArgs, runProgram, ExecError } from '@/lib/exec';
+import { baseEnv, findOnPath, GS_MAX_FILE_BYTES, gsArgs, runProgram, ExecError } from '@/lib/exec';
 
 describe('runProgram', () => {
   it('refuses a program that is not on the list', async () => {
@@ -172,22 +172,23 @@ describe('LaTeX template', () => {
 
 describe('gs templates', () => {
   const pdf = (d: string) => `${d}/in.pdf`;
+  const G = (d: string) => ({ ...T(d), memoryMb: 512, fileBytes: GS_MAX_FILE_BYTES });
   it.skipIf(!findOnPath('gs'))('accepts the 3 fixed templates inside a temp work folder (the check passes, the run fails)', async () => {
     const d = mkdtempSync(join(tmpdir(), 'exec-test-'));
     try {
       for (const job of ['render', 'no-text', 'text'] as const) {
-        const r = await runProgram('gs', gsArgs(job, 90, pdf(d), d), T(d));
+        const r = await runProgram('gs', gsArgs(job, 90, pdf(d), d), G(d));
         expect(r.code, job).not.toBe(0);
       }
     } finally {
       rmSync(d, { recursive: true, force: true });
     }
   });
-  it('has -dSAFER, the page range 1 to 10, the crop box and an output file in the work folder', () => {
+  it('has -dSAFER, the page range 1 to 10, the crop box, no UserUnit and an output file in the work folder', () => {
     const d = join(tmpdir(), 'exec-test-x');
     for (const job of ['render', 'no-text', 'text'] as const) {
       const a = gsArgs(job, 90, pdf(d), d);
-      expect(a.slice(0, 7)).toEqual(['-dSAFER', '-dNOPAUSE', '-dBATCH', '-dQUIET', '-dFirstPage=1', '-dLastPage=10', '-dUseCropBox']);
+      expect(a.slice(0, 8)).toEqual(['-dSAFER', '-dNOPAUSE', '-dBATCH', '-dQUIET', '-dFirstPage=1', '-dLastPage=10', '-dUseCropBox', '-dNoUserUnit']);
       expect(a.filter((x) => x.startsWith('-sOutputFile=')).length).toBe(1);
       expect(a.find((x) => x.startsWith('-sOutputFile='))!.startsWith(`-sOutputFile=${d}/`)).toBe(true);
     }
@@ -213,9 +214,14 @@ describe('gs templates', () => {
         good.map((x) => (x.startsWith('-sOutputFile=') ? '-sOutputFile=%pipe%id' : x)),
         gsArgs('text', 90, pdf(d), d).map((x) => (x === '-r720' ? '-r72' : x)),
       ];
-      for (const a of bad) await expect(runProgram('gs', a, T(d)), a.join(' ')).rejects.toThrow(/gs takes only/);
-      await expect(runProgram('gs', good, T(tmpdir()))).rejects.toThrow(/gs takes only/);
-      await expect(runProgram('gs', good, { ...T(d), env: { PATH: '/usr/bin', GS_OPTIONS: '-dNOSAFER' } })).rejects.toThrow(/environment key GS_OPTIONS is not allowed for gs/);
+      bad.push(good.filter((x) => x !== '-dNoUserUnit'));
+      for (const a of bad) await expect(runProgram('gs', a, G(d)), a.join(' ')).rejects.toThrow(/gs takes only/);
+      await expect(runProgram('gs', good, G(tmpdir()))).rejects.toThrow(/gs takes only/);
+      await expect(runProgram('gs', good, { ...G(d), env: { PATH: '/usr/bin', GS_OPTIONS: '-dNOSAFER' } })).rejects.toThrow(/environment key GS_OPTIONS is not allowed for gs/);
+      // gs must run with the memory limit and the 20 MB file size limit.
+      await expect(runProgram('gs', good, T(d))).rejects.toThrow(/fileBytes/);
+      await expect(runProgram('gs', good, { ...G(d), fileBytes: 900_000_000 })).rejects.toThrow(/fileBytes/);
+      await expect(runProgram('gs', good, { ...G(d), memoryMb: undefined })).rejects.toThrow(/memoryMb/);
     } finally {
       rmSync(d, { recursive: true, force: true });
     }

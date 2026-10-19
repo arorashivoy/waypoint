@@ -51,10 +51,12 @@ use `scripts/deploy.sh` for each update (step 10).
 
 3. Install the packages, apply the migrations and make the admin account.
 
-   The Pi needs the `poppler-utils` and `ghostscript` packages. The import of a PDF résumé reads the
-   text with `pdftotext` (from `poppler-utils`). It uses `gs` (from `ghostscript`) to find text that a
-   person cannot see (text in the colour of its background, or under a picture). If `gs` is missing or
-   fails, the import still works, but it shows the warning "Waypoint could not check text colour in this PDF."
+   The Pi needs the `poppler-utils` and `ghostscript` packages. Both are required. The import of a
+   PDF résumé reads the text with `pdftotext` (from `poppler-utils`). It uses `gs` (from `ghostscript`)
+   to find text that a person cannot see (text in the colour of its background, or under a picture).
+   Waypoint reads only the pages that pass this check. If `gs` is missing or fails, every PDF import
+   stops with "Waypoint could not check this PDF for hidden text. Export it again as a normal PDF, or
+   upload the .tex source."
    To install the packages, run `sudo apt install poppler-utils ghostscript`. Waypoint was tested with
    poppler-utils 22.12 and Ghostscript 10.00 (the Debian 12 packages).
 

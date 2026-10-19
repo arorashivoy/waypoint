@@ -28,6 +28,8 @@ export type RunOptions = {
   /** A limit on the address space, through prlimit. Not for Node programs:
    *  V8 reserves more address space than it uses. */
   memoryMb?: number;
+  /** A limit on the size of each file that the program writes, in bytes, through prlimit. */
+  fileBytes?: number;
   /** An absolute binary path, for WAYPOINT_CLAUDE_BIN or RESUME_ENGINE. It
    *  must be outside cwd, and its file name must be the program name. */
   bin?: string;
@@ -134,7 +136,10 @@ function checkPdftotext(args: readonly string[], opts: RunOptions): string | nul
 // Ghostscript draws the first 10 pages normally and with no text, and writes the glyph positions (txtwrite),
 // to find text that a person cannot see. The templates are fixed; only the resolution is a number that
 // Waypoint computes from the page size, so that the long side of a picture is at most 1000 pixels.
-export const GS_COMMON = ['-dSAFER', '-dNOPAUSE', '-dBATCH', '-dQUIET', '-dFirstPage=1', '-dLastPage=10', '-dUseCropBox'] as const;
+// -dNoUserUnit: a /UserUnit in the PDF does not make the page larger (pdftotext also ignores it).
+export const GS_COMMON = ['-dSAFER', '-dNOPAUSE', '-dBATCH', '-dQUIET', '-dFirstPage=1', '-dLastPage=10', '-dUseCropBox', '-dNoUserUnit'] as const;
+/** The largest file that gs may write. */
+export const GS_MAX_FILE_BYTES = 20_000_000;
 export const GS_MAX_DPI = 300;
 export type GsJob = 'render' | 'no-text' | 'text';
 export const GS_OUTPUT: Record<GsJob, string> = { render: 'n-%02d.ppm', 'no-text': 'f-%02d.ppm', text: 'text.xml' };
@@ -150,6 +155,7 @@ function checkGs(args: readonly string[], opts: RunOptions): string | null {
   const why = 'gs takes only the 3 fixed templates (render, no-text, text) with a resolution from 1 to 300 and the files inside a work folder in the temp folder';
   const cwd = resolve(opts.cwd);
   if (!inside(cwd, resolve(tmpdir())) || cwd.includes('%')) return why;
+  if (opts.fileBytes !== GS_MAX_FILE_BYTES || typeof opts.memoryMb !== 'number') return `gs needs memoryMb and fileBytes ${GS_MAX_FILE_BYTES}`;
   const input = args[args.length - 1];
   if (typeof input !== 'string' || !isAbsolute(input) || resolve(input) !== input || !inside(input, cwd)) return why;
   const same = (want: string[]) => args.length === want.length && want.every((w, i) => args[i] === w);
@@ -272,11 +278,19 @@ export async function runProgram(program: Program, args: readonly string[], opts
 
   let cmd = bin;
   let argv = [...args];
-  if (opts.memoryMb !== undefined) {
-    if (!Number.isSafeInteger(opts.memoryMb) || opts.memoryMb <= 0) throw new ExecError('memoryMb must be a positive whole number');
+  if (opts.memoryMb !== undefined || opts.fileBytes !== undefined) {
+    const limits: string[] = [];
+    if (opts.memoryMb !== undefined) {
+      if (!Number.isSafeInteger(opts.memoryMb) || opts.memoryMb <= 0) throw new ExecError('memoryMb must be a positive whole number');
+      limits.push(`--as=${opts.memoryMb * 1024 * 1024}`);
+    }
+    if (opts.fileBytes !== undefined) {
+      if (!Number.isSafeInteger(opts.fileBytes) || opts.fileBytes <= 0) throw new ExecError('fileBytes must be a positive whole number');
+      limits.push(`--fsize=${opts.fileBytes}`);
+    }
     const prlimit = findOnPath('prlimit');
-    if (!prlimit) throw new ExecError('prlimit is not installed, so the memory limit cannot be set');
-    argv = [`--as=${opts.memoryMb * 1024 * 1024}`, '--', bin, ...args];
+    if (!prlimit) throw new ExecError('prlimit is not installed, so the limits cannot be set');
+    argv = [...limits, '--', bin, ...args];
     cmd = prlimit;
   }
 

@@ -13,7 +13,6 @@
  * still comes from pdftotext; this module only says which characters show.
  */
 
-export const NO_COLOUR_WARNING = 'Waypoint could not check text colour in this PDF.';
 /** Two pixels differ when one channel differs by more than 24. */
 const TOLERANCE = 24;
 /**
@@ -162,12 +161,13 @@ export function parseTxtwrite(xml: string): Glyph[][] {
  * x of its start and end. For a steeper span, txtwrite gives no position per
  * char, so the span is divided into equal parts.
  */
-/** A rough advance of a character, as a share of the font size, to place the glyphs of a steep span. */
+/** Helvetica advances (in 1/1000 of the font size) for the characters 32 to 126. */
+const HELVETICA = [278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584];
+
+/** An estimated advance of a character, as a share of the font size, to place the glyphs of a steep span (Helvetica widths; 0.556 for other characters). */
 function roughWidth(c: string): number {
-  if (/^[ijlft.,:;'!|I\s]$/.test(c)) return 0.3;
-  if (/^[mwMW@]$/.test(c)) return 0.85;
-  if (/^[A-Z0-9]$/.test(c)) return 0.65;
-  return 0.55;
+  const n = c.codePointAt(0) ?? 0;
+  return n >= 32 && n <= 126 && c.length === 1 ? HELVETICA[n - 32] / 1000 : 0.556;
 }
 
 function spanGlyphs(s: [number, number, number, number], size: number, chars: { b: [number, number, number, number]; c: string }[]): Omit<Glyph, 'span'>[] {
@@ -211,28 +211,29 @@ type Frame = { ux: number; uy: number; vx: number; vy: number };
 const frame = (g: Glyph): Frame => ({ ux: g.dx, uy: g.dy, vx: g.dy, vy: -g.dx });
 
 /** The pixel box that holds the glyph box, at `k` pixels per point, inside the picture. */
-function pixelBounds(g: Glyph, k: number, W: number, H: number): [number, number, number, number] {
+function pixelBounds(g: Glyph, k: number, W: number, H: number, pad = 0): [number, number, number, number] {
   const f = frame(g);
   const pts: [number, number][] = [];
-  for (const u of [0, g.len]) for (const v of [-DESCENT * g.size, ASCENT * g.size]) pts.push([g.x + u * f.ux + v * f.vx, g.y + u * f.uy + v * f.vy]);
+  for (const u of [-pad, g.len + pad]) for (const v of [-DESCENT * g.size - pad, ASCENT * g.size + pad]) pts.push([g.x + u * f.ux + v * f.vx, g.y + u * f.uy + v * f.vy]);
   const xs = pts.map((p) => p[0] * k);
   const ys = pts.map((p) => p[1] * k);
   return [Math.max(0, Math.floor(Math.min(...xs))), Math.max(0, Math.floor(Math.min(...ys))), Math.min(W, Math.ceil(Math.max(...xs))), Math.min(H, Math.ceil(Math.max(...ys)))];
 }
 
 /** Call `fn` for each pixel whose centre is inside the glyph box. */
-function eachPixel(g: Glyph, k: number, W: number, H: number, fn: (o: number) => void): number {
-  const [x0, y0, x1, y1] = pixelBounds(g, k, W, H);
+/** `pad` (points) makes the box larger on each side. */
+function eachPixel(g: Glyph, k: number, W: number, H: number, fn: (o: number) => void, pad = 0): number {
+  const [x0, y0, x1, y1] = pixelBounds(g, k, W, H, pad);
   const f = frame(g);
-  const lo = -DESCENT * g.size;
-  const hi = ASCENT * g.size;
+  const lo = -DESCENT * g.size - pad;
+  const hi = ASCENT * g.size + pad;
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
       const px = (x + 0.5) / k - g.x;
       const py = (y + 0.5) / k - g.y;
       const u = px * f.ux + py * f.uy;
       const v = px * f.vx + py * f.vy;
-      if (u >= 0 && u < g.len && v >= lo && v <= hi) fn(y * W + x);
+      if (u >= -pad && u < g.len + pad && v >= lo && v <= hi) fn(y * W + x);
     }
   }
   return Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
@@ -378,6 +379,69 @@ export function glyphInk(glyphs: readonly Glyph[], normal: Raster, noText: Raste
   return { share: shows, dup };
 }
 
+/** A text-ink pixel counts as stray when it is more than 2 pixels outside every glyph box. */
+const STRAY_PAD_PX = 2;
+/** A page fails when more than 2% of its text ink is stray. */
+export const MAX_STRAY_SHARE = 0.02;
+
+/**
+ * The share of the text ink of a page (pixels that differ by more than 24
+ * between the normal picture and the picture with no text) that is outside every
+ * glyph box made larger by 2 pixels. Stroked text with a wide line, sheared text
+ * or text with a stretched matrix paints ink outside the boxes that txtwrite
+ * gives, and that ink could cover a hidden glyph. Returns null when the page is too large to check.
+ */
+export function strayInk(glyphs: readonly Glyph[], normal: Raster, noText: Raster, k: number): number | null {
+  const { width: W, height: H } = normal;
+  if (noText.width !== W || noText.height !== H) return null;
+  const inBox = new Uint8Array(W * H);
+  let visits = 0;
+  for (const g of glyphs) {
+    visits += eachPixel(g, k, W, H, (o) => {
+      inBox[o] = 1;
+    }, STRAY_PAD_PX / k);
+    if (visits > MAX_VISITS) return null;
+  }
+  const a = normal.data;
+  const b = noText.data;
+  let ink = 0;
+  let stray = 0;
+  for (let o = 0; o < W * H; o++) {
+    const p = o * 3;
+    if (Math.abs(a[p] - b[p]) > TOLERANCE || Math.abs(a[p + 1] - b[p + 1]) > TOLERANCE || Math.abs(a[p + 2] - b[p + 2]) > TOLERANCE) {
+      ink++;
+      if (!inBox[o]) stray++;
+    }
+  }
+  return ink ? stray / ink : 0;
+}
+
+/**
+ * Plain letters for the frame check: NFKD, no marks, lower case, only a to z and
+ * 0 to 9. Ghostscript gives some glyph names of fonts with no Unicode map as
+ * U+XX00 (for example U+6600 for "f"); such a code point counts as the letter XX.
+ */
+function plain(s: string): string {
+  let out = '';
+  for (const ch of s) {
+    const n = ch.codePointAt(0)!;
+    const c = n >= 0x2000 && n <= 0x7aff && (n & 0xff) === 0 ? String.fromCharCode(n >> 8) : ch;
+    out += c;
+  }
+  return out.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function lcs(a: string, b: string): number {
+  if (a.length * b.length > 40_000) return 0;
+  let prev = new Int32Array(b.length + 1);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = new Int32Array(b.length + 1);
+    for (let j = 1; j <= b.length; j++) cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
 /** The point in the middle of the glyph box, in points. */
 function centre(g: Glyph): [number, number] {
   const u = g.len / 2;
@@ -388,13 +452,7 @@ function centre(g: Glyph): [number, number] {
 export type WordBox = { x0: number; y0: number; x1: number; y1: number; text: string };
 
 /** Says, for each character of a pdftotext word, if it shows. */
-export type CharCheck = { charsShown(w: WordBox): boolean[] | null };
-
-/**
- * For a page whose txtwrite output the parser refused (for example a font name
- * that forges a line): no character shows. Then the forged lines cannot move glyph boxes.
- */
-export const NOTHING_SHOWS: CharCheck = { charsShown: (w) => [...w.text].map(() => false) };
+export type CharCheck = { charsShown(w: WordBox): boolean[] };
 
 /** A page index of glyph centres, to find the glyphs of a pdftotext word. */
 export class GlyphIndex implements CharCheck {
@@ -414,6 +472,61 @@ export class GlyphIndex implements CharCheck {
       list.push(i);
       this.grid.set(key, list);
     });
+  }
+
+  /**
+   * True when Ghostscript has glyphs with the text of this pdftotext word at the
+   * same place: the centre of the glyph run is within 2 pt (or 12% of the word
+   * box thickness, for a big font) of the centre of the word box, and the plain
+   * letters agree. A word of 3 plain letters or fewer must be equal; a longer word
+   * can miss 1 letter in 3 (ligatures and dashes of fonts with no Unicode map).
+   */
+  lineUp(w: WordBox): boolean {
+    const want = plain(w.text);
+    if (!want) return true;
+    const tol = Math.max(2, 0.12 * Math.min(w.x1 - w.x0, w.y1 - w.y0));
+    const found = this.near({ x0: w.x0 - tol, y0: w.y0 - tol, x1: w.x1 + tol, y1: w.y1 + tol }).slice(0, 64);
+    const cx = (w.x0 + w.x1) / 2;
+    const cy = (w.y0 + w.y1) / 2;
+    const slack = Math.floor(want.length / 3);
+    // Look for a run of glyphs, next to each other in text order, with the letters of the word and its centre at the centre of the word.
+    for (let a = 0; a < found.length; a++) {
+      for (let b = a; b < found.length && b - a <= want.length + slack + 2; b++) {
+        const run = found.slice(a, b + 1);
+        const got = plain(run.map((i) => this.glyphs[i].c).join(''));
+        const ok = want.length <= 3 ? got === want : got.length <= want.length + slack && lcs(want, got) >= want.length - slack;
+        if (!ok) continue;
+        const g = this.glyphs[run[0]];
+        const h = this.glyphs[run[run.length - 1]];
+        const up = ((ASCENT - DESCENT) / 2) * g.size;
+        const mx = (g.x + h.x + h.len * h.dx) / 2 + up * g.dy;
+        const my = (g.y + h.y + h.len * h.dy) / 2 - up * g.dx;
+        if (Math.abs(mx - cx) <= tol && Math.abs(my - cy) <= tol) return true;
+      }
+    }
+    return false;
+  }
+
+  /** The glyphs (not spaces, not copies) whose centre is in the box, in text order. */
+  private near(w: { x0: number; y0: number; x1: number; y1: number }): number[] {
+    const C = GlyphIndex.CELL;
+    const cx0 = Math.floor(w.x0 / C);
+    const cx1 = Math.floor(w.x1 / C);
+    const cy0 = Math.floor(w.y0 / C);
+    const cy1 = Math.floor(w.y1 / C);
+    if ((cx1 - cx0 + 1) * (cy1 - cy0 + 1) > 20_000) return [];
+    const found: number[] = [];
+    for (let x = cx0; x <= cx1; x++) {
+      for (let y = cy0; y <= cy1; y++) {
+        for (const i of this.grid.get(`${x},${y}`) ?? []) {
+          const [px, py] = this.centres[i];
+          if (px >= w.x0 && px <= w.x1 && py >= w.y0 && py <= w.y1) found.push(i);
+        }
+      }
+    }
+    if (!found.length) return found;
+    const g0 = this.glyphs[found[0]];
+    return found.sort((a, b) => this.centres[a][0] * g0.dx + this.centres[a][1] * g0.dy - (this.centres[b][0] * g0.dx + this.centres[b][1] * g0.dy));
   }
 
   /**
