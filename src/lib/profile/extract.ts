@@ -185,7 +185,8 @@ async function checkPages(work: string, input: string, lines: readonly BboxLine[
     const stray = strayInk(glyphs, normal, noText, k);
     if (!check || stray === null || stray > MAX_STRAY_SHARE) return;
     const index = new GlyphIndex(glyphs, check);
-    const words = lines.filter((l) => l.page === i + 1).flatMap((l) => l.words).filter((x) => ALNUM.test(x.text));
+    // Tiny words are hidden by the tiny rule in any case, so only the other words count for the gate.
+    const words = lines.filter((l) => l.page === i + 1).flatMap((l) => l.words).filter((x) => ALNUM.test(x.text) && !isTiny(x.x1 - x.x0, x.y1 - x.y0, [...x.text].length));
     const lined = words.filter((x) => index.lineUp(x)).length;
     if (words.length && lined < MIN_LINED_UP * words.length) return;
     out.set(i + 1, index);

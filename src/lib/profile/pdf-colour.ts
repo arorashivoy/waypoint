@@ -416,30 +416,46 @@ export function strayInk(glyphs: readonly Glyph[], normal: Raster, noText: Raste
   return ink ? stray / ink : 0;
 }
 
-/**
- * Plain letters for the frame check: NFKD, no marks, lower case, only a to z and
- * 0 to 9. Ghostscript gives some glyph names of fonts with no Unicode map as
- * U+XX00 (for example U+6600 for "f"); such a code point counts as the letter XX.
- */
-function plain(s: string): string {
-  let out = '';
-  for (const ch of s) {
-    const n = ch.codePointAt(0)!;
-    const c = n >= 0x2000 && n <= 0x7aff && (n & 0xff) === 0 ? String.fromCharCode(n >> 8) : ch;
-    out += c;
-  }
-  return out.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+/** Letters for the line-up check: NFKC ligatures opened, NFKD, no marks, lower case, no white space. */
+function letters(s: string): string {
+  return s.normalize('NFKC').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s/gu, '');
 }
+const ALNUM_CHAR = /^[\p{L}\p{N}]$/u;
+const LIGATURE_LETTER = /^[fil]$/;
 
-function lcs(a: string, b: string): number {
-  if (a.length * b.length > 40_000) return 0;
-  let prev = new Int32Array(b.length + 1);
-  for (let i = 1; i <= a.length; i++) {
-    const cur = new Int32Array(b.length + 1);
-    for (let j = 1; j <= b.length; j++) cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
-    prev = cur;
-  }
-  return prev[b.length];
+type Token = { kind: 'text'; t: string[] } | { kind: 'unknown' } | { kind: 'lig'; lead: number; n: number };
+
+/**
+ * True when the tokens spell the word `want` (an array of characters). A text token
+ * must match its characters exactly. A ligature token of n glyphs stands for n or n + 1
+ * of the letters f, i and l (ff, fi, fl, ffi, ffl). An unknown token stands for one character.
+ * A character of the word that is not a letter or digit (a dash) may take one glyph of any
+ * text, or none; a text token with no letter or digit may be left out.
+ */
+export function matchLetters(want: readonly string[], tokens: readonly Token[]): boolean {
+  const seen = new Set<number>();
+  const go = (i: number, j: number): boolean => {
+    const key = i * 1000 + j;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    if (j === tokens.length) return want.slice(i).every((c) => !ALNUM_CHAR.test(c));
+    const tk = tokens[j];
+    if (i < want.length && !ALNUM_CHAR.test(want[i])) {
+      if (go(i + 1, j)) return true;
+      if ((tk.kind === 'unknown' || (tk.kind === 'text' && tk.t.length === 1)) && go(i + 1, j + 1)) return true;
+    }
+    if (tk.kind === 'text') {
+      if (tk.t.every((c, k) => want[i + k] === c) && go(i + tk.t.length, j + 1)) return true;
+      if (!tk.t.some((c) => ALNUM_CHAR.test(c)) && go(i, j + 1)) return true;
+      return false;
+    }
+    if (tk.kind === 'unknown') return i < want.length && go(i + 1, j + 1);
+    for (const k of [tk.n, tk.n + 1]) {
+      if (k >= 2 && i + k <= want.length && want.slice(i, i + k).every((c) => LIGATURE_LETTER.test(c)) && go(i + k, j + 1)) return true;
+    }
+    return false;
+  };
+  return want.length < 1000 && tokens.length < 1000 && go(0, 0);
 }
 
 /** The point in the middle of the glyph box, in points. */
@@ -476,40 +492,82 @@ export class GlyphIndex implements CharCheck {
 
   /**
    * True when Ghostscript has glyphs with the text of this pdftotext word at the
-   * same place: the centre of the glyph run is within 2 pt (or 12% of the word
-   * box thickness, for a big font) of the centre of the word box, and the plain
-   * letters agree. A word of 3 plain letters or fewer must be equal; a longer word
-   * can miss 1 letter in 3 (ligatures and dashes of fonts with no Unicode map).
+   * same place. A glyph counts only when its centre is inside the word box and its
+   * height (the font size times 1.25) is from 0.6 to 1.6 times the box thickness, so
+   * specks of a tiny font cannot stand for a word. The letters must agree exactly
+   * (NFKD, no marks, lower case; see matchLetters). For the whole word, the centre of
+   * the glyph run must also be within 2 pt (or 12% of the box thickness) of the centre of the box.
    * With `shown`, only glyphs that show count, so a hidden glyph cannot make the word
    * line up; the per-word check uses this. The page gate uses all glyphs, because it
    * checks that the 2 frames agree. `part` is the shown part of the word when some
-   * characters are hidden: then its run must be inside the word box, and its centre is not compared.
+   * characters are hidden.
    */
   lineUp(w: WordBox, opts: { shown?: boolean; part?: string } = {}): boolean {
     const part = opts.part;
-    const want = plain(part ?? w.text);
-    if (!want) return true;
+    const want = [...letters(part ?? w.text)];
+    if (!want.some((c) => ALNUM_CHAR.test(c))) return true;
     const tol = Math.max(2, 0.12 * Math.min(w.x1 - w.x0, w.y1 - w.y0));
-    const found = this.near({ x0: w.x0 - tol, y0: w.y0 - tol, x1: w.x1 + tol, y1: w.y1 + tol }).filter((i) => !opts.shown || this.shows[i]).slice(0, 64);
+    const found = this.near(w)
+      .filter((i) => {
+        const g = this.glyphs[i];
+        const lead = g.lead;
+        if (opts.shown && !(lead === undefined ? this.shows[i] : this.shows[lead])) return false;
+        const thick = Math.abs(g.dx) >= Math.abs(g.dy) ? w.y1 - w.y0 : w.x1 - w.x0;
+        const height = (ASCENT + DESCENT) * g.size;
+        return height >= 0.6 * thick && height <= 1.6 * thick;
+      })
+      .slice(0, 64);
     const cx = (w.x0 + w.x1) / 2;
     const cy = (w.y0 + w.y1) / 2;
-    const slack = Math.floor(want.length / 3);
-    // Look for a run of glyphs, next to each other in text order, with the letters of the word and its centre at the centre of the word.
+    // Look for a run of glyphs, next to each other in text order, with the letters of the word.
     for (let a = 0; a < found.length; a++) {
-      for (let b = a; b < found.length && b - a <= want.length + slack + 2; b++) {
+      for (let b = a; b < found.length && b - a <= 2 * want.length + 2; b++) {
         const run = found.slice(a, b + 1);
-        const got = plain(run.map((i) => this.glyphs[i].c).join(''));
-        const ok = want.length <= 3 ? got === want : got.length <= want.length + slack && lcs(want, got) >= want.length - slack;
-        if (!ok) continue;
+        if (!matchLetters(want, this.tokens(run))) continue;
+        if (part !== undefined) return true;
         const g = this.glyphs[run[0]];
         const h = this.glyphs[run[run.length - 1]];
         const up = ((ASCENT - DESCENT) / 2) * g.size;
         const mx = (g.x + h.x + h.len * h.dx) / 2 + up * g.dy;
         const my = (g.y + h.y + h.len * h.dy) / 2 - up * g.dx;
-        if (part !== undefined || (Math.abs(mx - cx) <= tol && Math.abs(my - cy) <= tol)) return true;
+        if (Math.abs(mx - cx) <= tol && Math.abs(my - cy) <= tol) return true;
       }
     }
     return false;
+  }
+
+  /**
+   * The letter tokens of a glyph run. A glyph with followers that have no advance
+   * (a ligature with no Unicode map, for example U+6600 + U+6900 for "fi") is one
+   * ligature token. A glyph U+FFFD or in the private use area is one unknown letter.
+   * An accent glyph gives no token.
+   */
+  private tokens(run: number[]): Token[] {
+    const out: Token[] = [];
+    for (const i of run) {
+      const g = this.glyphs[i];
+      const last = out[out.length - 1];
+      if (g.lead !== undefined && last?.kind === 'lig' && last.lead === g.lead) {
+        last.n++;
+        continue;
+      }
+      if (g.lead !== undefined) {
+        out.push({ kind: 'lig', lead: g.lead, n: 1 });
+        continue;
+      }
+      if (run.some((j) => this.glyphs[j].lead === i)) {
+        out.push({ kind: 'lig', lead: i, n: 1 });
+        continue;
+      }
+      const n = g.c.codePointAt(0) ?? 0;
+      if ([...g.c].length === 1 && (n === 0xfffd || (n >= 0xe000 && n <= 0xf8ff))) {
+        out.push({ kind: 'unknown' });
+        continue;
+      }
+      const t = letters(g.c);
+      if (t) out.push({ kind: 'text', t: [...t] });
+    }
+    return out;
   }
 
   /** The glyphs (not spaces, not copies) whose centre is in the box, in text order. */
