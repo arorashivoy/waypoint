@@ -136,11 +136,13 @@ export async function pasteJob(userId: string, p: Parsed): Promise<PasteResult> 
     throw new PasteUserError(`Waypoint could not read this job from ${name}.`);
   }
 
-  const known = await db.job.findUnique({ where: { externalId: job.externalId }, select: { id: true } });
+  const known = await db.job.findUnique({ where: { externalId: job.externalId }, select: { id: true, pastedBy: true } });
   const { externalId, priority, postedAt, ...fields } = job;
+  // A second user who pastes the same job makes it a shared job. Each user can see a job that they pasted.
+  const shared = !!known?.pastedBy && known.pastedBy !== userId;
   const row = await db.job.upsert({
     where: { externalId },
-    update: { ...fields, ...(postedAt && { postedAt }), fetchedAt: new Date() },
+    update: { ...fields, ...(postedAt && { postedAt }), ...(shared && { pastedBy: null }), fetchedAt: new Date() },
     create: { externalId, ...fields, pastedBy: userId, priority: entry?.priority ?? priority, postedAt: postedAt ?? new Date() },
   });
 

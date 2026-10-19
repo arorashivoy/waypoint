@@ -158,6 +158,29 @@ describe('paste handler', () => {
     expect((await db.job.findUniqueOrThrow({ where: { id: job.id } })).role).toBe('Backend Engineer II');
   });
 
+  it('shares the job when a second user pastes it', async () => {
+    const a = await makeUser();
+    const b = await makeUser();
+    const company = slug();
+    const post = gh();
+    const url = `https://boards.greenhouse.io/${company}/jobs/${post.id}`;
+    respond(post);
+    const first = JSON.parse((await pasteAndRun(a.user.id, a.cookie, url)).result!);
+    expect((await db.job.findUniqueOrThrow({ where: { id: first.jobId } })).pastedBy).toBe(a.user.id);
+    respond(post);
+    const second = JSON.parse((await pasteAndRun(b.user.id, b.cookie, url)).result!);
+    expect(second).toMatchObject({ jobId: first.jobId, added: false });
+    expect((await db.job.findUniqueOrThrow({ where: { id: first.jobId } })).pastedBy).toBeNull();
+    // The paster's own second paste does not change the owner.
+    const c = await makeUser();
+    const other = gh();
+    respond(other);
+    const own = JSON.parse((await pasteAndRun(c.user.id, c.cookie, `https://boards.greenhouse.io/${company}/jobs/${other.id}`)).result!);
+    respond(other);
+    await pasteAndRun(c.user.id, c.cookie, `https://boards.greenhouse.io/${company}/jobs/${other.id}`);
+    expect((await db.job.findUniqueOrThrow({ where: { id: own.jobId } })).pastedBy).toBe(c.user.id);
+  });
+
   it('picks the job from the list of an Ashby board and of a Workable board', async () => {
     const { user, cookie } = await makeUser();
     const company = slug();

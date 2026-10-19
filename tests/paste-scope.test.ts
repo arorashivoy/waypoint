@@ -82,7 +82,7 @@ describe('a pasted job belongs to the user who pasted it', () => {
 
   });
 
-  it('keeps the owner when another user pastes the same job', async () => {
+  it('shares the job when another user pastes it, so both users can open it', async () => {
     const a = await makeUser();
     const b = await makeUser();
     const job = await pasteAs(a);
@@ -90,7 +90,7 @@ describe('a pasted job belongs to the user who pasted it', () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ id: Number(id), title: 'Backend Engineer', absolute_url: 'https://boards.greenhouse.io/x/jobs/1', location: { name: 'Berlin, Germany' }, content: 'x' })));
     await pasteRoute.POST(request('/api/jobs/paste', { method: 'POST', cookie: b.cookie, body: { url: `https://boards.greenhouse.io/${company}/jobs/${id}` } }), ctx());
     await runOnce(new Date(), { userId: b.user.id });
-    expect((await db.job.findUniqueOrThrow({ where: { id: job.id } })).pastedBy).toBe(a.user.id);
+    expect((await db.job.findUniqueOrThrow({ where: { id: job.id } })).pastedBy).toBeNull();
   });
 
   it('becomes a feed job when a refresh brings the same job', async () => {
