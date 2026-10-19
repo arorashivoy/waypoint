@@ -1,0 +1,20 @@
+{
+  "id": "fit-trading-cpp",
+  "title": "C++ Developer, Market Data",
+  "company": "Brackwater Capital",
+  "location": "London",
+  "cc": "GB",
+  "description": "Brackwater Capital is a small proprietary trading firm. The market data team builds the feed handlers and the order book that every strategy reads.\n\nYou will write low latency C++ for Linux, work on lock-free queues between threads, and measure every change in nanoseconds.\n\nWe ask for\n- 1 to 3 years of professional C++, or strong project work in C++.\n- A good grip on multithreading and data structures.\n- Comfort with TCP and UDP networking.\n\nNice to have: Python for tooling.\n\nOn-site in London. Graduates with strong projects are welcome to apply.",
+  "expected": {
+    "field": "Trading",
+    "level": "Mid",
+    "blockers": [],
+    "noFakeBlockers": true,
+    "legitimacy": [],
+    "injection": false,
+    "mustMet": [
+      "cpp",
+      "multithreading"
+    ]
+  }
+}

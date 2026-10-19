@@ -38,13 +38,16 @@ function addUsage(a: Usage, b: Usage): Usage {
   };
 }
 
-export async function askJson<T>(req: AskRequest<T>, ctx: CallContext, credential?: Credential | null): Promise<AskResult<T>> {
+/** Only the prompt eval sets these: another Sonnet ID for one run, and no `LlmUsage` row. */
+export type AskOptions = { model?: string; record?: boolean };
+
+export async function askJson<T>(req: AskRequest<T>, ctx: CallContext, credential?: Credential | null, opts: AskOptions = {}): Promise<AskResult<T>> {
   const cred = credential === undefined ? await credentialFor(ctx.userId) : credential;
   if (!cred) throw new NoCredentialError();
   const source = cred.kind === 'cli' ? 'cli' : cred.source;
   let usage: Usage | undefined;
   try {
-    const result = cred.kind === 'api' ? await askApi(cred.key, req, { failureKey: failureKey(cred, ctx.userId) }) : await askCliJson(req);
+    const result = cred.kind === 'api' ? await askApi(cred.key, req, { failureKey: failureKey(cred, ctx.userId), model: opts.model }) : await askCliJson(req, opts.model);
     usage = result.usage;
     return result;
   } catch (e) {
@@ -52,15 +55,17 @@ export async function askJson<T>(req: AskRequest<T>, ctx: CallContext, credentia
     throw e;
   } finally {
     // A failed write of the usage row must not hide the reply or the error.
-    if (usage) await recordUsage(ctx.userId, source, ctx.kind, usage).catch((err) => log.error({ err }, 'could not record usage'));
+    if (usage && opts.record !== false) await recordUsage(ctx.userId, source, ctx.kind, usage).catch((err) => log.error({ err }, 'could not record usage'));
   }
 }
 
-async function askCliJson<T>(req: AskRequest<T>): Promise<AskResult<T>> {
+async function askCliJson<T>(req: AskRequest<T>, model?: string): Promise<AskResult<T>> {
+  // Pass `model` only when set, so a normal call has the same arguments as before.
+  const ask = (prompt: typeof req.prompt) => (model ? askCli(req.system, prompt, model) : askCli(req.system, prompt));
   // The CLI has no structured output. Check the reply, and ask one time for a
   // repair with the exact problems listed. If askCli throws, the error goes up
   // as it is: a repair is only for a reply that does not match the schema.
-  const first = await askCli(req.system, req.prompt);
+  const first = await ask(req.prompt);
   const tryParse = (text: string) => {
     try {
       return req.schema.safeParse(extractJson(text));
@@ -72,7 +77,7 @@ async function askCliJson<T>(req: AskRequest<T>): Promise<AskResult<T>> {
   if (a.success) return { data: a.data as T, raw: first.text, usage: first.usage };
 
   const repair = repairPrompt(req.prompt, String(a.error.message));
-  const second = await askCli(req.system, repair);
+  const second = await ask(repair);
   const b = tryParse(second.text);
   const usage = addUsage(first.usage, second.usage);
   if (b.success) return { data: b.data as T, raw: second.text, usage };

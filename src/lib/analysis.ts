@@ -3,10 +3,10 @@ import { db } from './db';
 import { credentialFor } from './claude';
 import { askJsonCached } from './cache';
 import { coerceText, jobCheckSchema, BLOCKER_TYPES, LEGITIMACY_FLAGS } from './schemas';
-import { jobCheckPrompt, jobCheckSystem, PROMPT_VERSIONS, sanitise } from './prompts';
+import { jobCheckPrompt, jobCheckSystem, PROMPT_VERSIONS } from './prompts';
 import { claimsFor, profileSummary } from './user';
 import { fieldFit, levelFit, rankRoutes, routeLabel } from './match';
-import { checkEvidence, checkReply, citableClaims, fieldChoices, jobCheckProfileText, scoreCheck, type Blocker, type JobCheck, type Requirement, type ScorePart } from './jobcheck';
+import { checkEvidence, checkReply, citableClaims, fieldChoices, jobCheckProfileText, postedText, scoreCheck, type Blocker, type JobCheck, type Requirement, type ScorePart } from './jobcheck';
 import { getSettings } from './settings';
 import { CV_COUNTRY_RULES, FIELD_QUERIES } from './countries';
 import { type ClaimsDoc } from './claims';
@@ -209,7 +209,7 @@ export async function analyseJob(job: Job, userId: string, force = false): Promi
         { userId, kind: 'analysis' },
       );
       // The quotes are checked against the text that the model saw: after `sanitise`, not the raw description.
-      const posting = [job.role, job.company, job.city].map((v) => sanitise(v, 400)).join('\n') + `\n${sanitise(job.description)}`;
+      const posting = postedText(job);
       const check = checkReply(out, { slugs: new Set(citableClaims(claims).map((c) => c.slug)), posting, fields, fallback: { level: job.level, mode: job.mode } });
       stored = { ...check, by: 'claude', promptVersion: PROMPT_VERSIONS['job-check'] };
       read = true;

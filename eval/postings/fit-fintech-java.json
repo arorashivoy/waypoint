@@ -1,0 +1,21 @@
+{
+  "id": "fit-fintech-java",
+  "title": "Backend Engineer, Payments",
+  "company": "Quayside Pay",
+  "location": "Berlin",
+  "cc": "DE",
+  "description": "Quayside Pay moves money for small shops across the EU. Our payments team runs the settlement ledger that books every card and bank transfer.\n\nWhat you will do\n- Build and run Java services on Spring Boot that book payments to the ledger.\n- Design REST APIs for our merchant dashboard and for partner banks.\n- Move payment events between services with Kafka and keep the data consistent.\n- Tune PostgreSQL queries and add Redis caches where they help.\n\nWhat we ask\n- 2 to 4 years of backend work in Java.\n- Experience with Spring Boot, REST APIs and a relational database.\n- Good habits with tests and code review.\n\nNice to have: Kafka, Docker, AWS.\n\nWe work in English. We offer visa sponsorship and a relocation budget for people who join from outside the EU.",
+  "expected": {
+    "field": "Finance tech",
+    "level": "Mid",
+    "blockers": [],
+    "noFakeBlockers": true,
+    "legitimacy": [],
+    "injection": false,
+    "mustMet": [
+      "java",
+      "spring-boot",
+      "rest-apis"
+    ]
+  }
+}

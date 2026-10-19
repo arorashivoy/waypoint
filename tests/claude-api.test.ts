@@ -16,6 +16,14 @@ const fake = (impl: (p: any) => any) => ({ messages: { create: vi.fn(async (p: a
 const req = { system: prompt`SYS`, prompt: prompt`PROMPT`, schema: HookReply, effort: 'low' as const };
 
 describe('askApi', () => {
+  it('uses the model of the eval option, and refuses a model that is not Sonnet', async () => {
+    const client = fake(() => ({ ...ok, model: 'claude-sonnet-5-5' }));
+    await askApi('k', req, { failureKey: 'shared', client, model: 'claude-sonnet-5-5' });
+    expect(client.messages.create.mock.calls[0][0].model).toBe('claude-sonnet-5-5');
+    await expect(askApi('k', req, { failureKey: 'shared', client, model: 'claude-opus-4' })).rejects.toThrow(/not a Sonnet/);
+    expect(client.messages.create).toHaveBeenCalledTimes(1);
+  });
+
   it('sends Sonnet, a structured output, the effort and a cached system block', async () => {
     const client = fake(() => ok);
     const r = await askApi('k', req, { failureKey: 'shared', client });

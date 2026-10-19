@@ -1,0 +1,21 @@
+{
+  "id": "fit-ml-nlp",
+  "title": "Machine Learning Engineer, Language",
+  "company": "Fernhill AI",
+  "location": "Remote, EU",
+  "cc": "DE",
+  "description": "Fernhill AI trains language models that sort and summarise customer support tickets. We are 14 people, fully remote inside the EU.\n\nYou will train and test transformer models with PyTorch, build evaluation sets, and ship the models behind a Python service.\n\nWhat we ask\n- 2 years or more of machine learning work, or a thesis in NLP with real results.\n- Python and PyTorch.\n- Care about how you measure a model.\n\nA plus: Docker, AWS, a paper or a public repository.",
+  "expected": {
+    "field": "ML & NLP",
+    "level": "Mid",
+    "blockers": [],
+    "noFakeBlockers": true,
+    "legitimacy": [],
+    "injection": false,
+    "mustMet": [
+      "python",
+      "pytorch",
+      "nlp"
+    ]
+  }
+}

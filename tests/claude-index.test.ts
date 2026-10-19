@@ -75,3 +75,26 @@ describe('CLI repair retry', () => {
     await expect(claude.askJson(req, ctx, null)).rejects.toBeInstanceOf(claude.NoCredentialError);
   });
 });
+
+describe('options for the prompt eval', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('passes the model to the CLI and writes no usage row when record is false', async () => {
+    const { claude, cli, ctx } = await load();
+    const { db } = await import('@/lib/db');
+    cli.askCli.mockResolvedValue({ text: '{"hook":"x"}', usage, denials: 0 });
+    await claude.askJson(req, ctx, { kind: 'cli' }, { model: 'claude-sonnet-5-5', record: false });
+    expect(cli.askCli.mock.calls[0][2]).toBe('claude-sonnet-5-5');
+    expect(await db.llmUsage.count({ where: { userId: ctx.userId } })).toBe(0);
+    await claude.askJson(req, ctx, { kind: 'cli' });
+    expect(cli.askCli.mock.calls[1]).toHaveLength(2);
+    expect(await db.llmUsage.count({ where: { userId: ctx.userId } })).toBe(1);
+  });
+
+  it('passes the model to the API path', async () => {
+    const { claude, api, ctx } = await load();
+    api.askApi.mockResolvedValue({ data: { hook: 'x' }, raw: '{}', usage });
+    await claude.askJson(req, ctx, { kind: 'api', key: 'k', source: 'shared' }, { model: 'claude-sonnet-5-5' });
+    expect(api.askApi.mock.calls[0][2]).toMatchObject({ model: 'claude-sonnet-5-5' });
+  });
+});

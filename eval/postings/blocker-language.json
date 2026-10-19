@@ -1,0 +1,22 @@
+{
+  "id": "blocker-language",
+  "title": "Backend Developer",
+  "company": "Linden & Roth",
+  "location": "Vienna",
+  "cc": "AT",
+  "description": "Linden & Roth is a Vienna insurance software house. You will write Java services on Spring Boot with a team of 8.\n\nRequirements\n- 3 years of Java and Spring Boot.\n- PostgreSQL.\n- Fluent German (C1 or native) is required. All meetings, tickets and documents are in German.\n\nHybrid in Vienna.",
+  "expected": {
+    "field": "Backend",
+    "level": "Mid",
+    "blockers": [
+      "language"
+    ],
+    "noFakeBlockers": false,
+    "legitimacy": [],
+    "injection": false,
+    "mustMet": [
+      "java",
+      "spring-boot"
+    ]
+  }
+}

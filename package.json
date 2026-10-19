@@ -15,6 +15,7 @@
     "worker": "tsx --env-file=.env scripts/worker.ts",
     "backup": "tsx --env-file=.env scripts/backup.ts",
     "restore": "tsx --env-file=.env scripts/restore.ts",
+    "eval": "tsx --env-file=.env scripts/eval.ts",
     "check:claims": "tsx scripts/check-claims.ts",
     "migrate:claims": "tsx --env-file=.env scripts/migrate-claims.ts",
     "gdrive:auth": "tsx --env-file=.env scripts/gdrive-auth.ts",

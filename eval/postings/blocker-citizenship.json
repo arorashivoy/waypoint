@@ -1,0 +1,22 @@
+{
+  "id": "blocker-citizenship",
+  "title": "Backend Engineer",
+  "company": "Northgate Systems",
+  "location": "Austin, TX",
+  "cc": "US",
+  "description": "Northgate Systems builds logistics software for the US government. Our backend team writes Java services on Spring Boot and runs them on AWS.\n\nRequirements\n- 3+ years of Java.\n- Spring Boot, PostgreSQL and REST APIs.\n- Candidates must be US citizens. We cannot sponsor visas.\n\nOn-site in Austin.",
+  "expected": {
+    "field": "Backend",
+    "level": "Mid",
+    "blockers": [
+      "citizenship"
+    ],
+    "noFakeBlockers": false,
+    "legitimacy": [],
+    "injection": false,
+    "mustMet": [
+      "java",
+      "spring-boot"
+    ]
+  }
+}

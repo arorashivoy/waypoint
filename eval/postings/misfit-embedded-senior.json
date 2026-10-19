@@ -1,0 +1,16 @@
+{
+  "id": "misfit-embedded-senior",
+  "title": "Staff Embedded Firmware Engineer",
+  "company": "Coppergate Devices",
+  "location": "Munich",
+  "cc": "DE",
+  "description": "Coppergate Devices designs industrial sensors. We need a Staff Embedded Firmware Engineer to set the technical direction of our firmware.\n\nYou bring 9+ years of firmware work in C on bare metal and RTOS, you have written drivers for I2C, SPI and CAN, and you have taken a product through EMC tests. You lead design reviews and coach the team.\n\nNot for beginners. Hybrid, two days a week in Munich.",
+  "expected": {
+    "field": "Other",
+    "level": "Senior",
+    "blockers": [],
+    "noFakeBlockers": true,
+    "legitimacy": [],
+    "injection": false
+  }
+}

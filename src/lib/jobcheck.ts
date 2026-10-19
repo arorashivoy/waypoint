@@ -1,6 +1,7 @@
 import { BLOCKER_TYPES, LEGITIMACY_FLAGS, type JobCheckReplyT } from './schemas';
 import { FIELD_CHOICES } from './settings';
 import { matchScore } from './match';
+import { sanitise } from './prompts';
 import type { Claim, ClaimsDoc, Depth } from './claims';
 
 /**
@@ -72,6 +73,11 @@ export function jobCheckProfileText(doc: ClaimsDoc | null, settings: { fields: r
  */
 export const normaliseQuote = (s: string): string =>
   s.normalize('NFKC').replace(/＜/g, '<').replace(/＞/g, '>').toLowerCase().replace(/\s+/g, ' ').trim();
+
+/** The posting text that the model saw: after `sanitise`. `checkReply` matches the quotes of blockers against it. */
+export function postedText(job: { role: string; company: string; city: string; description: string }): string {
+  return [job.role, job.company, job.city].map((v) => sanitise(v, 400)).join('\n') + `\n${sanitise(job.description)}`;
+}
 
 const oneOf = <T extends string>(list: readonly T[], v: string): v is T => (list as readonly string[]).includes(v);
 const words = (s: string, max: number) => s.trim().split(/\s+/).filter(Boolean).slice(0, max).join(' ');

@@ -1,0 +1,21 @@
+{
+  "id": "fit-backend-python",
+  "title": "Python Backend Developer",
+  "company": "Tidewater Software",
+  "location": "Amsterdam",
+  "cc": "NL",
+  "description": "Tidewater builds scheduling software for physiotherapy clinics. The team is 9 engineers and the product is used in about 400 clinics.\n\nYou will own services in Python, expose REST APIs and keep our PostgreSQL schema in good shape. You will ship every week and talk to clinic staff when a release changes their day.\n\nRequirements\n- 2 or more years with Python in production.\n- REST API design and PostgreSQL.\n- You can package a service in Docker.\n\nPreferred: Redis, AWS, a taste for small and quiet code.\n\nHybrid: three days a week in our Amsterdam office. English is the working language.",
+  "expected": {
+    "field": "Backend",
+    "level": "Mid",
+    "blockers": [],
+    "noFakeBlockers": true,
+    "legitimacy": [],
+    "injection": false,
+    "mustMet": [
+      "python",
+      "rest-apis",
+      "postgresql"
+    ]
+  }
+}

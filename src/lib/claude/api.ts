@@ -47,13 +47,15 @@ function jsonFormat(schema: unknown) {
   return { type, schema: jsonSchema };
 }
 
-export async function askApi<T>(key: string, req: AskRequest<T>, opts: { failureKey: string; client?: MessagesClient }): Promise<{ data: T; raw: string; usage: Usage }> {
+export async function askApi<T>(key: string, req: AskRequest<T>, opts: { failureKey: string; client?: MessagesClient; model?: string }): Promise<{ data: T; raw: string; usage: Usage }> {
   const client: MessagesClient = opts.client ?? clientFor(key);
-  assertSonnet(MODEL);
+  // Only the prompt eval passes `opts.model`, to try another Sonnet. Both IDs go through the same check.
+  const model = opts.model ?? MODEL;
+  assertSonnet(model);
   let res: any;
   try {
     res = await client.messages.create({
-      model: MODEL,
+      model,
       max_tokens: req.maxTokens ?? 16000,
       // The system prompt is the same for every job of a refresh, so it is
       // cached. Prompts shorter than the model's minimum are not cached; that
@@ -95,12 +97,12 @@ export async function askApi<T>(key: string, req: AskRequest<T>, opts: { failure
     cacheReadTokens: Number(u.cache_read_input_tokens) || 0,
     cacheWriteTokens: Number(u.cache_creation_input_tokens) || 0,
   };
-  const model: string = typeof res.model === 'string' ? res.model : MODEL;
-  const usage: Usage = { model, ...tokens, costUsd: costUsd(tokens) };
+  const ran: string = typeof res.model === 'string' ? res.model : model;
+  const usage: Usage = { model: ran, ...tokens, costUsd: costUsd(tokens) };
 
   // The reply names the model that ran. Refuse it if it is not Sonnet.
   try {
-    assertSonnet(model);
+    assertSonnet(ran);
   } catch (e) {
     throw new ClaudeCallError((e as Error).message, usage);
   }

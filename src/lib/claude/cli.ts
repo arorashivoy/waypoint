@@ -132,7 +132,8 @@ export function interpretCliRun(res: RunResult, model: string): CliReply {
   return parseCliReply(res.stdout, model);
 }
 
-export async function askCli(system: string, prompt: string): Promise<CliReply> {
+/** `model` is for the prompt eval only. Every other call uses MODEL. */
+export async function askCli(system: string, prompt: string, model: string = MODEL): Promise<CliReply> {
   const { WAYPOINT_CLAUDE_BIN, WAYPOINT_CLAUDE_TIMEOUT_MS: timeoutMs } = env();
   // Find the binary before any folder or process exists.
   const bin = resolveClaudeBin(WAYPOINT_CLAUDE_BIN);
@@ -141,14 +142,14 @@ export async function askCli(system: string, prompt: string): Promise<CliReply> 
   try {
     const mcp = join(work, '.mcp-empty.json');
     writeFileSync(mcp, '{"mcpServers":{}}');
-    const res = await runProgram('claude', cliArgs(MODEL, system, mcp), {
+    const res = await runProgram('claude', cliArgs(model, system, mcp), {
       cwd: work,
       input: prompt,
       timeoutMs,
       env: childEnv(),
       bin,
     });
-    const out = interpretCliRun(res, MODEL);
+    const out = interpretCliRun(res, model);
     clearFailures('cli');
     return out;
   } finally {

@@ -1,0 +1,21 @@
+{
+  "id": "blocker-clearance",
+  "title": "Software Engineer, Defence Systems",
+  "company": "Ironwood Dynamics",
+  "location": "Bristol",
+  "cc": "GB",
+  "description": "Ironwood Dynamics writes mission software for naval systems. You will build C++ services for sensor data.\n\nWe ask for 2 to 5 years of C++ and good multithreading skills.\n\nYou must hold active SC clearance at the start date. We cannot start the clearance process for you.\n\nOn-site in Bristol.",
+  "expected": {
+    "field": "Other",
+    "level": "Mid",
+    "blockers": [
+      "clearance"
+    ],
+    "noFakeBlockers": false,
+    "legitimacy": [],
+    "injection": false,
+    "mustMet": [
+      "cpp"
+    ]
+  }
+}
