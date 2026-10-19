@@ -3,6 +3,7 @@ import { env } from '../env';
 import { readSecret, secretHint } from '../secrets';
 import { cliBinary } from './cli';
 import { claudeAuthFailure, claudeQuotaFailure } from './failures';
+import { cliDisabled } from './selftest';
 import type { Credential } from './types';
 import { monthSpend, nextReset } from './usage';
 
@@ -37,7 +38,8 @@ export async function credentialFor(userId: string): Promise<Credential | null> 
   if (own) return { kind: 'api', key: own, source: 'own' };
   const shared = env().ANTHROPIC_API_KEY;
   if (shared && (await monthSpend(userId, 'shared')) < env().WAYPOINT_SHARED_MONTHLY_USD) return { kind: 'api', key: shared, source: 'shared' };
-  if (user.role === 'admin' && cliBinary()) return { kind: 'cli' };
+  // A failed self-test turns the CLI off (spec 6.2). Read the row only when the CLI decides.
+  if (user.role === 'admin' && cliBinary() && !(await cliDisabled())) return { kind: 'cli' };
   return null;
 }
 
@@ -59,21 +61,23 @@ export async function claudeStatus(userId: string): Promise<ClaudeStatus> {
   const capReached = sharedAvailable && sharedSpentUsd >= capUsd;
   const base = { keyHint, sharedAvailable, capUsd, sharedSpentUsd, capReached, resetsAt: reset.toISOString() };
 
-  const cred: Credential | null =
-    !user || user.disabledAt
-      ? null
-      : keyHint
-        ? { kind: 'api', key: '', source: 'own' }
-        : sharedAvailable && !capReached
-          ? { kind: 'api', key: '', source: 'shared' }
-          : user.role === 'admin' && cliBinary()
-            ? { kind: 'cli' }
-            : null;
+  let cliOff = false;
+  let cred: Credential | null = null;
+  if (user && !user.disabledAt) {
+    if (keyHint) cred = { kind: 'api', key: '', source: 'own' };
+    else if (sharedAvailable && !capReached) cred = { kind: 'api', key: '', source: 'shared' };
+    else if (user.role === 'admin' && cliBinary()) {
+      if (await cliDisabled()) cliOff = true;
+      else cred = { kind: 'cli' };
+    }
+  }
 
   if (!cred) {
-    const detail = capReached
-      ? `You used this month's limit of ${usd(capUsd)} on the shared key. It resets on ${day(reset)}. Add your own API key in Settings to continue now.`
-      : 'Add an API key in Settings to use Claude.';
+    const detail = cliOff
+      ? 'The Claude CLI failed its self-test. Read the reason on the admin health page.'
+      : capReached
+        ? `You used this month's limit of ${usd(capUsd)} on the shared key. It resets on ${day(reset)}. Add your own API key in Settings to continue now.`
+        : 'Add an API key in Settings to use Claude.';
     return { ...base, mode: 'none', detail, authFailure: null, quotaFailure: null };
   }
 

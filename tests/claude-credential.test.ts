@@ -3,6 +3,8 @@ import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 
 vi.mock('@/lib/claude/cli', async (orig) => ({ ...(await orig<typeof import('@/lib/claude/cli')>()), cliBinary: vi.fn(() => '/usr/bin/claude'), askCli: vi.fn() }));
+// The real row is shared by all test files. Here the reader is a mock, so no file sees a row from another file.
+vi.mock('@/lib/claude/selftest', () => ({ cliDisabled: vi.fn(async () => null), runCliSelfTestAtStart: vi.fn() }));
 vi.mock('@/lib/claude/api', () => ({ askApi: vi.fn() }));
 
 import { prompt } from '@/lib/prompts';
@@ -13,6 +15,7 @@ import { askApi } from '@/lib/claude/api';
 import { askJson, ClaudeCallError, claudeStatus, credentialFor, NoCredentialError } from '@/lib/claude';
 import { setAuthFailure, clearFailures } from '@/lib/claude/failures';
 import { askCli } from '@/lib/claude/cli';
+import { cliDisabled } from '@/lib/claude/selftest';
 import { monthSpend, monthStart, nextReset, recordUsage } from '@/lib/claude/usage';
 
 const user = (role: 'admin' | 'member' = 'member') =>
@@ -28,6 +31,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   resetEnvForTests();
   vi.mocked(askApi).mockReset();
+  vi.mocked(cliDisabled).mockResolvedValue(null);
 });
 
 describe('credentialFor', () => {
@@ -64,6 +68,32 @@ describe('credentialFor', () => {
     resetEnvForTests();
     expect(await credentialFor((await user('member')).id)).toBeNull();
     expect(await credentialFor((await user('admin')).id)).toEqual({ kind: 'cli' });
+  });
+
+  it('gives the admin no CLI while the self-test has turned it off, and the CLI again after', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    resetEnvForTests();
+    const admin = await user('admin');
+    vi.mocked(cliDisabled).mockResolvedValue({ reason: 'tools are on', at: '2026-10-17T10:00:00.000Z' });
+    expect(await credentialFor(admin.id)).toBeNull();
+    const s = await claudeStatus(admin.id);
+    expect(s.mode).toBe('none');
+    expect(s.detail).toMatch(/failed its self-test/);
+    vi.mocked(cliDisabled).mockResolvedValue(null);
+    expect(await credentialFor(admin.id)).toEqual({ kind: 'cli' });
+    expect((await claudeStatus(admin.id)).mode).toBe('cli');
+  });
+
+  it('does not read the self-test row for a member or when a key decides first', async () => {
+    vi.mocked(cliDisabled).mockClear();
+    vi.mocked(cliDisabled).mockResolvedValue({ reason: 'r', at: 'a' });
+    expect((await credentialFor((await user('admin')).id))?.kind).toBe('api');
+    expect((await claudeStatus((await user('admin')).id)).mode).toBe('shared');
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    resetEnvForTests();
+    expect(await credentialFor((await user('member')).id)).toBeNull();
+    expect((await claudeStatus((await user('member')).id)).mode).toBe('none');
+    expect(cliDisabled).not.toHaveBeenCalled();
   });
 
   it('does not count the spend of last month or of other users', async () => {

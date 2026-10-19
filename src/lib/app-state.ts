@@ -17,3 +17,8 @@ export async function setState(key: string, value: unknown): Promise<void> {
   const text = JSON.stringify(value);
   await db.appState.upsert({ where: { key }, create: { key, value: text }, update: { value: text } });
 }
+
+/** Delete a key. A missing key is fine. */
+export async function clearState(key: string): Promise<void> {
+  await db.appState.deleteMany({ where: { key } });
+}

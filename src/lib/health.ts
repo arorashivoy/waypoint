@@ -2,6 +2,7 @@ import { statfs } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { db } from './db';
 import { cliBinary } from './claude/cli';
+import { cliDisabled } from './claude/selftest';
 import { env } from './env';
 import { lastBeat } from './tasks/queue';
 
@@ -56,11 +57,14 @@ export async function runChecks(now: Date = new Date(), opts: { beatId?: string 
         : { ok: false, detail: `The last heartbeat was ${Math.round(age / 1000)} seconds ago. The limit is 90.` };
     }),
     guarded(async () => {
-      if (env().ANTHROPIC_API_KEY) return { ok: true, detail: 'The shared API key is set.' };
-      if (cliBinary()) return { ok: true, detail: 'The Claude CLI is available to the admin.' };
+      const off = cliBinary() ? await cliDisabled() : null;
+      const cliNote = off ? ` The Claude CLI is off: it failed its self-test at ${off.at}.` : '';
+      if (env().ANTHROPIC_API_KEY) return { ok: true, detail: `The shared API key is set.${cliNote}` };
+      if (cliBinary() && !off) return { ok: true, detail: 'The Claude CLI is available to the admin.' };
       const own = await db.userSecret.count({ where: { kind: 'anthropic' } });
-      return own > 0
-        ? { ok: true, detail: 'At least one user saved an API key.' }
+      if (own > 0) return { ok: true, detail: `At least one user saved an API key.${cliNote}` };
+      return off
+        ? { ok: false, detail: `The Claude CLI failed its self-test at ${off.at}: ${off.reason}` }
         : { ok: false, detail: 'No shared key, no CLI and no user key.' };
     }),
     guarded(async () => {
