@@ -34,6 +34,10 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
   const [sheet, setSheet] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastReport, setLastReport] = useState<string | null>(null);
+  const [pasteUrl, setPasteUrl] = useState('');
+  const [pasting, setPasting] = useState(false);
+  // A pasted job can be in a country that is off. The list does not hold it, but its detail must still open.
+  const [pastedId, setPastedId] = useState<string | null>(null);
 
   const onCcs = new Set(state.countries.filter((c: any) => c.on).map((c: any) => c.cc));
 
@@ -59,7 +63,7 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
     [state.jobs, state.countries, state.levels, f, sponsorOnly, topOnly, q],
   );
 
-  const activeId = selected && jobs.some((j: any) => j.id === selected) ? selected : phone ? selected : jobs[0]?.id ?? null;
+  const activeId = selected && (selected === pastedId || jobs.some((j: any) => j.id === selected)) ? selected : phone ? selected : jobs[0]?.id ?? null;
 
   const activeFilters =
     Object.entries(f).filter(([k, v]) => v !== DEFAULT_FILTERS[k]).length + (sponsorOnly ? 1 : 0) + (topOnly ? 1 : 0);
@@ -86,6 +90,24 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
       setToast((e as Error).message);
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  // The task reads the job from the board. A warning or a note comes back with the result and shows with the job.
+  const doPaste = async () => {
+    if (!pasteUrl.trim() || pasting) return;
+    setPasting(true);
+    try {
+      const res = await runTask<{ jobId: string; warning: string | null; note?: string | null }>(() => post<{ taskId: string }>('/api/jobs/paste', { url: pasteUrl.trim() }));
+      setPasteUrl('');
+      await refresh();
+      setPastedId(res.jobId);
+      openJob(res.jobId);
+      setToast([res.warning, res.note].filter(Boolean).join(' ') || 'Job added.');
+    } catch (e) {
+      setToast((e as Error).message);
+    } finally {
+      setPasting(false);
     }
   };
 
@@ -143,6 +165,20 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
           ★ Top companies
         </button>
       </div>
+
+      <form
+        style={{ display: 'flex', gap: 8, padding: '0 var(--gutter) 10px', alignItems: 'center' }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          doPaste();
+        }}
+      >
+        <label className="sr-only" htmlFor="wp-paste">Paste a job link</label>
+        <input id="wp-paste" type="url" className="field" style={{ flex: 1, minWidth: 0 }} placeholder="Paste a job link (Greenhouse, Lever, Ashby, Workable)" maxLength={2000} value={pasteUrl} onChange={(e) => setPasteUrl(e.target.value)} />
+        <button className="btn" type="submit" disabled={pasting || !pasteUrl.trim()}>
+          {pasting ? 'Reading…' : 'Add job'}
+        </button>
+      </form>
 
       {lastReport && (
         <div className="stack" style={{ gap: 4, padding: '0 var(--gutter) 10px', alignItems: 'flex-start' }}>

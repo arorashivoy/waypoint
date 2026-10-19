@@ -17,6 +17,7 @@ import { searchQueries } from '@/lib/resume';
 import { ensureBaseResume } from '@/lib/resume/base';
 import { suggestWording, wordingView } from '@/lib/resume/suggest';
 import { CV_MESSAGE_MAX, NO_RESUME, CvError, cvView, publishCv, refineCv, resetCv } from '@/lib/cv';
+import { PasteTaskPayload, PasteUserError, pasteJob } from '@/lib/sources/paste';
 import { runOutreach } from '@/lib/outreach';
 import { INCOMING_MAX } from '@/lib/schemas';
 import { claimsFor, isAdmin } from '@/lib/user';
@@ -260,3 +261,15 @@ registerHandler(
     }
   },
 );
+
+// A pasted job link. The route checked the link. The payload holds only the parts that it read, and the fetch URL is built from them again.
+registerHandler('paste', PasteTaskPayload, async (payload, task) => {
+  const userId = task.userId;
+  if (!userId) return { skipped: 'no-user' };
+  try {
+    return await pasteJob(userId, payload);
+  } catch (e) {
+    if (e instanceof PasteUserError) throw new TaskFatal(e.message);
+    throw e;
+  }
+});
