@@ -54,7 +54,7 @@ function errorText(err: unknown): string {
 }
 
 async function failAtOnce(id: string, error: string): Promise<void> {
-  await db.task.update({ where: { id }, data: { status: 'failed', lastError: scrub(error).slice(0, MAX_ERROR_LENGTH) } });
+  await db.task.update({ where: { id }, data: { status: 'failed', lastError: scrub(error.slice(0, MAX_ERROR_LENGTH)).slice(0, MAX_ERROR_LENGTH) } });
 }
 
 /**

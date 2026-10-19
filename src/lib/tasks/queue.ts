@@ -104,7 +104,7 @@ export async function failTask(id: string, error: string, now: Date = new Date()
     select: { attempts: true },
   });
   // A key in an error text must not reach the database or a backup.
-  const lastError = scrub(error).slice(0, MAX_ERROR_LENGTH);
+  const lastError = scrub(error.slice(0, MAX_ERROR_LENGTH)).slice(0, MAX_ERROR_LENGTH);
   const delay = RETRY_DELAYS_MS[row.attempts - 1];
   if (delay === undefined) {
     await db.task.update({

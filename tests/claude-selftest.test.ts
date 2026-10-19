@@ -34,6 +34,15 @@ describe('runCliSelfTestAtStart', () => {
     expect(Number.isNaN(Date.parse(off!.at))).toBe(false);
   });
 
+  it('keeps a key out of the stored reason and the result', async () => {
+    const r = await runCliSelfTestAtStart(async () => ({ ok: false, why: 'call failed: api_key=plainkey123456 sk-ant-api03-ABCDEF' }));
+    expect(r).toMatchObject({ ran: true, ok: false });
+    for (const text of [(await cliDisabled())!.reason, (r as { why: string }).why]) {
+      expect(text).not.toMatch(/plainkey123456|sk-ant-api03/);
+      expect(text).toContain('[removed]');
+    }
+  });
+
   it('turns CLI mode off when a tool call was denied', async () => {
     expect((await runCliSelfTestAtStart(canary({ result: 'NONE', permission_denials: [{}, {}] }))).ran).toBe(true);
     expect((await cliDisabled())?.reason).toMatch(/denied 2 tool call/);

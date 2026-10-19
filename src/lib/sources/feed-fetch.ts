@@ -23,7 +23,7 @@ async function isFresh(board: string, now: Date): Promise<boolean> {
 
 /** Keeps the etag and the last-modified value of the stored row. */
 export async function recordFailure(board: string, err: unknown, now: Date = new Date()): Promise<void> {
-  const error = scrub(err instanceof Error ? err.message : String(err)).slice(0, MAX_ERROR_LENGTH);
+  const error = scrub((err instanceof Error ? err.message : String(err)).slice(0, MAX_ERROR_LENGTH)).slice(0, MAX_ERROR_LENGTH);
   await db.feedFetch.upsert({
     where: { board },
     update: { status: 'failed', error, fetchedAt: now },

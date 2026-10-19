@@ -180,6 +180,17 @@ describe('base résumé', () => {
     expect(readdirSync(join(dir, user.id, 'resumes')).filter((f) => f.startsWith('base-'))).toEqual(['base-2.pdf']);
   });
 
+  it('stores the reason of a failed build with no key in it', async () => {
+    const { user } = await makeUser();
+    await saveProfile(user.id, doc, 'First');
+    vi.mocked(compileLatex).mockRejectedValueOnce(new Error('pdflatex failed: x-api-key: plainkey123456 and sk-ant-api03-ABCDEF'));
+    const out = await ensureBaseResume(user.id);
+    expect(out).toMatchObject({ why: expect.stringContaining('[removed]') });
+    const reason = await baseFailure(user.id);
+    expect(reason).not.toMatch(/plainkey123456|sk-ant-api03/);
+    expect(reason).toContain('[removed]');
+  });
+
   it('queues one base task after a profile save, once', async () => {
     const { user } = await makeUser();
     await saveProfile(user.id, doc, 'First');

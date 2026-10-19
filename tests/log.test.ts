@@ -111,4 +111,30 @@ describe('log', () => {
     expect(out.map).toBe('[Map]');
     expect(out.set).toBe('[Set]');
   });
+
+  it.each([
+    ['a-a-…', 'a-'.repeat(100_000)],
+    ['a-…:', 'a-'.repeat(100_000) + ':'],
+    ['a-a-…=x', 'a-'.repeat(100_000) + '=x'],
+    ['password-…', 'password-'.repeat(22_000)],
+  ])('scrub reads %s (200 kB) in linear time', (_name, text) => {
+    const start = performance.now();
+    const out = scrub(text);
+    expect(performance.now() - start).toBeLessThan(100);
+    expect(out.length).toBeLessThan(20_100);
+    expect(out.endsWith(' [cut]')).toBe(true);
+  });
+
+  it('scrub still removes a secret after the speed fix', () => {
+    expect(scrub('x '.repeat(50) + 'app_key=SEC1 my-long-client-secret: SEC2')).not.toMatch(/SEC[12]/);
+    expect(scrub('some-service-oauth-access_token=SEC3')).not.toContain('SEC3');
+  });
+
+  it('scrub keeps names that only end in key, and removes the secret names', () => {
+    for (const text of ['jobKey=abc', 'dedupeKey: foo', 'sortKey=2', 'monkey: 1', 'inputTokens: 5', 'keyword=x']) expect(scrub(text)).toBe(text);
+    for (const name of ['key', 'api_key', 'app_key', 'accessToken', 'client_secret', 'password']) {
+      expect(scrub(`${name}=VAL`)).toBe(`${name}=[removed]`);
+      expect(scrub(`${name}: VAL`)).toBe(`${name}: [removed]`);
+    }
+  });
 });

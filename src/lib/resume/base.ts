@@ -9,6 +9,7 @@ import { getState, setState } from '../app-state';
 import { db } from '../db';
 import { profileVersion } from '../profile/store';
 import { z } from 'zod';
+import { scrub } from '../log';
 
 /**
  * The default base résumé: a user with no own .tex gets a PDF that the built-in template makes
@@ -32,9 +33,9 @@ export async function baseFailure(userId: string): Promise<string | null> {
   return f && Date.now() - f.at < FAILURE_TTL_MS && f.version === (await profileVersion(userId)) ? f.reason : null;
 }
 
-/** The first line, with no path, at most 200 characters. */
+/** The first line, with no path and no key, at most 200 characters. */
 function shortReason(text: string): string {
-  return text.split('\n')[0].replace(/(?<![\w.])\/[^\s'"`]+/g, '<path>').slice(0, 200);
+  return scrub(text.split('\n')[0].slice(0, 1000).replace(/(?<![\w.])\/[^\s'"`]+/g, '<path>')).slice(0, 200);
 }
 
 async function fail(userId: string, version: number, text: string): Promise<{ why: string }> {

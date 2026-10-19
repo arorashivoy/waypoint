@@ -15,27 +15,32 @@ export const REDACT_PATHS = [
   'req.headers.cookie', 'req.headers.authorization',
 ];
 
-// A secret name: password, secret, cookie, authorization, a name that ends in key, and a name that ends in "token".
-const NAME = String.raw`[\w-]*(?:pass(?:word|wd)|secret|cookie|authori[sz]ation|key|token)`;
+// A whole secret name, as the key-name walk reads it. The prefix is short and starts at a word start, so the
+// match takes linear time. `key` and `sig` count only as the whole name: jobKey and sortKey stay.
+const NAME = String.raw`(?<![\w-])(?:[\w-]{0,30}(?:pass(?:word|wd)|secret|cookie|authori[sz]ation|api[-_]?key|app[-_]?key|token)|key)`;
 const SCRUBS: [RegExp, string][] = [
   [/sk-ant-[A-Za-z0-9_-]+/g, '[removed]'],
-  // key=value in a URL or in form text. The name may be part of a longer name (access_token, client_secret).
+  // key=value in a URL or in form text.
   [new RegExp(`(^|[?&\\s;,])(${NAME}|sig)=[^&\\s]+`, 'gi'), '$1$2=[removed]'],
   [/Bearer\s+\S+/gi, 'Bearer [removed]'],
   // JSON-style text: "token":"x" or 'secret': 'x'. The key stays, the value goes.
   [new RegExp(`(["']${NAME}["']\\s*:\\s*)"(?:\\\\.|[^"\\\\])*"`, 'gi'), '$1"[removed]"'],
   [new RegExp(`(["']${NAME}["']\\s*:\\s*)'(?:\\\\.|[^'\\\\])*'`, 'gi'), "$1'[removed]'"],
   // Header text and inspect text: x-api-key: value, Authorization: value, { token: 'v' }.
-  [new RegExp(`\\b(${NAME})(\\s*:\\s*)["']?[^\\s,;"'}]+["']?`, 'gi'), '$1$2[removed]'],
+  [new RegExp(`(${NAME})(\\s*:\\s*)["']?[^\\s,;"'}]+["']?`, 'gi'), '$1$2[removed]'],
 ];
+
+/** The longest text that scrub reads. A longer text is cut, so a huge error body cannot block the process. */
+export const SCRUB_MAX = 20_000;
 
 /** Removes keys, tokens and passwords from free text, such as an error message or a URL. */
 export function scrub(text: string): string {
-  return SCRUBS.reduce((t, [re, to]) => t.replace(re, to), text);
+  const head = text.length > SCRUB_MAX ? `${text.slice(0, SCRUB_MAX)} [cut]` : text;
+  return SCRUBS.reduce((t, [re, to]) => t.replace(re, to), head);
 }
 
 // A key name that holds a secret. "token" counts only at the end of the name, so inputTokens stays.
-const SECRET_KEY = /pass(?:word|wd)|secret|cookie|authori[sz]ation|api[-_]?key|(?:^|[-_a-z])token$|^key$/i;
+const SECRET_KEY = /pass(?:word|wd)|secret|cookie|authori[sz]ation|api[-_]?key|app[-_]?key|(?:^|[-_a-z])token$|^key$/i;
 const MAX_DEPTH = 5;
 
 /** Scrubs every string in a value. A secret key gives "[removed]". It stops at depth 5 and at a cycle. */

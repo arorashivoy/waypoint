@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { clearState, getState, setState } from '../app-state';
-import { log } from '../log';
+import { log, scrub } from '../log';
 import { cliBinary, cliSelfTest } from './cli';
 
 const KEY = 'cliDisabled';
@@ -33,10 +33,10 @@ export async function runCliSelfTestAtStart(test: () => Promise<Verdict> = cliSe
       log.info('claude cli self-test passed; cli mode is on');
       return { ran: true, ok: true };
     }
-    const reason = verdict.why.slice(0, 300);
+    const reason = scrub(verdict.why.slice(0, 300));
     await setState(KEY, { reason, at: new Date().toISOString() });
     log.error({ reason }, 'claude cli self-test failed; cli mode is off');
-    return { ran: true, ok: false, why: verdict.why };
+    return { ran: true, ok: false, why: reason };
   } catch (e) {
     // The database failed. Keep the worker alive and report a fail.
     log.error({ err: e }, 'claude cli self-test could not save its result');
