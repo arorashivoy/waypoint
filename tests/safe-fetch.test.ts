@@ -86,7 +86,7 @@ describe('safeFetch: DNS check', () => {
     ['192.168.0.1', true], ['224.0.0.1', true], ['240.0.0.1', true], ['255.255.255.255', true], ['8.8.8.8', false],
     ['::', true], ['::1', true], ['fc00::1', true], ['fdff::1', true], ['fe80::1', true], ['febf::1', true], ['ff02::1', true],
     ['::ffff:10.0.0.1', true], ['::ffff:8.8.8.8', false], ['64:ff9b::7f00:1', true], ['64:ff9b::808:808', false],
-    ['2002:7f00:1::', true], ['2606:4700::1', false], ['not an address', true],
+    ['2002:7f00:1::', true], ['192.0.0.9', true], ['192.0.2.1', true], ['198.18.0.1', true], ['198.19.255.255', true], ['198.20.0.1', false], ['198.51.100.7', true], ['203.0.113.7', true], ['2001:db8::1', true], ['::ffff:0:7f00:1', true], ['::ffff:0:808:808', false], ['2606:4700::1', false], ['not an address', true],
   ])('isRefusedAddress(%s) is %s', (address, refused) => {
     expect(isRefusedAddress(address as string)).toBe(refused);
   });
@@ -161,6 +161,12 @@ describe('safeFetch: limits', () => {
   it('accepts a body at the cap', async () => {
     fetchMock.mockResolvedValueOnce(new Response('a'.repeat(1000), { status: 200 }));
     expect((await (await safeFetch(URL_OK, { maxBytes: 1000 })).text()).length).toBe(1000);
+  });
+
+  it('stops a DNS lookup that does not end, at the time limit', async () => {
+    lookup.mockImplementationOnce(() => new Promise(() => {}));
+    await expect(safeFetch(URL_OK, { timeoutMs: 20 })).rejects.toThrow(/too long/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('gives a SafeFetchError when the board is slow', async () => {

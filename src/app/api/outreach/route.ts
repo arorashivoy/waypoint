@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { visibleTo } from '@/lib/job-scope';
 import { profileSummary } from '@/lib/user';
 import { handle, readJson } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
@@ -18,7 +19,7 @@ import { enqueueOutreach, type OutreachPayload } from '@/lib/outreach';
 export const POST = handle(async (req) => {
   const user = await requireUser(req);
   const body = await readJson(req);
-  const job = await db.job.findUniqueOrThrow({ where: { id: String(body.jobId ?? '') } });
+  const job = await db.job.findFirstOrThrow({ where: { id: String(body.jobId ?? ''), ...visibleTo(user.id) } });
   const app = await db.application.upsert({
     where: { userId_jobId: { userId: user.id, jobId: job.id } },
     update: {},

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { visibleTo } from '@/lib/job-scope';
 import { profileSummary } from '@/lib/user';
 import { handle, HttpError, readJson } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
@@ -81,7 +82,7 @@ async function detail(jobId: string, userId: string, analysing: string | null) {
 /** Opens a job. If the job has no analysis yet, it queues an analysis task. */
 export const GET = handle<{ params: { id: string } }>(async (req, { params }) => {
   const user = await requireUser(req);
-  await db.job.findUniqueOrThrow({ where: { id: params.id } });
+  await db.job.findFirstOrThrow({ where: { id: params.id, ...visibleTo(user.id) }, select: { id: true } });
   const analysing = (await needsAnalysis(params.id, user.id)) ? await queueJobAnalysis(user.id, params.id) : null;
   return NextResponse.json(await detail(params.id, user.id, analysing));
 });
@@ -95,12 +96,13 @@ export const POST = handle<{ params: { id: string } }>(async (req, { params }) =
   const user = await requireUser(req);
   const body = await readJson(req);
   if (body.reanalyse !== true) throw new HttpError(400, 'Send { "reanalyse": true } to analyse the job again.');
-  await db.job.findUniqueOrThrow({ where: { id: params.id } });
+  await db.job.findFirstOrThrow({ where: { id: params.id, ...visibleTo(user.id) }, select: { id: true } });
   return NextResponse.json({ taskId: await queueJobAnalysis(user.id, params.id, true) });
 });
 
 export const PATCH = handle<{ params: { id: string } }>(async (req, { params }) => {
   const user = await requireUser(req);
+  await db.job.findFirstOrThrow({ where: { id: params.id, ...visibleTo(user.id) }, select: { id: true } });
   const body = await readJson(req);
   const app = await db.application.upsert({
     where: { userId_jobId: { userId: user.id, jobId: params.id } },

@@ -6,6 +6,7 @@ import { draftsFromResume } from '@/lib/profile/resume-import';
 import { draftsFromRepo } from '@/lib/profile/github-import';
 import { userDir } from '@/lib/user-files';
 import { db } from '@/lib/db';
+import { visibleTo } from '@/lib/job-scope';
 import { analyseJob } from '@/lib/analysis';
 import { pruneCacheBySize } from '@/lib/cache';
 import { getState, setState } from '@/lib/app-state';
@@ -63,7 +64,7 @@ registerHandler('maintenance', z.unknown(), async () => {
 registerHandler('analysis', z.object({ jobId: z.string(), batch: z.string().optional(), force: z.boolean().optional() }), async ({ jobId, force }, task) => {
   const userId = task.userId;
   if (!userId) return { skipped: 'no-user' };
-  const job = await db.job.findUnique({ where: { id: jobId } });
+  const job = await db.job.findFirst({ where: { id: jobId, ...visibleTo(userId) } });
   if (!job) return { skipped: 'gone' };
   if (!(await credentialFor(userId))) {
     const status = await claudeStatus(userId);
@@ -100,7 +101,8 @@ registerHandler('refresh', z.object({ force: z.boolean() }), async ({ force }, t
       where: { externalId: j.externalId },
       // An undated listing keeps the date it was first seen rather than being
       // re-stamped today on every refresh.
-      update: { fetchedAt: new Date(), ...(j.postedAt && { postedAt: j.postedAt }), description: j.description, url: j.url, priority: j.priority },
+      // A board job is a feed job now, also when a user pasted it first.
+      update: { pastedBy: null, fetchedAt: new Date(), ...(j.postedAt && { postedAt: j.postedAt }), description: j.description, url: j.url, priority: j.priority },
       create: { ...j, postedAt: j.postedAt ?? new Date() },
     });
   }
@@ -114,7 +116,7 @@ registerHandler('refresh', z.object({ force: z.boolean() }), async ({ force }, t
   // "Live" counts the stored jobs in the countries of this user, as the job list does. A board that was
   // fetched less than 6 hours ago is skipped, so the jobs of this run alone can be 0.
   const mine = (await db.countryPref.findMany({ where: { userId, on: true }, select: { cc: true } })).map((p) => p.cc);
-  const total = await db.job.count({ where: { cc: { in: mine } } });
+  const total = await db.job.count({ where: { cc: { in: mine }, ...visibleTo(userId) } });
 
   return { added, total, report, analysing };
 });
@@ -136,7 +138,7 @@ registerHandler(
       return 'why' in built ? { skipped: built.why } : { built: true };
     }
     if (!jobId) throw new TaskFatal('The task has no job.');
-    const job = await db.job.findUnique({ where: { id: jobId } });
+    const job = await db.job.findFirst({ where: { id: jobId, ...visibleTo(userId) } });
     if (!job) throw new TaskFatal('The job is gone.');
     const app = await db.application.upsert({
       where: { userId_jobId: { userId, jobId } },

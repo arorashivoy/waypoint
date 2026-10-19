@@ -24,7 +24,10 @@ export const DELETE = handle(async (req) => {
   // deleteMany: a second request in a double submit finds no row and does not fail.
   // Each rate-limit key of a user ends with ":<user id>" (for example "resume-import:<id>").
   // The match on that ending cannot hit the key of another user: an ID is a cuid.
+  // A job that this user pasted goes too, unless another user has an application or an analysis for it. Then it becomes a feed job.
   await db.$transaction([
+    db.job.deleteMany({ where: { pastedBy: user.id, applications: { none: { userId: { not: user.id } } }, analyses: { none: { userId: { not: user.id } } } } }),
+    db.job.updateMany({ where: { pastedBy: user.id }, data: { pastedBy: null } }),
     db.rateLimit.deleteMany({ where: { key: { endsWith: `:${user.id}` } } }),
     db.user.deleteMany({ where: { id: user.id } }),
   ]);

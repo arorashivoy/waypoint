@@ -141,7 +141,7 @@ export async function pasteJob(userId: string, p: Parsed): Promise<PasteResult> 
   const row = await db.job.upsert({
     where: { externalId },
     update: { ...fields, ...(postedAt && { postedAt }), fetchedAt: new Date() },
-    create: { externalId, ...fields, priority: entry?.priority ?? priority, postedAt: postedAt ?? new Date() },
+    create: { externalId, ...fields, pastedBy: userId, priority: entry?.priority ?? priority, postedAt: postedAt ?? new Date() },
   });
 
   const scan = checkForInjection(`${job.role}\n${job.description}`);

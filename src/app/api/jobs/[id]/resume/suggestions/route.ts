@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { visibleTo } from '@/lib/job-scope';
 import { handle, HttpError, readJson } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
 import { decideSuggestion } from '@/lib/resume/suggest';
@@ -18,7 +19,7 @@ export const POST = handle<{ params: { id: string } }>(async (req, { params }) =
   const body = await readJson(req);
   const action = body.action;
   if (action === 'suggest') {
-    if (!(await db.job.findUnique({ where: { id: params.id }, select: { id: true } }))) throw new HttpError(404, 'Not found.');
+    if (!(await db.job.findFirst({ where: { id: params.id, ...visibleTo(user.id) }, select: { id: true } }))) throw new HttpError(404, 'Not found.');
     return NextResponse.json({ taskId: await enqueueCv(user.id, params.id, { action: 'suggest' }) });
   }
   if (action !== 'accept' && action !== 'reject') throw new HttpError(400, 'Send action "suggest", "accept" or "reject".');

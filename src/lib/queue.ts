@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { db } from './db';
+import { visibleTo } from './job-scope';
 import { makeJobViewer, MAX_ANALYSIS_TRIES } from './analysis';
 import { credentialFor } from './claude';
 import { enqueue } from './tasks/queue';
@@ -60,6 +61,7 @@ export async function queueAnalysis(userId: string, limit = 25) {
   const candidates = await db.job.findMany({
     where: {
       cc: { in: onCcs },
+      ...visibleTo(userId),
       analyses: { none: { userId, OR: [{ analysedAt: { not: null } }, { tries: { gte: MAX_ANALYSIS_TRIES } }] } },
     },
     orderBy: { postedAt: 'desc' },

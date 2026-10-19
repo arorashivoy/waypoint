@@ -61,6 +61,10 @@ function v6Bytes(address: string): number[] | null {
 function refusedV4([a, b, c, d]: number[]): boolean {
   return (
     a === 0 || // 0.0.0.0/8
+    (a === 192 && b === 0 && (c === 0 || c === 2)) || // 192.0.0.0/24 and 192.0.2.0/24
+    (a === 198 && (b === 18 || b === 19)) || // 198.18.0.0/15
+    (a === 198 && b === 51 && c === 100) || // 198.51.100.0/24
+    (a === 203 && b === 0 && c === 113) || // 203.0.113.0/24
     a === 10 ||
     (a === 100 && b >= 64 && b <= 127) || // CGNAT
     a === 127 ||
@@ -88,25 +92,36 @@ export function isRefusedAddress(address: string): boolean {
   const mapped = b.slice(0, 10).every((x) => x === 0) && b[10] === 255 && b[11] === 255;
   const compatible = b.slice(0, 12).every((x) => x === 0);
   const nat64 = b[0] === 0 && b[1] === 0x64 && b[2] === 0xff && b[3] === 0x9b && b.slice(4, 12).every((x) => x === 0);
-  if (mapped || compatible || nat64) return refusedV4(b.slice(12));
+  // IPv4-translated (::ffff:0:a.b.c.d) holds an IPv4 address too.
+  const translated = b.slice(0, 8).every((x) => x === 0) && b[8] === 255 && b[9] === 255 && b[10] === 0 && b[11] === 0;
+  if (mapped || compatible || nat64 || translated) return refusedV4(b.slice(12));
   if (b[0] === 0 && b[1] === 0x64 && b[2] === 0xff && b[3] === 0x9b) return true; // 64:ff9b:1::/48, local NAT64
   if (b[0] === 0x20 && b[1] === 0x02) return refusedV4(b.slice(2, 6)); // 6to4 holds an IPv4 address
   if (b[0] === 0x20 && b[1] === 0x01 && b[2] === 0 && b[3] === 0) return true; // Teredo
   if ((b[0] & 0xfe) === 0xfc) return true; // fc00::/7
   if (b[0] === 0xfe) return true; // fe00::/8: link-local fe80::/10 and site-local fec0::/10
   if (b[0] === 0xff) return true; // ff00::/8
+  if (b[0] === 0x20 && b[1] === 0x01 && b[2] === 0x0d && b[3] === 0xb8) return true; // 2001:db8::/32, documentation
   return false;
 }
 
 /** Throws unless the URL is an https URL on an allowed host and every address of the host is public. */
-async function check(url: URL): Promise<void> {
+async function check(url: URL, signal: AbortSignal): Promise<void> {
   if (url.protocol !== 'https:') throw new SafeFetchError('Waypoint only fetches https links.');
   if (url.username || url.password || url.port) throw new SafeFetchError('Waypoint does not fetch a link with a user name or a port.');
   if (!ALLOWED_HOSTS.includes(url.hostname.toLowerCase())) throw new SafeFetchError('Waypoint does not fetch from this host.');
   let found: { address: string }[];
   try {
-    found = await dns.lookup(url.hostname, { all: true, verbatim: true });
-  } catch {
+    // The lookup is under the same time limit as the fetch.
+    const aborted = new Promise<never>((_, reject) => {
+      const stop = () => reject(new SafeFetchError('The board took too long to answer.'));
+      if (signal.aborted) stop();
+      else signal.addEventListener('abort', stop, { once: true });
+    });
+    aborted.catch(() => {});
+    found = await Promise.race([dns.lookup(url.hostname, { all: true, verbatim: true }), aborted]);
+  } catch (e) {
+    if (e instanceof SafeFetchError) throw e;
     throw new SafeFetchError('Waypoint could not find the address of the board.');
   }
   if (!found.length || found.some((a) => isRefusedAddress(a.address))) {
@@ -154,7 +169,7 @@ export async function safeFetch(url: string, opts: { timeoutMs?: number; maxByte
     throw new SafeFetchError('Waypoint cannot read this link.');
   }
   for (let hops = 0; ; hops++) {
-    await check(current);
+    await check(current, signal);
     let res: Response;
     try {
       res = await fetch(current, { redirect: 'manual', signal, cache: 'no-store', headers: { accept: 'application/json', 'user-agent': 'Waypoint/0.1 (personal job search)' } });

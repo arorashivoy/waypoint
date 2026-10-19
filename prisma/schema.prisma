@@ -293,10 +293,15 @@ model Job {
   // without touching its match score.
   priority Boolean @default(false)
 
+  // The user who pasted this job and was first to add it. Only that user sees the row and gets an analysis of it.
+  // A refresh of the same job sets it to null, and then the job is a normal feed job.
+  pastedBy String?
+
   applications Application[]
   analyses     JobAnalysis[]
 
   @@index([cc, postedAt])
+  @@index([pastedBy])
 }
 
 model Application {

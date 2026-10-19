@@ -1,3 +1,4 @@
+import { visibleTo } from './job-scope';
 import { db } from './db';
 import { COUNTRIES, GLOBAL_SITES } from './countries';
 import { makeJobViewer } from './analysis';
@@ -38,7 +39,7 @@ export async function buildState(userId: string) {
     db.user.findUniqueOrThrow({ where: { id: userId } }),
     // Paused countries are dropped here rather than in the browser, so the cap
     // is spent on listings the user can actually see.
-    db.job.findMany({ where: { cc: { in: onCcs } }, orderBy: { postedAt: 'desc' }, take: 400 }),
+    db.job.findMany({ where: { cc: { in: onCcs }, ...visibleTo(userId) }, orderBy: { postedAt: 'desc' }, take: 400 }),
     db.application.findMany({ where: { userId }, include: { job: true, outreach: { orderBy: { createdAt: 'desc' } } } }),
     claudeStatus(userId),
     profileSummary(userId),
@@ -50,7 +51,7 @@ export async function buildState(userId: string) {
 
   const appByJob = new Map(apps.map((a) => [a.jobId, a]));
   const counts = new Map<string, number>();
-  for (const g of await db.job.groupBy({ by: ['cc'], _count: { _all: true } })) counts.set(g.cc, g._count._all);
+  for (const g of await db.job.groupBy({ by: ['cc'], where: visibleTo(userId), _count: { _all: true } })) counts.set(g.cc, g._count._all);
 
   const view = await makeJobViewer(userId);
   const jobCards = jobs.map((j) => {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { visibleTo } from '@/lib/job-scope';
 import { handle, HttpError } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
 import { CV_MESSAGE_MAX } from '@/lib/cv';
@@ -9,7 +10,7 @@ import { enqueueCv } from '@/lib/tasks/cv';
 export const dynamic = 'force-dynamic';
 
 async function start(userId: string, jobId: string, payload: { action: 'refine' | 'reset'; message?: string }) {
-  if (!(await db.job.findUnique({ where: { id: jobId }, select: { id: true } }))) throw new HttpError(404, 'Not found.');
+  if (!(await db.job.findFirst({ where: { id: jobId, ...visibleTo(userId) }, select: { id: true } }))) throw new HttpError(404, 'Not found.');
   return NextResponse.json({ taskId: await enqueueCv(userId, jobId, payload) });
 }
 
