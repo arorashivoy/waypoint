@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { db } from '../db';
 import { HttpError } from '../auth/http';
+import { checkOwnTex } from '../resume/own-tex';
 import { checkDoc, emptyDoc, type ClaimKind, type ClaimsDoc, type Depth, type ProjectSource, type Rel, type Surface } from './doc';
 
 /**
@@ -218,6 +219,12 @@ export async function saveProfile(userId: string, next: ClaimsDoc, note: string,
   const check = checkDoc(next);
   if (!check.doc) throw new ProfileError(check.errors);
   const doc = check.doc;
+  // The LaTeX of a project goes into the CV source as it is, so it passes the same checks as an own .tex file.
+  const texErrors = doc.targets.projects.flatMap((p, i) => {
+    const r = p.tex ? checkOwnTex(p.tex) : null;
+    return r && !r.ok ? r.reasons.map((reason) => `targets.projects[${i}].tex: ${reason}`) : [];
+  });
+  if (texErrors.length) throw new ProfileError(texErrors);
   try {
     const version = await db.$transaction(
       async (tx) => {
