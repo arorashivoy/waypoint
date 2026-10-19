@@ -75,7 +75,7 @@ function posted(v: unknown, scale = 1): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function shape(partial: Omit<RawJob, 'field' | 'level' | 'mode' | 'sponsor' | 'visa' | 'priority'> & { field?: string }): RawJob {
+export function shape(partial: Omit<RawJob, 'field' | 'level' | 'mode' | 'sponsor' | 'visa' | 'priority'> & { field?: string }): RawJob {
   const text = `${partial.role}\n${partial.description}`;
   return {
     ...partial,
@@ -95,74 +95,83 @@ function keepInCountries(jobs: RawJob[], ccs: string[]): RawJob[] {
 // --- Public ATS board APIs. All four publish a documented, unauthenticated
 // --- endpoint intended for exactly this: republishing a company's own openings.
 
+/** One posting of each board as a `RawJob`. A fetched board and a pasted link both call these, so the same job gets the same `externalId`. */
+export function greenhouseJob(j: any, company: string, token: string): RawJob {
+  const location = j.location?.name || '';
+  return shape({
+    externalId: `greenhouse:${token}:${j.id}`,
+    source: 'Greenhouse',
+    role: j.title,
+    company,
+    ...resolvePlace(location),
+    url: j.absolute_url,
+    description: stripHtml(decodeEntities(j.content || '')),
+    // first_published is the real posting date; updated_at moves whenever
+    // anyone edits the advert, which would make "posted this week" meaningless.
+    postedAt: posted(j.first_published || j.updated_at),
+  });
+}
+
+export function leverJob(j: any, company: string, token: string): RawJob {
+  const location = j.categories?.location || '';
+  return shape({
+    externalId: `lever:${token}:${j.id}`,
+    source: 'Lever',
+    role: j.text,
+    company,
+    ...resolvePlace(location),
+    url: j.hostedUrl,
+    description: stripHtml(j.descriptionPlain || j.description || ''),
+    postedAt: posted(j.createdAt),
+  });
+}
+
+export function ashbyJob(j: any, company: string, token: string): RawJob {
+  const location = j.location || '';
+  return shape({
+    externalId: `ashby:${token}:${j.id}`,
+    source: 'Ashby',
+    role: j.title,
+    company,
+    ...resolvePlace(location),
+    url: j.jobUrl,
+    description: stripHtml(j.descriptionHtml || j.descriptionPlain || ''),
+    postedAt: posted(j.publishedAt),
+  });
+}
+
+export function workableJob(j: any, company: string, token: string): RawJob {
+  const location = [j.city, j.country].filter(Boolean).join(', ');
+  return shape({
+    externalId: `workable:${token}:${j.shortcode}`,
+    source: 'Workable',
+    role: j.title,
+    company,
+    ...resolvePlace(location),
+    url: j.url || j.application_url,
+    description: stripHtml(j.description || ''),
+    postedAt: posted(j.published_on),
+  });
+}
+
 async function greenhouse(e: Board, feed: Feed): Promise<RawJob[]> {
   const data = await getJson(`https://boards-api.greenhouse.io/v1/boards/${e.token}/jobs?content=true`, feed);
-  return (data.jobs || []).map((j: any) => {
-    const location = j.location?.name || '';
-    return shape({
-      externalId: `greenhouse:${e.token}:${j.id}`,
-      source: 'Greenhouse',
-      role: j.title,
-      company: e.company,
-      ...resolvePlace(location),
-      url: j.absolute_url,
-      description: stripHtml(decodeEntities(j.content || '')),
-      // first_published is the real posting date; updated_at moves whenever
-      // anyone edits the advert, which would make "posted this week" meaningless.
-      postedAt: posted(j.first_published || j.updated_at),
-    });
-  });
+  return (data.jobs || []).map((j: any) => greenhouseJob(j, e.company, e.token));
 }
 
 async function lever(e: Board, feed: Feed): Promise<RawJob[]> {
   const data = await getJson(`https://api.lever.co/v0/postings/${e.token}?mode=json`, feed);
-  return (data || []).map((j: any) => {
-    const location = j.categories?.location || '';
-    return shape({
-      externalId: `lever:${e.token}:${j.id}`,
-      source: 'Lever',
-      role: j.text,
-      company: e.company,
-      ...resolvePlace(location),
-      url: j.hostedUrl,
-      description: stripHtml(j.descriptionPlain || j.description || ''),
-      postedAt: posted(j.createdAt),
-    });
-  });
+  return (data || []).map((j: any) => leverJob(j, e.company, e.token));
 }
 
 async function ashby(e: Board, feed: Feed): Promise<RawJob[]> {
   const data = await getJson(`https://api.ashbyhq.com/posting-api/job-board/${e.token}?includeCompensation=false`, feed);
-  return (data.jobs || []).map((j: any) => {
-    const location = j.location || '';
-    return shape({
-      externalId: `ashby:${e.token}:${j.id}`,
-      source: 'Ashby',
-      role: j.title,
-      company: e.company,
-      ...resolvePlace(location),
-      url: j.jobUrl,
-      description: stripHtml(j.descriptionHtml || j.descriptionPlain || ''),
-      postedAt: posted(j.publishedAt),
-    });
-  });
+  return (data.jobs || []).map((j: any) => ashbyJob(j, e.company, e.token));
 }
 
 async function workable(e: Board, feed: Feed): Promise<RawJob[]> {
   const data = await getJson(`https://apply.workable.com/api/v1/widget/accounts/${e.token}?details=true`, feed);
-  return (data.jobs || []).map((j: any) => {
-    const location = [j.city, j.country].filter(Boolean).join(', ');
-    return shape({
-      externalId: `workable:${e.token}:${j.shortcode}`,
-      source: 'Workable',
-      role: j.title,
-      company: e.company,
-      ...resolvePlace(location),
-      url: j.url || j.application_url,
-      description: stripHtml(j.description || ''),
-      postedAt: posted(j.published_on),
-    });
-  });
+  return (data.jobs || []).map((j: any) => workableJob(j, e.company, e.token));
 }
 
 // --- Large employers' own careers sites.
