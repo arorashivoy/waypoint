@@ -91,7 +91,8 @@ For the first deploy of the `multi-user` branch on an always-on host (units, wor
 |---|---|---|
 | Node 18+ | `node -v` | nodejs.org or NodeSource (on a Raspberry Pi use **64-bit** Pi OS) |
 | Claude Code CLI | `claude --version` | https://claude.com/claude-code |
-| A LaTeX engine for tailored CVs | `which tectonic` | `brew install tectonic`, or the aarch64/x86_64 release binary on Linux |
+| `pdflatex` for the template CV (`tectonic` alone is not enough) | `which pdflatex` | Linux: `sudo apt install texlive-latex-base texlive-latex-recommended lmodern`. macOS: `brew install --cask mactex-no-gui` |
+| `pdftotext` and `gs` for PDF import | `which pdftotext gs` | Linux: `sudo apt install poppler-utils ghostscript`. macOS: `brew install poppler ghostscript`. After a Ghostscript upgrade, run `npx vitest run tests/profile-extract.test.ts` and check that it passes before the next deploy. |
 | cloudflared (only for remote access) | `which cloudflared` | `brew install cloudflared` / the Linux package |
 
 **Claude auth.** Either the user runs `claude login` on this machine, or **[USER]** they run

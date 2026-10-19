@@ -57,8 +57,26 @@ use `scripts/deploy.sh` for each update (step 10).
    Waypoint reads only the pages that pass this check. If `gs` is missing or fails, every PDF import
    stops with "Waypoint could not check this PDF for hidden text. Export it again as a normal PDF, or
    upload the .tex source."
-   To install the packages, run `sudo apt install poppler-utils ghostscript`. Waypoint was tested with
-   poppler-utils 22.12 and Ghostscript 10.00 (the Debian 12 packages).
+   Members who use the built-in template, or an own `.tex` file, also need LaTeX. The template and an
+   own `.tex` compile only with `pdflatex` or `xelatex`. `tectonic` alone is not enough: without
+   `pdflatex` or `xelatex`, the base résumé of every member fails. The template needs `parskip`
+   (from `texlive-latex-recommended`) and the `lmodern` font. Without `lmodern`, the text of the PDF
+   loses the letters fi, ff and fl.
+   To install the packages, run:
+
+   ```bash
+   sudo apt install poppler-utils ghostscript texlive-latex-base texlive-latex-recommended lmodern
+   ```
+
+   `texlive-fonts-recommended` is not required. Waypoint was tested with poppler-utils 22.12 and
+   Ghostscript 10.00 (the Debian 12 packages).
+
+   After any Ghostscript upgrade, run `npx vitest run tests/profile-extract.test.ts` and check that it
+   passes before the next deploy. A newer Ghostscript can write ligatures and accents in another
+   form, and then the PDF import drops those words.
+
+   The migrations include `6_pasted_by`, which adds the column that keeps a pasted job with the user
+   who pasted it. `npx prisma migrate deploy` applies it. Old jobs stay shared.
 
    ```bash
    npm ci

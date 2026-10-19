@@ -498,7 +498,11 @@ Nothing is generated: every line on the PDF is one you wrote, either in the base
 entry, so the CV cannot say anything you have not.
 
 Producing the PDF is best-effort. It needs a LaTeX engine (tectonic, pdflatex, xelatex or lualatex,
-auto-detected). If the section cannot be mapped to the ledger or the compile fails, the base
+auto-detected) for the `RESUME_TEX` of the admin. The built-in template and an own `.tex` of a member
+compile only with `pdflatex` or `xelatex`; `tectonic` alone is not enough. On Debian, install
+`texlive-latex-base`, `texlive-latex-recommended` and `lmodern`, with `poppler-utils` and `ghostscript`
+for the PDF import. After a Ghostscript upgrade, run `npx vitest run tests/profile-extract.test.ts`
+and check that it passes before the next deploy. If the section cannot be mapped to the ledger or the compile fails, the base
 `RESUME_PDF` goes out unchanged and the UI says why. Output is keyed on a hash of the rendered
 LaTeX, so an unchanged order is a cache hit. `GET /api/resume/<applicationId>` serves the PDF for
 one application, and `Application.cvUrl` / `cvPath` / `cvLead` record which version a given company
@@ -613,7 +617,7 @@ Copy `.env.example` to `.env`. Everything has a working default except the optio
 | `RESUME_PDF` | *(unset)* | Base CV sent when tailoring is unavailable. With neither this nor `RESUME_TEX`, CV features are off. `~` is expanded. |
 | `RESUME_TEX` | *(unset)* | LaTeX source of the same CV. Turns on per-job tailoring. See [Tailored CVs](#tailored-cvs). |
 | `RESUME_PUBLIC_URL` | *(unset)* | A link a recruiter can open. The referral message offers a link only when this or Drive is set. |
-| `RESUME_ENGINE` | auto | `tectonic`, `pdflatex`, `xelatex` or `lualatex`. |
+| `RESUME_ENGINE` | auto | `tectonic`, `pdflatex`, `xelatex` or `lualatex`. It applies only to the `RESUME_TEX` of the admin. The template and an own `.tex` use `pdflatex` or `xelatex`. |
 | `RESUME_MAX_PROJECTS` | *(unset)* | How many projects the tailored CV carries, picked from `claims.yml`. Unset keeps the base CV's count. |
 | `RESUME_TIMEOUT_MS` | `180000` | Per-compile timeout. Tailored PDFs go to `data/users/<userId>/resumes/`. |
 | `CLAIMS_FILE` | `data/profile/claims.yml` | Path to the claims ledger. |
