@@ -15,6 +15,9 @@
     "mustMet": [
       "cpp",
       "multithreading"
+    ],
+    "levelAlt": [
+      "Entry"
     ]
   }
 }

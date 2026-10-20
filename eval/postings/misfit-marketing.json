@@ -11,6 +11,10 @@
     "blockers": [],
     "noFakeBlockers": true,
     "legitimacy": [],
-    "injection": false
+    "injection": false,
+    "allowedBlockers": [
+      "location",
+      "language"
+    ]
   }
 }

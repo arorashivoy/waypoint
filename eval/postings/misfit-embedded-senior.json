@@ -11,6 +11,9 @@
     "blockers": [],
     "noFakeBlockers": true,
     "legitimacy": [],
-    "injection": false
+    "injection": false,
+    "allowedBlockers": [
+      "seniority"
+    ]
   }
 }

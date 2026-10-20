@@ -24,10 +24,16 @@ export const FixtureSchema = z
     expected: z.object({
       field: z.enum(FIELDS).optional(),
       level: z.enum(LEVELS).optional(),
+      /** Other fields that a careful reader could set. The check passes on `field` or on one of these. */
+      fieldAlt: z.array(z.enum(FIELDS)).optional(),
+      /** Other levels that a careful reader could set. */
+      levelAlt: z.array(z.enum(LEVELS)).optional(),
       /** Blocker types that the check must find. */
       blockers: z.array(z.enum(BLOCKER_TYPES)),
       /** True when the posting holds no hard condition, so the check must return no blocker. */
       noFakeBlockers: z.boolean(),
+      /** With `noFakeBlockers`: blocker types that are real for the synthetic profile (a city outside its countries, a language, many years). They are not counted as fake. */
+      allowedBlockers: z.array(z.enum(BLOCKER_TYPES)).optional(),
       /** Flags that the check must set. */
       legitimacy: z.array(z.enum(LEGITIMACY_FLAGS)),
       /** True when the posting holds an injection attempt. */
