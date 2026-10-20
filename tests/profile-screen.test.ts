@@ -1,7 +1,7 @@
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
-import { FIELDS } from '@/components/profile/fields';
+import { describe, expect, it, vi } from 'vitest';
+import { errorsFor, FIELDS, fromForm, summaryOf, targetOptions, toForm } from '@/components/profile/fields';
 import { ITEM_KINDS } from '@/lib/profile/apply';
 import {
   actionName,
@@ -12,6 +12,12 @@ import {
   factLabel,
   factRows,
   FILE_ACCEPT,
+  BATCH_PAGE,
+  isBlocked,
+  makeGuard,
+  mergeRows,
+  readyIds,
+  uniqueNames,
   PROFILE_TABS,
   readTab,
   tabQuery,
@@ -95,7 +101,7 @@ describe('the labels of draft facts', () => {
 
   it('shows no raw key', () => {
     const rows = factRows({ repoUrl: 'https://github.com/a/b', higherIsBetter: true, scaleMax: 10, empty: '', none: null, list: [] });
-    expect(rows.map((r) => r.label)).toEqual(['Repository', 'A higher value is better', 'Top of the scale']);
+    expect(rows.map((r) => r.label)).toEqual(['Repository', 'A higher value is better', 'Highest possible value']);
     expect(rows[1].text).toBe('Yes');
     expect(factLabel('someNewKey')).toBe('Some new key');
   });
@@ -143,5 +149,94 @@ describe('the empty states', () => {
     const html = renderToStaticMarkup(h(ExperienceTab, { doc: empty, levels: [], onSaved: noop, setToast: noop }));
     expect(html).toContain('No positions yet.');
     expect(html).toContain('Add a position');
+  });
+});
+
+describe('the accept rules for drafts', () => {
+  const d = (id: string, warnings: string[] = [], warningsApproved = false) => ({ id, warnings, warningsApproved });
+
+  it('never puts a draft with an unchecked warning into a bulk accept', () => {
+    const list = [d('a'), d('b', ['hidden text']), d('c', ['hidden text'], true), d('d', [], true)];
+    expect(list.filter(isBlocked).map((x) => x.id)).toEqual(['b']);
+    expect(readyIds(list)).toEqual(['a', 'c', 'd']);
+    expect(readyIds([d('x', ['w'])])).toEqual([]);
+  });
+
+  it('runs one action at a time: a second call while one runs does nothing', async () => {
+    const guard = makeGuard();
+    let release = () => {};
+    const first = vi.fn(() => new Promise<string>((r) => { release = () => r('one'); }));
+    const second = vi.fn(async () => 'two');
+    const a = guard.run(first);
+    expect(guard.busy()).toBe(true);
+    expect(await guard.run(second)).toBeUndefined();
+    expect(second).not.toHaveBeenCalled();
+    release();
+    expect(await a).toBe('one');
+    expect(guard.busy()).toBe(false);
+    expect(await guard.run(second)).toBe('two');
+  });
+
+  it('frees the guard when an action fails', async () => {
+    const guard = makeGuard();
+    await expect(guard.run(async () => { throw new Error('no'); })).rejects.toThrow('no');
+    expect(guard.busy()).toBe(false);
+  });
+
+  it('gives each draft with the same title its own button name', () => {
+    const names = uniqueNames(['Route planner', 'Java', 'Route planner']);
+    expect(names).toEqual(['Route planner', 'Java', 'Route planner (2)']);
+    const all = names.flatMap((n) => ['Accept', 'Edit', 'Reject'].map((v) => actionName(v, n)));
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it('shows 10 drafts of a batch first', () => {
+    expect(BATCH_PAGE).toBe(10);
+  });
+});
+
+describe('the merge view', () => {
+  it('shows only the fields that differ, and names the others', () => {
+    const r = mergeRows(
+      { id: 'a', title: 'Route planner', description: 'Old', bullets: ['x'] },
+      { id: 'a', title: 'Route planner', description: 'New', bullets: ['x'], url: 'https://x.test' },
+    );
+    expect(r.same).toEqual(['ID', 'Title', 'Bullets']);
+    expect(r.changed.map((c) => [c.label, c.now, c.draft])).toEqual([
+      ['Description', 'Old', 'New'],
+      ['Link', 'Nothing', 'https://x.test'],
+    ]);
+  });
+});
+
+describe('the form logic of the editor', () => {
+  it('keeps the ID of a bullet when its line stays, and changes only a changed line', () => {
+    const pos = doc.targets.positions[0];
+    const withBullets = { ...pos, bullets: [{ id: 'b1', match: 'Cut latency', text: 'Cut latency by 40%.' }, { id: 'b2', match: 'Led', text: 'Led 3 people.' }] };
+    const form = toForm('position', withBullets);
+    expect(form.bullets).toBe('Cut latency by 40%.\nLed 3 people.');
+    const next = fromForm('position', { ...form, bullets: 'Cut latency by 40%.\nLed 4 people.' }, withBullets, { evidence: [], listed: [] }) as any;
+    expect(next.bullets.map((b: any) => b.id)).toEqual(['b1', 'b2']);
+    expect(next.bullets[1].text).toBe('Led 4 people.');
+  });
+
+  it('turns an empty optional field into no field, and a number into a number', () => {
+    const form = toForm('claim', null);
+    const item = fromForm('claim', { ...form, label: 'GPA', kind: 'metric', value: '1.8', scaleMax: '5' }, null, { evidence: [], listed: [] }) as any;
+    expect(item.slug).toBe('gpa');
+    expect(item.value).toBe(1.8);
+    expect(item.scaleMax).toBe(5);
+  });
+
+  it('reports a problem by field, and the first-save form of a position has problems', () => {
+    const item = fromForm('position', toForm('position', null), null, { evidence: [], listed: [] });
+    const e = errorsFor(doc, 'position', item, null);
+    expect(e.count).toBeGreaterThan(0);
+    expect(Object.keys(e.byField)).toEqual(expect.arrayContaining(['title']));
+  });
+
+  it('names the items and lists the targets of evidence', () => {
+    expect(summaryOf('position', doc.targets.positions[0]).title).toBe('Backend Engineer · Kestrel Pay');
+    expect(targetOptions(doc).map((t) => t.value)).toEqual(['position:kestrel', 'position:norrvik', 'education:tu', 'project:route-planner']);
   });
 });

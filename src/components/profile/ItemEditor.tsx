@@ -5,8 +5,9 @@ import { DEPTHS, SURFACES, type Claim, type ClaimsDoc, type Depth, type Evidence
 import type { Item, ItemKind } from '@/lib/profile/apply';
 import { ApiError, post, put } from '../api';
 import { STALE_PROFILE_MESSAGE } from '@/lib/profile/stale';
-import { Button, Field } from '../ui';
+import { Button, Field, Fold } from '../ui';
 import Problems, { fieldProblem } from './Problems';
+import { countOf } from './model';
 import { useProfileVersion } from './version';
 import { errorsFor, FIELDS, fromForm, targetOptions, toForm } from './fields';
 
@@ -103,7 +104,8 @@ export default function ItemEditor({ kind, doc, itemKey: key, item, mode, onDone
       {kind === 'claim' && (
         <>
           <div className="pf-wide pf-group">
-            <span className="pf-group-title">Evidence</span>
+            <Fold title="Evidence" status={countOf(evidence.length, 'proof', 'proofs')} defaultOpen={evidence.length === 0}>
+            <div className="pf-group">
             {evidence.map((e, i) => (
               <div key={i} className="pf-evidence">
                 <div className="pf-wide">
@@ -134,10 +136,12 @@ export default function ItemEditor({ kind, doc, itemKey: key, item, mode, onDone
               </div>
             ))}
             <div><Button onClick={() => setEvidence((list) => [...list, { target: '', depth: 'used' }])}>Add evidence</Button></div>
+            </div>
+            </Fold>
             <Problems list={tried || evidence.length > 0 ? errs.byField.evidence : undefined} />
           </div>
           <fieldset className="pf-wide pf-group">
-            <legend className="pf-group-title">Where it shows</legend>
+            <legend className="pf-group-title">Seen in</legend>
             <div className="pf-surfaces">
               {SURFACES.map((s) => (
                 <label key={s} className="pf-check">

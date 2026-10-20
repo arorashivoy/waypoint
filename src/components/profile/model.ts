@@ -79,9 +79,9 @@ export const FACT_LABELS: Record<string, string> = {
   kind: 'Kind',
   links: 'Related claims',
   evidence: 'Evidence',
-  mentions: 'Where it shows',
+  mentions: 'Seen in',
   value: 'Value',
-  scaleMax: 'Top of the scale',
+  scaleMax: 'Highest possible value',
   higherIsBetter: 'A higher value is better',
 };
 
@@ -116,3 +116,60 @@ export function factRows(value: unknown): { key: string; label: string; text: st
 export function claimEmpty(total: number, query: string): { cause: string; search: boolean } {
   return query.trim() && total > 0 ? { cause: emptySearchText(query), search: true } : { cause: 'No claims yet.', search: false };
 }
+
+/** A draft as far as the accept rules care. */
+export type DraftState = { id: string; warnings: string[]; warningsApproved: boolean };
+
+/** A draft with a warning that the user has not checked. It never goes into an accept. */
+export const isBlocked = (d: DraftState) => d.warnings.length > 0 && !d.warningsApproved;
+
+/** The IDs that a bulk accept may send: no draft with an unchecked warning. */
+export const readyIds = (list: DraftState[]): string[] => list.filter((d) => !isBlocked(d)).map((d) => d.id);
+
+/** A batch shows this many drafts first. */
+export const BATCH_PAGE = 10;
+
+/** One run at a time. A second call while the first runs does nothing. It reads a plain flag, so two quick clicks cannot both start. */
+export function makeGuard() {
+  let running = false;
+  return {
+    busy: () => running,
+    async run<T>(fn: () => Promise<T>): Promise<T | undefined> {
+      if (running) return undefined;
+      running = true;
+      try {
+        return await fn();
+      } finally {
+        running = false;
+      }
+    },
+  };
+}
+
+/** Titles that are unique: the second "Route planner" becomes "Route planner (2)". For the names of buttons. */
+export function uniqueNames(titles: string[]): string[] {
+  const seen = new Map<string, number>();
+  return titles.map((t) => {
+    const n = (seen.get(t) ?? 0) + 1;
+    seen.set(t, n);
+    return n === 1 ? t : `${t} (${n})`;
+  });
+}
+
+/** What a draft that merges into an item changes: the fields that differ, and the names of those that stay. */
+export function mergeRows(existing: unknown, data: unknown): { changed: { key: string; label: string; now: string; draft: string }[]; same: string[] } {
+  const now = new Map(factRows(existing).map((r) => [r.key, r]));
+  const draft = new Map(factRows(data).map((r) => [r.key, r]));
+  const keys = [...new Set([...draft.keys(), ...now.keys()])];
+  const changed: { key: string; label: string; now: string; draft: string }[] = [];
+  const same: string[] = [];
+  for (const key of keys) {
+    const a = now.get(key);
+    const b = draft.get(key);
+    if (a && b && a.text === b.text) same.push(a.label);
+    else changed.push({ key, label: (a ?? b)!.label, now: a?.text ?? 'Nothing', draft: b?.text ?? 'Nothing' });
+  }
+  return { changed, same };
+}
+
+export const HISTORY_TITLE = 'Profile history';

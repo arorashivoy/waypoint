@@ -43,7 +43,7 @@ export const FIELDS: Record<ItemKind, FieldSpec[]> = {
     { key: 'kind', label: 'Kind', kind: 'select', options: CLAIM_KINDS },
     { key: 'aliases', label: 'Other names', kind: 'lines', hint: 'One on each line.' },
     { key: 'value', label: 'Value', kind: 'number', hint: 'Only for a metric or a credential.' },
-    { key: 'scaleMax', label: 'Top of the scale', kind: 'number' },
+    { key: 'scaleMax', label: 'Highest possible value', kind: 'number' },
     { key: 'higherIsBetter', label: 'A higher value is better', kind: 'bool' },
     { key: 'slug', label: 'ID', kind: 'text', hint: 'Lowercase words with hyphens.' },
   ],

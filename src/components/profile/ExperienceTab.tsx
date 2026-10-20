@@ -49,8 +49,8 @@ export default function ExperienceTab({ doc, levels, onSaved, setToast, onGoto }
   };
   return (
     <div className="pf-stack">
-      <section className="glass ui-panel pf-meta" aria-label="Name and headline">
-        <h2 className="ui-panel-title">Name and headline</h2>
+      <section className="glass ui-panel pf-meta" aria-labelledby="pf-meta-h">
+        <h2 id="pf-meta-h" className="ui-panel-title">Name and headline</h2>
         <div className="pf-fields">
           <Field label="Name">{(c) => <input {...c} type="text" value={name} onChange={(e) => setName(e.target.value)} />}</Field>
           <Field label="Headline" hint="For example: Backend engineer, Java and Kafka">
@@ -91,6 +91,11 @@ export default function ExperienceTab({ doc, levels, onSaved, setToast, onGoto }
           You cannot edit it. Change your positions to change it.
         </p>
       </Fold>
+      {onGoto && (
+        <p className="pf-note">
+          Made a mistake? <Button variant="link" onClick={() => onGoto('resume')}>See the profile history</Button>
+        </p>
+      )}
     </div>
   );
 }

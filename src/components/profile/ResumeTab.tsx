@@ -6,7 +6,7 @@ import { Button, ErrorNote, Fold, Skeleton } from '../ui';
 import FileButton from './FileButton';
 import HistoryPanel from './HistoryPanel';
 import Problems from './Problems';
-import { countOf, FILE_ACCEPT } from './model';
+import { countOf, FILE_ACCEPT, HISTORY_TITLE } from './model';
 
 type Props = { state: any; version: number; changed: () => Promise<void>; setToast: (s: string) => void };
 type Source = { mode: 'template' | 'own-tex'; hasOwnTex: boolean };
@@ -60,13 +60,19 @@ export default function ResumeTab({ state, version, changed, setToast }: Props) 
 
   return (
     <div className="pf-stack">
-      <section className="glass ui-panel" aria-label="Résumé source">
-        <h2 className="ui-panel-title">Résumé source</h2>
+      <section className="glass ui-panel" aria-labelledby="pf-src-h">
+        <h2 id="pf-src-h" className="ui-panel-title">Résumé source</h2>
         {error && !source ? (
           <ErrorNote what="Waypoint could not load your résumé source." fix={`${error.replace(/\.?$/, '.')} Check your connection, then try again.`} onRetry={() => { load().catch((e) => setError((e as Error).message)); }} />
         ) : (
           <div className="pf-source">
             <div className="pf-source-text">
+              {source && (
+                <ul className="pf-choice" aria-label="Résumé source in use">
+                  <li data-on={source.mode === 'template'}>Classic template</li>
+                  <li data-on={source.mode === 'own-tex'}>Your own .tex file</li>
+                </ul>
+              )}
               {text ? (
                 <>
                   <strong>{text.title}</strong>
@@ -111,8 +117,9 @@ export default function ResumeTab({ state, version, changed, setToast }: Props) 
         )}
       </Fold>
 
-      <section className="glass ui-panel" aria-label="History">
-        <h2 className="ui-panel-title">History</h2>
+      <section id="pf-history" className="glass ui-panel" aria-labelledby="pf-hist-h">
+        <h2 id="pf-hist-h" className="ui-panel-title">{HISTORY_TITLE}</h2>
+        <p className="pf-note">Every change to your profile, with Restore. Use it to undo an accepted draft or a save.</p>
         <HistoryPanel version={version} changed={changed} setToast={setToast} />
       </section>
     </div>

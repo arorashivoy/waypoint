@@ -5,7 +5,7 @@ import { Field, Fold } from '../ui';
 import FileButton from './FileButton';
 import { countOf, emptySearchText, FILE_ACCEPT } from './model';
 
-export default function LinkedInPanel({ state, refresh, setToast }: { state: any; refresh: () => Promise<any>; setToast: (s: string) => void }) {
+export default function LinkedInPanel({ state, refresh, setToast, folded }: { state: any; refresh: () => Promise<any>; setToast: (s: string) => void; /** Wraps the panel in a closed fold, when drafts wait. */ folded?: boolean }) {
   const [query, setQuery] = useState('');
 
   const upload = async (file: File) => {
@@ -51,10 +51,10 @@ export default function LinkedInPanel({ state, refresh, setToast }: { state: any
       ]
     : [];
 
-  return (
+  const body = (
     <div className="pf-stack">
-      <section className="glass ui-panel" aria-label="LinkedIn">
-        <h2 className="ui-panel-title">LinkedIn</h2>
+      <section className="glass ui-panel" aria-labelledby="pf-li-h">
+        <h2 id="pf-li-h" className="ui-panel-title">LinkedIn</h2>
         <div className="pf-source">
           <div className="pf-source-text">
             {lastImport ? (
@@ -142,5 +142,10 @@ export default function LinkedInPanel({ state, refresh, setToast }: { state: any
         </div>
       </Fold>
     </div>
+  );
+  return folded ? (
+    <Fold title="LinkedIn and connections" status={lastImport ? `Imported on ${importedAt}` : 'No export yet'}>{body}</Fold>
+  ) : (
+    body
   );
 }

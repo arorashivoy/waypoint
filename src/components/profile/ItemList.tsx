@@ -37,7 +37,7 @@ export default function ItemList({ kind, title, noun, addLabel = `Add a ${noun}`
   const remove = async (key: string) => {
     try {
       onSaved(await del(`/api/profile/items/${kind}/${encodeURIComponent(key)}?version=${version}`));
-      setToast('Removed. The history in the Résumé tab can put it back.');
+      setToast('Removed. The profile history in the Résumé tab can put it back.');
     } catch (e) {
       onStale(e);
       setToast((e as Error).message);
@@ -50,9 +50,9 @@ export default function ItemList({ kind, title, noun, addLabel = `Add a ${noun}`
   const close = () => setEditing(null);
 
   return (
-    <section className="pf-section" aria-label={title}>
+    <section className="pf-section" aria-labelledby={`${kind}-h`}>
       <div className="pf-head">
-        <h2>{title}</h2>
+        <h2 id={`${kind}-h`}>{title}</h2>
         {items.length > 0 && <Button variant={primary ? 'go' : 'plain'} onClick={() => setEditing('+new')}>{addLabel}</Button>}
       </div>
 

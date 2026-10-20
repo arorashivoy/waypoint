@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { STALE_PROFILE_MESSAGE } from '@/lib/profile/stale';
 import { ApiError } from './api';
 import { useProfile, type ProfileData } from './data';
-import { Badge, ErrorNote, Skeleton, Tabs } from './ui';
+import { Badge, Button, ErrorNote, Skeleton, Tabs } from './ui';
 import { PROFILE_TABS, readTab, tabQuery, type ProfileTab } from './profile/model';
 import { ProfileVersionContext } from './profile/version';
 import ExperienceTab from './profile/ExperienceTab';
@@ -29,6 +29,8 @@ function useSideList() {
 export default function ProfileScreen({ state: me, refresh, setToast }: { state: any; refresh: () => Promise<any>; setToast: (s: string) => void }) {
   const [tab, setTab] = useState<ProfileTab>('experience');
   const side = useSideList();
+  // After a save or an accept, a quiet line points to the profile history, where the user can undo it.
+  const [changedNote, setChangedNote] = useState(false);
   const { data, error, mutate } = useProfile();
   // The tabs read the summary, the contacts and the last import from the same state as before.
   const state = useMemo(() => (data ? { ...me, ...data.view } : me), [me, data]);
@@ -46,8 +48,15 @@ export default function ProfileScreen({ state: me, refresh, setToast }: { state:
   }, [tab, side, data]);
   const choose = useCallback((next: ProfileTab) => {
     setTab(next);
+    if (next === 'resume') setChangedNote(false);
     window.history.replaceState(window.history.state, '', `${window.location.pathname}${tabQuery(next)}`);
   }, []);
+
+  // The profile history is the last panel of the Résumé tab: open the tab and bring the panel into view.
+  const goto = useCallback((next: ProfileTab) => {
+    choose(next);
+    if (next === 'resume') setTimeout(() => document.getElementById('pf-history')?.scrollIntoView({ block: 'start' }), 60);
+  }, [choose]);
 
   /** After a change: the new profile, and the other screens, because job scores read the profile. */
   const changed = useCallback(async () => {
@@ -55,6 +64,7 @@ export default function ProfileScreen({ state: me, refresh, setToast }: { state:
   }, [refresh]);
   // The reply of a save has the new version. Take it at once, so the next save does not send the old one.
   const onSaved = useCallback((reply?: { doc?: ProfileData['doc']; version?: number }) => {
+    setChangedNote(true);
     if (reply?.doc && typeof reply.version === 'number') {
       const { doc, version } = reply;
       mutate((d?: ProfileData) => d && { ...d, doc, version }, { revalidate: false });
@@ -82,10 +92,10 @@ export default function ProfileScreen({ state: me, refresh, setToast }: { state:
   const panel = (id: ProfileTab) => {
     if (!data || id !== tab) return null;
     switch (id) {
-      case 'experience': return <ExperienceTab doc={data.doc} levels={me?.levels} onSaved={onSaved} setToast={setToast} onGoto={choose} />;
-      case 'projects': return <ProjectsTab doc={data.doc} onSaved={onSaved} setToast={setToast} onGoto={choose} />;
+      case 'experience': return <ExperienceTab doc={data.doc} levels={me?.levels} onSaved={onSaved} setToast={setToast} onGoto={goto} />;
+      case 'projects': return <ProjectsTab doc={data.doc} onSaved={onSaved} setToast={setToast} onGoto={goto} />;
       case 'claims': return <ClaimsTab doc={data.doc} warnings={data.warnings} onSaved={onSaved} setToast={setToast} />;
-      case 'imports': return <ImportsTab doc={data.doc} version={data.version} state={state} changed={changed} setToast={setToast} onCount={onCount} />;
+      case 'imports': return <ImportsTab doc={data.doc} version={data.version} state={state} changed={changed} setToast={setToast} onCount={onCount} drafts={drafts} onAccepted={() => setChangedNote(true)} />;
       case 'resume': return <ResumeTab state={state} version={data.version} changed={changed} setToast={setToast} />;
     }
   };
@@ -104,6 +114,12 @@ export default function ProfileScreen({ state: me, refresh, setToast }: { state:
             <Skeleton rows={4} />
           )
         ) : (
+          <>
+          {changedNote && tab !== 'resume' && (
+            <p className="pf-undo">
+              Profile changed. Made a mistake? <Button variant="link" onClick={() => goto('resume')}>See the profile history</Button>
+            </p>
+          )}
           <Tabs
             label="Profile sections"
             orientation={side ? 'vertical' : 'horizontal'}
@@ -123,6 +139,7 @@ export default function ProfileScreen({ state: me, refresh, setToast }: { state:
               panel: panel(t.id),
             }))}
           />
+          </>
         )}
       </div>
     </ProfileVersionContext.Provider>
