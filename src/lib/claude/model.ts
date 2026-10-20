@@ -9,7 +9,7 @@
  * one new call for each cached prompt. Change it only after `npm run eval`
  * passes on the new model.
  */
-export const MODEL = 'claude-sonnet-5';
+export const MODEL = 'claude-sonnet-5-5';
 
 export class ModelError extends Error {}
 
