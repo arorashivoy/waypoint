@@ -542,6 +542,41 @@ describe('GlyphIndex', () => {
     const bad = new GlyphIndex(other, { shows: [true, false, true, true], dup: other.map(() => false) });
     expect(bad.lineUp(box('fine', 15), { shown: true })).toBe(false);
   });
+  it('takes a glyph with no advance as a ligature part after a plain f (Ghostscript 10.02 form)', () => {
+    const fi = [g('f', 0), g('i', 5, { len: 0.05, lead: 0 }), g('n', 5), g('e', 10)];
+    const ok = new GlyphIndex(fi, { shows: [true, false, true, true], dup: fi.map(() => false) });
+    expect(ok.lineUp(box('fine', 15), { shown: true })).toBe(true);
+    expect(ok.charsShown(box('fine', 15))).toEqual([true, true, true, true]);
+    // ffi: the wide f and one part with the text U+00CF.
+    const ffi = [g('o', 0), g('f', 5, { len: 8 }), g('\u00cf', 13, { len: 0.05, lead: 1 }), g('c', 13), g('e', 18)];
+    const wide = new GlyphIndex(ffi, { shows: [true, true, false, true, true], dup: ffi.map(() => false) });
+    expect(wide.lineUp(box('office', 23), { shown: true })).toBe(true);
+    expect(wide.charsShown(box('office', 23))).toEqual(Array(6).fill(true));
+    // Only after an f, only the letters of a ligature, and not when the f does not show.
+    const other = [g('x', 0), g('i', 5, { len: 0.05, lead: 0 }), g('n', 5), g('e', 10)];
+    expect(new GlyphIndex(other, { shows: [true, false, true, true], dup: other.map(() => false) }).lineUp(box('fine', 15), { shown: true })).toBe(false);
+    const odd = [g('f', 0), g('z', 5, { len: 0.05, lead: 0 }), g('n', 5), g('e', 10)];
+    expect(new GlyphIndex(odd, { shows: [true, false, true, true], dup: odd.map(() => false) }).lineUp(box('fine', 15), { shown: true })).toBe(false);
+    const dark = new GlyphIndex(fi, { shows: [false, false, true, true], dup: fi.map(() => false) });
+    expect(dark.charsShown(box('fine', 15))).toEqual([false, false, true, true]);
+  });
+  it('does not share the pixels around a ligature part of the Ghostscript 10.02 form', () => {
+    const picture = (px: (x: number, y: number) => number) => {
+      const data = Buffer.alloc(100 * 100 * 3);
+      for (let y = 0; y < 100; y++) for (let x = 0; x < 100; x++) data.fill(px(x, y), (y * 100 + x) * 3, (y * 100 + x) * 3 + 3);
+      return { width: 100, height: 100, data };
+    };
+    const ink = picture((x, y) => (x >= 12 && x < 18 && y >= 36 && y < 50 ? 0 : 255));
+    const white = picture(() => 255);
+    const base: Glyph = { c: 'm', x: 10, y: 50, dx: 1, dy: 0, len: 10, size: 20, span: 0, steep: false };
+    const part: Glyph = { ...base, c: 'i', x: 30, len: 0, lead: 2, span: 1 };
+    // A lone zero-width glyph near m shares the ink of m. A part after an f does not.
+    const alone = glyphInk([base, { ...part, x: 15, lead: undefined }], ink, white, 1)!;
+    expect(alone.share[0]).toBe(0);
+    const f: Glyph = { ...base, c: 'f', x: 20, len: 8 };
+    const lig = glyphInk([base, { ...part, x: 15, lead: 2 }, f], ink, white, 1)!;
+    expect(lig.share[0]).toBeGreaterThan(0.08);
+  });
   it('never shows a glyph with almost no advance, and shares the pixels around it', () => {
     const picture = (px: (x: number, y: number) => number) => {
       const data = Buffer.alloc(100 * 100 * 3);

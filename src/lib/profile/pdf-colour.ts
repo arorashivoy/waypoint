@@ -471,15 +471,25 @@ function letters(s: string): string {
 }
 const ALNUM_CHAR = /^[\p{L}\p{N}]$/u;
 const LIGATURE_LETTER = /^[fil]$/;
-/** Ghostscript's text for the first glyph of an f ligature in a font with no Unicode map. */
+/** Ghostscript 10.0 gives the first glyph of an f ligature in a font with no Unicode map the text U+6600 (the bytes of "f"). */
 const LIGATURE_LEAD = '\u6600';
-/** Ghostscript's text for the second glyph of ff, fi, ffi and fl (no advance). */
+/** Ghostscript 10.0 gives the second glyph of ff, fi, fl, ffi and ffl (no advance) one of these texts. */
 const LIGATURE_FOLLOWERS = ['\u6600', '\u6900', '\ucf00', '\u6c00'];
+/** Ghostscript 10.02 gives the first glyph the text "f", and the parts (no advance) the texts f, i, l and U+00CF (the rest of ffi and ffl). */
+const LIGATURE_LEAD_10_02 = 'f';
+const LIGATURE_FOLLOWERS_10_02 = ['f', 'i', 'l', '\u00cf'];
 
-/** True for the second glyph of a pdflatex ligature: no advance, after a U+6600 glyph, with a known text. */
+/** True when the glyph is the first glyph of a pdflatex ligature, in the 10.0 or the 10.02 form. */
+function isLigatureLead(c: string): boolean {
+  return c === LIGATURE_LEAD || c === LIGATURE_LEAD_10_02;
+}
+
+/** True for the second glyph of a pdflatex ligature: no advance, after a lead glyph of the same form, with a known text. */
 function isLigaturePart(glyphs: readonly Glyph[], i: number): boolean {
   const g = glyphs[i];
-  return g.lead !== undefined && glyphs[g.lead].c === LIGATURE_LEAD && LIGATURE_FOLLOWERS.includes(g.c);
+  if (g.lead === undefined) return false;
+  const lead = glyphs[g.lead].c;
+  return (lead === LIGATURE_LEAD && LIGATURE_FOLLOWERS.includes(g.c)) || (lead === LIGATURE_LEAD_10_02 && LIGATURE_FOLLOWERS_10_02.includes(g.c));
 }
 /** The most unknown glyphs (U+FFFD, private use) that one word may have. */
 const MAX_UNKNOWN = 2;
@@ -624,13 +634,13 @@ export class GlyphIndex implements CharCheck {
     for (const i of run) {
       const g = this.glyphs[i];
       const last = out[out.length - 1];
-      // Only Ghostscript's form of an f ligature with no Unicode map (U+6600, then U+6600, U+6900, U+CF00 or U+6C00) is a ligature token.
+      // Only Ghostscript's forms of an f ligature are ligature tokens: U+6600, then U+6600, U+6900, U+CF00 or U+6C00 (10.0), or f, then f, i, l or U+00CF (10.02).
       if (g.lead !== undefined && isLigaturePart(this.glyphs, i)) {
         if (last?.kind === 'lig' && last.lead === g.lead) last.n++;
         else out.push({ kind: 'lig', lead: g.lead, n: 1 });
         continue;
       }
-      if (g.c === LIGATURE_LEAD && run.some((j) => this.glyphs[j].lead === i && isLigaturePart(this.glyphs, j))) {
+      if (isLigatureLead(g.c) && run.some((j) => this.glyphs[j].lead === i && isLigaturePart(this.glyphs, j))) {
         out.push({ kind: 'lig', lead: i, n: 1 });
         continue;
       }
