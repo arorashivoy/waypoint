@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { readSession } from '@/lib/auth/session';
+import { DesignDemos } from './DesignDemos';
 import './design.css';
 
 export const dynamic = 'force-dynamic';
@@ -34,7 +35,7 @@ const SCALE = [
   ['31', 'var(--t-31)'],
 ] as const;
 
-export default async function DesignPage() {
+export default async function DesignPage({ searchParams }: { searchParams: { sheet?: string } }) {
   await requireAdminPage();
   return (
     <main className="ds">
@@ -77,83 +78,7 @@ export default async function DesignPage() {
         </div>
       </section>
 
-      <section aria-labelledby="ds-buttons">
-        <h2 id="ds-buttons">Buttons and fields</h2>
-        <div className="ds-stack">
-          <div className="ds-wrap">
-            <button className="btn go" type="button">Mark as applied</button>
-            <button className="btn" type="button">Open the posting</button>
-            <button className="btn link" type="button">Show all 9 requirements</button>
-            <button className="btn go" type="button" disabled>Disabled</button>
-          </div>
-          <div className="ds-field">
-            <label htmlFor="ds-url">Job link</label>
-            <input id="ds-url" className="field" aria-invalid="true" aria-describedby="ds-url-msg" defaultValue="https://careers.example.com/123" />
-            <span id="ds-url-msg" className="msg">Paste a link from Greenhouse, Lever, Ashby or Workable.</span>
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="ds-glass">
-        <h2 id="ds-glass">Glass panel</h2>
-        <div className="glass ds-panel ds-stack" style={{ maxWidth: 520 }}>
-          <h3>Your way in</h3>
-          <p style={{ color: 'var(--soft)' }}>Anna Weber can refer you. Panels use the glass fill, a hairline edge and a blur.</p>
-        </div>
-      </section>
-
-      <section aria-labelledby="ds-route">
-        <h2 id="ds-route">Route, score pill and ring</h2>
-        <div className="ds-wrap" style={{ alignItems: 'flex-start', gap: 'var(--s6)' }}>
-          <div>
-            <ol className="ds-route">
-              <li className="m"><span className="rq">4+ years of backend services in Java</span><span className="st m">Met</span><div className="ev">Ledger service at Orbit</div></li>
-              <li className="p"><span className="rq">Kubernetes in production</span><span className="st p">Partial</span><div className="ev">A staging cluster in homelab-k8s</div></li>
-              <li><span className="rq">Terraform</span><span className="st x">Missing</span></li>
-            </ol>
-            <p className="ds-blocker">Needs a Swiss work permit</p>
-          </div>
-          <div className="ds-stack" style={{ alignItems: 'flex-start' }}>
-            <div className="ds-wrap">
-              <span className="ds-pill hi">86</span>
-              <span className="ds-pill mid">62</span>
-              <span className="ds-pill lo">41</span>
-            </div>
-            <div className="ds-ring" role="img" aria-label="Match score 86">
-              <div><b>86</b><small>match</small></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="ds-states">
-        <h2 id="ds-states">States</h2>
-        <div className="ds-states">
-          <div className="glass ds-state">
-            <h3>Loading</h3>
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="ds-skel"><span className="t" /><span className="n" /><span className="r" /></div>
-            ))}
-          </div>
-          <div className="glass ds-state">
-            <h3>Empty</h3>
-            <div className="ds-empty">
-              <div className="dash" aria-hidden="true"><em /><i /></div>
-              <p>Your filters hide all 48 jobs.</p>
-              <small>The level filter shows only Senior and above.</small>
-              <button className="btn go" type="button">Clear the filters</button>
-            </div>
-          </div>
-          <div className="glass ds-state">
-            <h3>Error</h3>
-            <div className="ds-err" role="alert">
-              <strong>Waypoint could not build your CV.</strong>
-              <span>LaTeX stopped at line 42: an unknown command. Fix the line in your .tex file, then build again.</span>
-              <button className="btn" type="button">Build again</button>
-            </div>
-          </div>
-        </div>
-      </section>
+      <DesignDemos sheetOpen={searchParams.sheet === '1'} />
     </main>
   );
 }

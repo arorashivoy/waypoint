@@ -2,6 +2,8 @@ import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
+  // tsconfig keeps jsx as preserve for Next.js; the tests that render components need the real transform.
+  oxc: { jsx: { runtime: 'automatic' } },
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   test: {
     include: ['tests/**/*.test.ts'],
