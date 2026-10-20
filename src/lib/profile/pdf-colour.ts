@@ -247,6 +247,39 @@ function eachPixel(g: Glyph, k: number, W: number, H: number, fn: (o: number) =>
   return Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
 }
 
+
+/** How far (in glyph places) from a ligature part the glyphs are looked at that stay out of its shared band. */
+const BAND_REACH = 12;
+/** The shared band reaches this far (in font sizes) along the line from the part. A word space is wider, so the next word keeps its ink. */
+const BAND_MARGIN = 0.2;
+
+/**
+ * Marks as shared (-2) the pixels of the line band of ligature part `i`: from the descent to the ascent, and
+ * 0.2 font size to each side of the part. The box of its lead and the boxes of the glyphs of its own span stay free,
+ * because the honest ligature draws there. A part that paints a bar can so take the ink only from the glyphs that
+ * touch it, not from white text further along the line. Returns the number of pixels visited.
+ */
+function shareBand(glyphs: readonly Glyph[], i: number, k: number, W: number, H: number, owner: Int32Array): number {
+  const g = glyphs[i];
+  const mates = new Set<number>([g.lead as number]);
+  for (let j = Math.max(0, i - BAND_REACH); j <= Math.min(glyphs.length - 1, i + BAND_REACH); j++) {
+    if (j !== i && glyphs[j].span === g.span && glyphs[j].lead === undefined && !isSpace(glyphs[j].c)) mates.add(j);
+  }
+  const free = new Set<number>();
+  let visits = 0;
+  for (const j of mates) {
+    visits += eachPixel(glyphs[j], k, W, H, (o) => {
+      free.add(o);
+    });
+  }
+  const m = BAND_MARGIN * g.size;
+  const band: Glyph = { ...g, x: g.x - m * g.dx, y: g.y - m * g.dy, len: 2 * m };
+  visits += eachPixel(band, k, W, H, (o) => {
+    if (!free.has(o)) owner[o] = -2;
+  });
+  return visits;
+}
+
 /**
  * True when pixel `o` of the normal picture shows ink: on some channel, its value
  * is more than 24 above or below every value of the picture with no text at the
@@ -367,7 +400,15 @@ export function glyphInk(glyphs: readonly Glyph[], normal: Raster, noText: Raste
   const owner = new Int32Array(W * H).fill(-1);
   let visits = 0;
   for (let i = 0; i < n; i++) {
-    if (follows[i] >= 0 || isSpace(glyphs[i].c) || isLigaturePart(glyphs, i)) continue;
+    if (isLigaturePart(glyphs, i)) {
+      // A ligature part has no pixels of its own, but it may paint. Its ink must not go to a glyph of another
+      // span, so it shares the pixels of its own line band within 1 font size. The box of its lead and the boxes
+      // of the glyphs of its own span stay out of the shared zone: the honest ligature draws there.
+      visits += shareBand(glyphs, i, k, W, H, owner);
+      if (visits > MAX_VISITS) return null;
+      continue;
+    }
+    if (follows[i] >= 0 || isSpace(glyphs[i].c)) continue;
     const g = glyphs[i];
     if (g.len < MIN_ADVANCE * g.size) {
       // A glyph with almost no advance: every pixel within 1 font size of its place, in any direction, is shared.
@@ -475,9 +516,9 @@ const LIGATURE_LETTER = /^[fil]$/;
 const LIGATURE_LEAD = '\u6600';
 /** Ghostscript 10.0 gives the second glyph of ff, fi, fl, ffi and ffl (no advance) one of these texts. */
 const LIGATURE_FOLLOWERS = ['\u6600', '\u6900', '\ucf00', '\u6c00'];
-/** Ghostscript 10.02 gives the first glyph the text "f", and the parts (no advance) the texts f, i, l and U+00CF (the rest of ffi and ffl). */
+/** Ghostscript 10.02 gives the first glyph the text "f", and the parts (no advance) the texts f, i, l, U+00CF (the rest of ffi) and U+00D2 (the rest of ffl). */
 const LIGATURE_LEAD_10_02 = 'f';
-const LIGATURE_FOLLOWERS_10_02 = ['f', 'i', 'l', '\u00cf'];
+const LIGATURE_FOLLOWERS_10_02 = ['f', 'i', 'l', '\u00cf', '\u00d2'];
 
 /** True when the glyph is the first glyph of a pdflatex ligature, in the 10.0 or the 10.02 form. */
 function isLigatureLead(c: string): boolean {
@@ -553,7 +594,8 @@ export class GlyphIndex implements CharCheck {
   constructor(private glyphs: readonly Glyph[], check: PageCheck) {
     this.shows = check.shows;
     this.marks = check.marks;
-    this.centres = glyphs.map(centre);
+    // A ligature part has no width of its own and sits on the edge of its lead, so it takes the centre of its lead.
+    this.centres = glyphs.map((g, i) => centre(isLigaturePart(glyphs, i) ? glyphs[g.lead as number] : g));
     glyphs.forEach((g, i) => {
       // A copy of a glyph is not a character of its own (pdftotext also drops it).
       if (isSpace(g.c) || check.dup[i]) return;
@@ -674,7 +716,7 @@ export class GlyphIndex implements CharCheck {
     }
     if (!found.length) return found;
     const g0 = this.glyphs[found[0]];
-    return found.sort((a, b) => this.centres[a][0] * g0.dx + this.centres[a][1] * g0.dy - (this.centres[b][0] * g0.dx + this.centres[b][1] * g0.dy));
+    return found.sort((a, b) => this.centres[a][0] * g0.dx + this.centres[a][1] * g0.dy - (this.centres[b][0] * g0.dx + this.centres[b][1] * g0.dy) || a - b);
   }
 
   /**
@@ -703,7 +745,7 @@ export class GlyphIndex implements CharCheck {
     if (!found.length) return chars.map(() => false);
     // Read order: along the text direction of the glyphs.
     const g0 = this.glyphs[found[0]];
-    found.sort((a, b) => this.centres[a][0] * g0.dx + this.centres[a][1] * g0.dy - (this.centres[b][0] * g0.dx + this.centres[b][1] * g0.dy));
+    found.sort((a, b) => this.centres[a][0] * g0.dx + this.centres[a][1] * g0.dy - (this.centres[b][0] * g0.dx + this.centres[b][1] * g0.dy) || a - b);
     // A ligature glyph stands for 2 or 3 characters; an accent stands for none.
     const slots: number[] = [];
     const letters: string[] = [];

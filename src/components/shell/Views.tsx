@@ -2,7 +2,7 @@
 
 import { ErrorNote, Skeleton } from '../ui';
 import JobsScreen from '../JobsScreen';
-import PendingScreen from '../PendingScreen';
+import PendingScreen from '../pending/PendingScreen';
 import { useJobs, usePending, type Me } from '../data';
 
 type Common = { me: Me; refresh: () => Promise<any>; setToast: (s: string) => void };
@@ -26,9 +26,7 @@ export function JobsView({ me, refresh, setToast, openJob, closeJob, selected, g
   );
 }
 
-export function PendingView({ me, refresh, setToast }: Common) {
+export function PendingView({ refresh, setToast, onJobs }: Omit<Common, 'me'> & { onJobs: () => void }) {
   const { data, error, mutate } = usePending();
-  const state = data && { ...me, ...data };
-  if (!state) return <Wait error={error} onRetry={() => { mutate(); }} />;
-  return <PendingScreen state={state} refresh={refresh} setToast={setToast} />;
+  return <PendingScreen data={data} error={error} onRetry={() => { mutate(); }} refresh={refresh} setToast={setToast} onJobs={onJobs} />;
 }
