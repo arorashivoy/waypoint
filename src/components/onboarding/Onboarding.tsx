@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { leaveSession, patch, post } from '../api';
 import { useProfile, useSearchSettings, type Me, type ProfileData } from '../data';
 import { ProfileVersionContext, useProfileVersionValue } from '../profile/version';
@@ -206,7 +206,8 @@ export default function Onboarding({ me, setToast, toggleCountry, refresh, onLea
               {at > 0 ? <Button variant="link" onClick={back}>Back</Button> : <span />}
               <div className="ob-foot-main">
                 {skipLabel && <Button variant="link" onClick={skip}>{skipLabel}</Button>}
-                {primary}
+                {/* One key for each step: the button of the last step must not turn into the submit button of the next step during the same click. */}
+                {primary && <Fragment key={current}>{primary}</Fragment>}
               </div>
             </footer>
           </section>

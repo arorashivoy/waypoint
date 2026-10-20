@@ -24,6 +24,7 @@
     "user:create-admin": "tsx --env-file=.env scripts/create-admin.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "test:live": "WAYPOINT_LIVE=1 vitest run tests/live",
     "typecheck": "tsc --noEmit"
   },
@@ -44,6 +45,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@types/adm-zip": "^0.5.5",
     "@types/node": "22.20.5",
     "@types/papaparse": "^5.3.14",
