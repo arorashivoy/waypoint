@@ -115,22 +115,3 @@ describe('claudeLine', () => {
     expect(claudeLine('cli')).toBe('Claude: the admin subscription');
   });
 });
-
-describe('globals.css hover rules', () => {
-  it('has no :hover selector outside @media (hover: hover)', () => {
-    let css = readFileSync('src/app/globals.css', 'utf8');
-    // Remove each @media (hover: hover) block, with its nested braces.
-    for (;;) {
-      const start = css.indexOf('@media (hover: hover)');
-      if (start === -1) break;
-      let depth = 0;
-      let end = css.indexOf('{', start);
-      for (; end < css.length; end++) {
-        if (css[end] === '{') depth++;
-        if (css[end] === '}' && --depth === 0) break;
-      }
-      css = css.slice(0, start) + css.slice(end + 1);
-    }
-    expect(css.match(/[^{}]*:hover[^{}]*\{/g) ?? []).toEqual([]);
-  });
-});

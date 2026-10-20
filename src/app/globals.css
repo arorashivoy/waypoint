@@ -53,7 +53,7 @@
 * { -webkit-tap-highlight-color: transparent; }
 
 /* Dark only in part 6. The tokens allow a light theme later. */
-html { color-scheme: dark; height: 100%; background: var(--night); }
+html { color-scheme: dark; height: 100%; background: var(--night); -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
 body {
   margin: 0;
@@ -95,7 +95,10 @@ h1, h2, h3 { font-family: var(--f-head); }
 
 a { color: var(--lav); }
 @media (hover: hover) { a:hover { color: var(--text); } }
-button, input, textarea, select { font-family: inherit; color: inherit; font-size: inherit; }
+button, input, textarea, select { font-family: inherit; color: inherit; }
+button { font-size: inherit; }
+/* 16 px stops iOS from zooming the page when a field gets focus. */
+input, select, textarea { font-size: 16px; }
 button { cursor: pointer; }
 :focus-visible { outline: 3px solid var(--lav); outline-offset: 2px; }
 
@@ -484,7 +487,11 @@ button { cursor: pointer; }
 .pf-choice li { padding: var(--s1) var(--s3); border-radius: var(--r-ctl); border: 1px solid var(--edge); font-size: var(--t-13); color: var(--soft); }
 .pf-choice li[data-on='true'] { color: var(--text); border-color: color-mix(in srgb, var(--lav) 55%, transparent); background: color-mix(in srgb, var(--lav) 12%, transparent); }
 .btn[aria-disabled='true'] { opacity: 0.45; cursor: not-allowed; }
-@media (pointer: coarse) { .pf-row .btn, .pf-actions .btn { min-height: 44px; } }
+@media (pointer: coarse) {
+  .pf-row .btn, .pf-actions .btn { min-height: 44px; }
+  /* A link inside a sentence keeps its line. Padding and an equal negative margin grow the target to 44 px. */
+  .pf-undo .btn.link, .pf-note .btn.link { padding-block: 13px; margin-block: -13px; }
+}
 .pf-warn {
   display: flex; flex-direction: column; align-items: flex-start; gap: var(--s2); padding: var(--s3) var(--s4); border-radius: var(--r-row);
   background: color-mix(in srgb, var(--butter) 8%, transparent); border: 1px solid color-mix(in srgb, var(--butter) 28%, transparent);
@@ -631,7 +638,8 @@ button { cursor: pointer; }
 .ui-switch:disabled { opacity: 0.45; cursor: not-allowed; }
 
 @media (pointer: coarse) {
-  .btn, .ui-btn, .ui-tab, .ui-fold-head, .ui-switch { min-height: 44px; }
+  .btn, .ui-btn, .ui-tab, .ui-fold-head, .ui-switch, .chip, .sh-nav-item, .sh-tab, .sh-rail-item { min-height: 44px; }
+  .chip { min-width: 44px; }
   .field, select.field { min-height: 44px; }
 }
 

@@ -17,7 +17,7 @@ function Section({ id, title, count, loading, onJobs, children }: { id: SectionK
   return (
     <Panel className="pn-sec" data-section={id} aria-labelledby={`pn-${id}`}>
       <div className="pn-head">
-        <h2 id={`pn-${id}`} className="ui-panel-title">{title}</h2>
+        <h2 id={`pn-${id}`} className="ui-panel-title" tabIndex={-1}>{title}</h2>
         {!loading && (id === 'needs' && count > 0
           ? <Badge tone="coral">{count}<span className="sr-only"> {count === 1 ? 'item needs' : 'items need'} you</span></Badge>
           : <span className="pn-count">{count}<span className="sr-only"> {count === 1 ? 'item' : 'items'}</span></span>)}
