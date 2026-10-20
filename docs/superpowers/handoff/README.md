@@ -27,6 +27,7 @@ Give this file to a Claude Code cloud session. It tells that session how to cont
 6. **Browser checks owed (local).** STOP and ask the owner (section 5).
 7. **Finish part 5.** Push `multi-user`, and update the PR #2 description with a part 5 section, in the same style as parts 1–4. Report to the owner: a summary, the full list "Rulings I made" (every `Ruling:` line of the ledger, in order, each with its cost if wrong), the deploy notes, and the options to integrate (keep draft PR #2 open is the expected choice).
 8. **Part 6.** Write the part 6 plan with the superpowers writing-plans skill from spec sections 7 and 8, plus every "CAN WAIT (6)" item in the part 3 and part 4 final reviews and the part 5 deferred minors that name part 6. Ask the owner to review the plan before you code it. Then run it the same way.
+   - **Use the `frontend-design` skill for part 6 (owner's order, 2026-10-20).** The owner finds the current UI very poor. Load `frontend-design` before you write the plan, and use it to set one clear visual direction: type, colour, spacing, layout for phone, tablet and desktop, and states (empty, loading, error). Put that direction in the plan as its own first task, and tell each implementer subagent that touches the UI to load `frontend-design` too. A part 6 task is not done when it only works; it must also look good. The owner reviews the visual direction with the plan.
 
 ## 4. How to work
 
