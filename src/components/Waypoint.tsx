@@ -5,7 +5,7 @@ import { ApiError, api, post } from './api';
 import { KEYS, useMe, useRefresh, type Me } from './data';
 import { useToast } from './hooks';
 import ProfileScreen from './ProfileScreen';
-import { Interim } from './shell/Interim';
+import SettingsScreen from './SettingsScreen';
 import { JobsView, PendingView } from './shell/Views';
 import Loading from './shell/Loading';
 import Rail from './shell/Rail';
@@ -13,6 +13,7 @@ import Sidebar from './shell/Sidebar';
 import TabBar from './shell/TabBar';
 import TopBar from './shell/TopBar';
 import { claudeLine, taskLine } from './shell/task';
+import { sectionQuery } from './settings/model';
 import { useCollapsed, useLocation } from './shell/useShell';
 import { ErrorNote } from './ui';
 
@@ -37,6 +38,12 @@ export default function Waypoint() {
       // The job list depends on the countries, so it loads again. On a failure this also puts back the real choice.
       await refresh();
     }
+  };
+
+  // The empty Jobs list opens the Job search section. Go to Settings first, then name the section in the URL before Settings reads it.
+  const openJobSearch = () => {
+    go('settings');
+    window.history.replaceState(null, '', `${window.location.pathname}${sectionQuery('job-search')}`);
   };
 
   const toastEl = toast && <div className="toast" role="status">{toast}</div>;
@@ -84,10 +91,10 @@ export default function Waypoint() {
             </div>
           )}
           <div className="sh-view">
-            {loc.view === 'jobs' && <JobsView me={state} refresh={refresh} setToast={setToast} openJob={openJob} closeJob={closeJob} selected={loc.job} goToSettings={() => go('settings')} />}
+            {loc.view === 'jobs' && <JobsView me={state} refresh={refresh} setToast={setToast} openJob={openJob} closeJob={closeJob} selected={loc.job} goToSettings={openJobSearch} />}
             {loc.view === 'pending' && <PendingView refresh={refresh} setToast={setToast} onJobs={() => go('jobs')} />}
             {loc.view === 'profile' && <ProfileScreen state={state} refresh={refresh} setToast={setToast} />}
-            {loc.view === 'settings' && <Interim.Settings state={state} setToast={setToast} toggleCountry={toggleCountry} />}
+            {loc.view === 'settings' && <SettingsScreen state={state} setToast={setToast} toggleCountry={toggleCountry} />}
           </div>
         </main>
       </div>

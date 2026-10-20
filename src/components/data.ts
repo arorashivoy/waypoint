@@ -113,11 +113,11 @@ export function useProfile() {
   return useData<ProfileData>(KEYS.profile);
 }
 
-type SessionRow = { id: string; current: boolean; userAgent: string | null; createdAt: string; lastSeenAt: string };
-type ClaudeStatus = { mode: 'own' | 'shared' | 'cli' | 'none'; detail: string; keyHint: string | null; sharedAvailable: boolean; capUsd: number; sharedSpentUsd: number; capReached: boolean; resetsAt: string };
-type FailedBoard = { board: string; status: string; fetchedAt: string; error: string | null };
-type SearchSettings = { fields: string[]; visaStatus: string; fieldChoices: string[] };
-type UserRow = { id: string; email: string; name: string; role: string; disabled: boolean; createdAt: string; lastSeenAt: string | null; sharedSpentUsd: number };
+export type SessionRow = { id: string; current: boolean; userAgent: string | null; createdAt: string; lastSeenAt: string };
+export type ClaudeStatus = { mode: 'own' | 'shared' | 'cli' | 'none'; detail: string; keyHint: string | null; sharedAvailable: boolean; capUsd: number; sharedSpentUsd: number; capReached: boolean; resetsAt: string; cliOff?: boolean };
+export type FailedBoard = { board: string; status: string; fetchedAt: string; error: string | null };
+export type SearchSettings = { fields: string[]; visaStatus: string; fieldChoices: string[] };
+export type UserRow = { id: string; email: string; name: string; role: string; disabled: boolean; createdAt: string; lastSeenAt: string | null; sharedSpentUsd: number };
 
 const SETTINGS = {
   sessions: '/api/account/sessions',

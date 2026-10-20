@@ -18,7 +18,10 @@ export type Settings = {
 };
 
 export const SettingsSchema = z.object({
-  fields: z.array(z.enum(FIELD_CHOICES)).max(6, 'Choose 6 fields or fewer.'),
+  fields: z
+    .array(z.enum(FIELD_CHOICES))
+    .max(6, 'Choose 6 fields or fewer.')
+    .refine((list) => new Set(list).size === list.length, 'Choose each field one time only.'),
   visaStatus: z
     .string()
     .max(200, 'The visa status must have 200 characters or fewer.')
@@ -56,10 +59,13 @@ export async function getSettings(userId: string): Promise<Settings> {
   };
 }
 
+/** An upsert, so two saves at the same time (a double submit) do not fail on the unique user row. */
 export async function saveSearchSettings(userId: string, input: SearchSettings): Promise<void> {
   const fields = JSON.stringify(input.fields);
   const visaStatus = input.visaStatus.trim();
-  const existing = await db.userSettings.findUnique({ where: { userId }, select: { userId: true } });
-  if (existing) await db.userSettings.update({ where: { userId }, data: { fields, visaStatus } });
-  else await db.userSettings.create({ data: { userId, fields, visaStatus, resumeMode: await defaultResumeMode(userId) } });
+  await db.userSettings.upsert({
+    where: { userId },
+    update: { fields, visaStatus },
+    create: { userId, fields, visaStatus, resumeMode: await defaultResumeMode(userId) },
+  });
 }
