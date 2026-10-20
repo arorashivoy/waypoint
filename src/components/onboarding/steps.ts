@@ -24,3 +24,14 @@ export function wizardSteps(me: { claude: { mode: string } }, ownKey = false): W
 export function startStep(steps: WizardStep[], saved: WizardStep | null): WizardStep {
   return saved && steps.includes(saved) ? saved : steps[0];
 }
+
+export type StepStatus = 'done' | 'skipped' | 'now' | 'later';
+
+/** The state of one step on the route. A step before the current one is done, or skipped when the user skipped it. */
+export function stepStatus(steps: WizardStep[], current: WizardStep, skipped: ReadonlySet<WizardStep>, step: WizardStep): StepStatus {
+  const at = steps.indexOf(current);
+  const i = steps.indexOf(step);
+  if (i === at) return 'now';
+  if (i > at) return 'later';
+  return skipped.has(step) ? 'skipped' : 'done';
+}

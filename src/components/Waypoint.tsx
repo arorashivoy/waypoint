@@ -1,6 +1,7 @@
 'use client';
 
 import { useSWRConfig } from 'swr';
+import { useWizardBypass } from './onboarding/bypass';
 import Onboarding from './onboarding/Onboarding';
 import { ApiError, api } from './api';
 import { KEYS, useMe, useRefresh, type Me } from './data';
@@ -26,6 +27,7 @@ export default function Waypoint() {
   const { loc, go, openJob, closeJob } = useLocation();
   const [collapsed, setCollapsed] = useCollapsed();
   const [toast, setToast] = useToast();
+  const [bypass, setBypass] = useWizardBypass();
   const loadError = state === undefined && error && !(error instanceof ApiError && error.status === 401) ? String(error.message) : null;
 
   const toggleCountry = async (cc: string, on: boolean) => {
@@ -53,11 +55,11 @@ export default function Waypoint() {
     );
   }
 
-  // A new user sees the wizard until the user finishes or skips it. A link with ?view= goes to the app at once.
-  if (!state.onboarding.onboardedAt && !new URLSearchParams(window.location.search).has('view')) {
+  // A new user sees the wizard until the user finishes or skips it. A link with ?view= goes to the app for this page load.
+  if (!state.onboarding.onboardedAt && !bypass) {
     return (
       <>
-        <Onboarding me={state} setToast={setToast} toggleCountry={toggleCountry} refresh={refresh} onLeave={() => go('jobs')} />
+        <Onboarding me={state} setToast={setToast} toggleCountry={toggleCountry} refresh={refresh} onLeave={() => { setBypass(true); go('jobs'); }} />
         {toastEl}
       </>
     );
@@ -103,7 +105,7 @@ export default function Waypoint() {
             {loc.view === 'jobs' && <JobsView me={state} refresh={refresh} setToast={setToast} openJob={openJob} closeJob={closeJob} selected={loc.job} goToSettings={openJobSearch} />}
             {loc.view === 'pending' && <PendingView refresh={refresh} setToast={setToast} onJobs={() => go('jobs')} />}
             {loc.view === 'profile' && <ProfileScreen state={state} refresh={refresh} setToast={setToast} />}
-            {loc.view === 'settings' && <SettingsScreen state={state} setToast={setToast} toggleCountry={toggleCountry} />}
+            {loc.view === 'settings' && <SettingsScreen state={state} setToast={setToast} toggleCountry={toggleCountry} onReopenWizard={() => setBypass(false)} />}
           </div>
         </main>
       </div>

@@ -14,6 +14,8 @@ import { taskLine } from '../shell/task';
 import { Button, EmptyState, ErrorNote, Fold, Skeleton, TaskIndicator } from '../ui';
 import type { FirstJobs } from './useFirstJobs';
 
+export const IMPORT_HINT = 'ob-import-hint';
+
 const CLAUDE_WORDS: Record<string, string> = {
   shared: 'Waypoint uses the shared key.',
   own: 'Waypoint uses your own API key.',
@@ -50,7 +52,7 @@ export function AccountStep({ me, run, onOwnKey }: Common & { onOwnKey: () => vo
 }
 
 /** Step 2. The countries switch at once. The fields and the visa status save with the main button of the card. */
-export function SearchStep({ me, setToast, toggleCountry, formId, onSaved }: Common & { toggleCountry: (cc: string, on: boolean) => void | Promise<unknown>; formId: string; onSaved: () => void }) {
+export function SearchStep({ me, setToast, toggleCountry, formId, onSaved, onBusy }: Common & { toggleCountry: (cc: string, on: boolean) => void | Promise<unknown>; formId: string; onSaved: () => void; onBusy: (busy: boolean) => void }) {
   const search = useSearchSettings();
   const on = me.countries.filter((c) => c.on).length;
   return (
@@ -63,7 +65,7 @@ export function SearchStep({ me, setToast, toggleCountry, formId, onSaved }: Com
         <h2 id="ob-fields" className="pf-group-title">Fields and visa status</h2>
         <LoadError what="your job search settings" error={search.error} retry={search.mutate} />
         {search.data ? (
-          <SearchForm value={search.data} formId={formId} hideSave setToast={setToast} onSaved={async (saved) => { await search.mutate(saved, { revalidate: false }); onSaved(); }} />
+          <SearchForm value={search.data} formId={formId} hideSave onBusy={onBusy} setToast={setToast} onSaved={async (saved) => { await search.mutate(saved, { revalidate: false }); onSaved(); }} />
         ) : (
           !search.error && <Skeleton rows={3} />
         )}
@@ -77,6 +79,9 @@ export function ClaudeStep({ run, onSaved }: { run: Run; onSaved: () => void }) 
   return <ClaudeKeyForm run={run} onDone={onSaved} />;
 }
 
+/** What the LinkedIn panel reads: the shell data and the profile view. */
+type ImportState = Me & Partial<ProfileData['view']>;
+
 type ProfileProps = { data: ProfileData | undefined; error?: Error; retry: () => unknown; changed: () => Promise<void>; setToast: (s: string) => void };
 
 function ProfileWait({ data, error, retry }: Pick<ProfileProps, 'data' | 'error' | 'retry'>) {
@@ -89,7 +94,7 @@ function ProfileWait({ data, error, retry }: Pick<ProfileProps, 'data' | 'error'
 }
 
 /** Step 4. The import panels of the Profile screen. Each import shows its progress and its result on the card. */
-export function ImportStep({ data, error, retry, changed, setNote, note, state }: Omit<ProfileProps, 'setToast'> & { setNote: (s: string) => void; note: string; state: any }) {
+export function ImportStep({ data, error, retry, changed, setNote, note, state, imported }: Omit<ProfileProps, 'setToast'> & { setNote: (s: string) => void; note: string; state: ImportState; imported: boolean }) {
   return (
     <div className="pf-stack">
       <ProfileWait data={data} error={error} retry={retry} />
@@ -99,6 +104,7 @@ export function ImportStep({ data, error, retry, changed, setNote, note, state }
             <ImportSources imported={changed} setToast={setNote} />
           </section>
           <p className="pf-note ob-result" role="status" aria-live="polite">{note}</p>
+          {!imported && <p id={IMPORT_HINT} className="pf-note">Import one source to continue, or skip this step.</p>}
           <LinkedInPanel state={state} refresh={changed} setToast={setNote} folded />
         </>
       )}

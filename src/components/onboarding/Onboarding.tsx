@@ -1,14 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { patch } from '../api';
-import { useProfile, type Me, type ProfileData } from '../data';
+import { leaveSession, patch, post } from '../api';
+import { useProfile, useSearchSettings, type Me, type ProfileData } from '../data';
 import { ProfileVersionContext, useProfileVersionValue } from '../profile/version';
 import type { Run } from '../settings/parts';
 import { BrandMark } from '../shell/icons';
-import { Button } from '../ui';
+import { Button, ErrorNote } from '../ui';
+import { leaveWizard } from './leave';
 import StepRoute from './StepRoute';
-import { AccountStep, ClaudeStep, FirstJobsStep, ImportStep, ReviewStep, SearchStep } from './Steps';
+import { AccountStep, ClaudeStep, FirstJobsStep, IMPORT_HINT, ImportStep, ReviewStep, SearchStep } from './Steps';
 import { startStep, wizardSteps, type WizardStep } from './steps';
 import { useFirstJobs } from './useFirstJobs';
 
@@ -47,6 +48,11 @@ function words(step: WizardStep, me: Me): { title: string; lead: string } {
 
 export default function Onboarding({ me, setToast, toggleCountry, refresh, onLeave }: Props) {
   const [ownKey, setOwnKey] = useState(false);
+  // The steps that the user skipped. They show as Skipped on the route until the user does them.
+  const [skipped, setSkipped] = useState<ReadonlySet<WizardStep>>(new Set());
+  const [leaveError, setLeaveError] = useState<string | null>(null);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const searchReady = !!useSearchSettings().data;
   const [current, setCurrent] = useState<WizardStep>(() => startStep(wizardSteps(me), me.onboarding.step));
   const steps = useMemo(() => wizardSteps(me, ownKey || current === 'claude'), [me, ownKey, current]);
   const at = Math.max(steps.indexOf(current), 0);
@@ -73,16 +79,26 @@ export default function Onboarding({ me, setToast, toggleCountry, refresh, onLea
   }, [setToast]);
 
   const leave = useCallback(async (body: { onboarded: true; step: WizardStep | null }) => {
-    try {
-      await patch('/api/onboarding', body);
-      await refresh();
-      onLeave();
-    } catch (e) {
-      setToast((e as Error).message);
-    }
-  }, [refresh, onLeave, setToast]);
+    setLeaveError(null);
+    const result = await leaveWizard(() => patch('/api/onboarding', body), refresh);
+    if (result.ok) onLeave();
+    else setLeaveError(result.message);
+  }, [refresh, onLeave]);
 
-  const next = () => (last ? leave({ onboarded: true, step: null }) : go(steps[at + 1]));
+  /** Moves on. A skip marks the step as skipped; doing the step clears the mark. */
+  const advance = (didSkip: boolean) => {
+    setSkipped((prev) => {
+      const nextSet = new Set(prev);
+      if (didSkip) nextSet.add(current);
+      else nextSet.delete(current);
+      return nextSet;
+    });
+    // The last step that the user skips stays the saved step, so Settings still offers "Finish setting up".
+    if (last) return leave({ onboarded: true, step: didSkip ? current : null });
+    return go(steps[at + 1]);
+  };
+  const next = () => advance(false);
+  const skip = () => advance(true);
   const back = () => go(steps[at - 1]);
 
   /** For the forms of Settings: runs the request and shows the error as a toast. True when the request worked. */
@@ -108,7 +124,7 @@ export default function Onboarding({ me, setToast, toggleCountry, refresh, onLea
     [mutate],
   );
   const [note, setNote] = useState('');
-  const imported = (profile?.pendingDrafts ?? 0) > 0 || !!profile?.view?.lastImport;
+  const hasImport = (profile?.pendingDrafts ?? 0) > 0 || !!profile?.view?.lastImport;
 
   const [jobs, fetchJobs] = useFirstJobs(refresh);
 
@@ -116,14 +132,16 @@ export default function Onboarding({ me, setToast, toggleCountry, refresh, onLea
   const primary = (() => {
     switch (current) {
       case 'account':
-      case 'review':
         return <Button variant="go" onClick={next}>Continue</Button>;
+      case 'review':
+        // While drafts wait, the job of this step is to accept them: "Accept all" is the main button and Continue is plain.
+        return <Button variant={(profile?.pendingDrafts ?? 0) > 0 ? 'plain' : 'go'} onClick={next}>Continue</Button>;
       case 'search':
-        return <Button variant="go" type="submit" form={SEARCH_FORM}>Save and continue</Button>;
+        return <Button variant="go" type="submit" form={SEARCH_FORM} busy={searchBusy} disabled={!searchReady}>Save and continue</Button>;
       case 'claude':
         return null; // The key form has its own button.
       case 'import':
-        return <Button variant="go" disabled={!imported} onClick={next}>Continue</Button>;
+        return <Button variant="go" aria-disabled={!hasImport || undefined} aria-describedby={hasImport ? undefined : IMPORT_HINT} onClick={() => { if (hasImport) next(); }}>Continue</Button>;
       case 'refresh':
         return jobs.phase === 'done'
           ? <Button variant="go" onClick={next}>See your jobs</Button>
@@ -136,11 +154,11 @@ export default function Onboarding({ me, setToast, toggleCountry, refresh, onLea
       case 'account':
         return <AccountStep me={me} setToast={setToast} run={run} onOwnKey={() => { setOwnKey(true); go('claude'); }} />;
       case 'search':
-        return <SearchStep me={me} setToast={setToast} run={run} toggleCountry={toggleCountry} formId={SEARCH_FORM} onSaved={next} />;
+        return <SearchStep me={me} setToast={setToast} run={run} toggleCountry={toggleCountry} formId={SEARCH_FORM} onSaved={next} onBusy={setSearchBusy} />;
       case 'claude':
         return <ClaudeStep run={run} onSaved={next} />;
       case 'import':
-        return <ImportStep data={profile} error={profileError} retry={mutate} changed={changed} note={note} setNote={setNote} state={state} />;
+        return <ImportStep data={profile} error={profileError} retry={mutate} changed={changed} note={note} setNote={setNote} state={state} imported={hasImport} />;
       case 'review':
         return <ReviewStep data={profile} error={profileError} retry={mutate} changed={changed} setToast={setToast} onCount={onCount} onBack={back} />;
       case 'refresh':
@@ -148,7 +166,7 @@ export default function Onboarding({ me, setToast, toggleCountry, refresh, onLea
     }
   })();
 
-  const skipLabel = last && jobs.phase === 'done' ? null : 'Skip for now';
+  const skipLabel = last && jobs.phase === 'done' ? null : 'Skip this step';
 
   return (
     <ProfileVersionContext.Provider value={version}>
@@ -159,14 +177,26 @@ export default function Onboarding({ me, setToast, toggleCountry, refresh, onLea
               <BrandMark />
               <span className="ob-brand-name">Waypoint</span>
             </div>
-            <StepRoute steps={steps} current={current} />
+            <StepRoute steps={steps} current={current} skipped={skipped} />
             <div className="ob-leave">
               <Button variant="link" onClick={() => leave({ onboarded: true, step: current })}>Skip setup</Button>
-              <span className="ob-leave-note">Finish it later in Settings.</span>
+              <span className="ob-leave-note">You can finish it later in Settings.</span>
+              <Button variant="link" onClick={() => leaveSession(() => post('/api/auth/signout'), setToast)}>Sign out</Button>
             </div>
           </aside>
 
           <section className="ob-main" aria-labelledby="ob-title">
+            {leaveError && (
+              <div className="ob-error">
+                <ErrorNote
+                  live
+                  what="Waypoint could not leave the setup."
+                  fix={`${leaveError.replace(/\.?$/, '.')} Try again, or open Settings.`}
+                  onRetry={() => { leave({ onboarded: true, step: current }); }}
+                />
+                <a className="btn ui-btn" href="/?view=settings">Open Settings</a>
+              </div>
+            )}
             <header className="ob-head">
               <h1 id="ob-title" ref={heading} tabIndex={-1} className="ob-title">{title}</h1>
               <p className="ob-lead">{lead}</p>
@@ -175,7 +205,7 @@ export default function Onboarding({ me, setToast, toggleCountry, refresh, onLea
             <footer className="ob-foot">
               {at > 0 ? <Button variant="link" onClick={back}>Back</Button> : <span />}
               <div className="ob-foot-main">
-                {skipLabel && <Button variant="link" onClick={next}>{skipLabel}</Button>}
+                {skipLabel && <Button variant="link" onClick={skip}>{skipLabel}</Button>}
                 {primary}
               </div>
             </footer>

@@ -27,9 +27,9 @@ function useSideList() {
   return side;
 }
 
-type Props = { state: any; setToast: (s: string) => void; toggleCountry: (cc: string, on: boolean) => void | Promise<unknown> };
+type Props = { state: any; setToast: (s: string) => void; toggleCountry: (cc: string, on: boolean) => void | Promise<unknown>; /** The wizard may show again: the app stops skipping it. */ onReopenWizard?: () => void };
 
-export default function SettingsScreen({ state, setToast, toggleCountry }: Props) {
+export default function SettingsScreen({ state, setToast, toggleCountry, onReopenWizard }: Props) {
   const isAdmin = state?.user?.role === 'admin';
   const [section, setSection] = useState<SettingsSection>(() => (typeof window === 'undefined' ? 'account' : readSection(window.location.search, isAdmin)));
   const side = useSideList();
@@ -40,11 +40,12 @@ export default function SettingsScreen({ state, setToast, toggleCountry }: Props
     try {
       await patch('/api/onboarding', { onboarded: false });
       window.history.replaceState(null, '', window.location.pathname);
+      onReopenWizard?.();
       await mutate(KEYS.me);
     } catch (e) {
       setToast((e as Error).message);
     }
-  }, [mutate, setToast]);
+  }, [mutate, setToast, onReopenWizard]);
 
   // The section is in the URL (?view=settings&section=job-search), so a reload or a shared link keeps it.
   useEffect(() => {

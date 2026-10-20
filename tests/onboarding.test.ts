@@ -9,7 +9,12 @@ import { db } from '@/lib/db';
 import { buildMe } from '@/lib/state';
 import AccountSection from '@/components/settings/AccountSection';
 import { refreshLine } from '@/components/jobs/refresh';
-import { startStep, wizardSteps } from '@/components/onboarding/steps';
+import { hasViewParam } from '@/components/onboarding/bypass';
+import { leaveWizard } from '@/components/onboarding/leave';
+import Onboarding from '@/components/onboarding/Onboarding';
+import StepRoute from '@/components/onboarding/StepRoute';
+import { startStep, stepStatus, wizardSteps, type WizardStep } from '@/components/onboarding/steps';
+import { getSettings } from '@/lib/settings';
 import * as onboarding from '@/app/api/onboarding/route';
 import { ctx, makeUser, request } from './helpers/http';
 import { applyMigrations, migrationNames } from './setup/migrate';
@@ -201,5 +206,82 @@ describe('Settings, Account', () => {
   it('offers "Finish setting up" only when the user skipped part of the wizard', () => {
     expect(render(() => {})).toContain('Finish setting up');
     expect(render()).not.toContain('Finish setting up');
+  });
+});
+
+describe('the status of a step on the route', () => {
+  const steps = wizardSteps({ claude: { mode: 'shared' } });
+  const status = (current: WizardStep, skipped: WizardStep[], step: WizardStep) => stepStatus(steps, current, new Set(skipped), step);
+
+  it('marks the steps before the current one as done, or skipped when the user skipped them', () => {
+    expect(status('review', ['import'], 'account')).toBe('done');
+    expect(status('review', ['import'], 'import')).toBe('skipped');
+    expect(status('review', ['import'], 'review')).toBe('now');
+    expect(status('review', ['import'], 'refresh')).toBe('later');
+  });
+
+  it('does not mark a step that comes later as skipped', () => {
+    expect(status('search', ['refresh'], 'refresh')).toBe('later');
+  });
+
+  it('says Skipped on the route', () => {
+    const html = renderToStaticMarkup(createElement(StepRoute, { steps, current: 'review', skipped: new Set<WizardStep>(['import']) }));
+    expect(html).toContain('Skipped');
+    expect(html.match(/Done/g)).toHaveLength(2);
+  });
+});
+
+describe('leaving the wizard', () => {
+  it('leaves when the save works, even if loading the data again fails', async () => {
+    const reload = vi.fn(async () => { throw new Error('offline'); });
+    expect(await leaveWizard(async () => ({}), reload)).toEqual({ ok: true });
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it('stays and gives the message when the save fails', async () => {
+    const reload = vi.fn(async () => {});
+    expect(await leaveWizard(async () => { throw new Error('The server is down.'); }, reload)).toEqual({ ok: false, message: 'The server is down.' });
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('shows Skip setup, Skip this step and Sign out on the wizard', () => {
+    const me = {
+      user: { name: 'Mira Okafor', email: 'mira@example.com', role: 'member' }, claude: { mode: 'none' }, countries: [], analysing: null,
+      onboarding: { onboardedAt: null, step: null },
+    } as unknown as Parameters<typeof Onboarding>[0]['me'];
+    const html = renderToStaticMarkup(createElement(Onboarding, { me, setToast: () => {}, toggleCountry: () => {}, refresh: async () => {}, onLeave: () => {} }));
+    for (const text of ['Skip setup', 'Skip this step', 'Sign out']) expect(html).toContain(text);
+  });
+});
+
+describe('the ?view= bypass', () => {
+  it('sees a view in the address', () => {
+    expect(hasViewParam('?view=settings')).toBe(true);
+    expect(hasViewParam('?job=abc')).toBe(false);
+    expect(hasViewParam('')).toBe(false);
+  });
+});
+
+describe('the résumé mode of a row that the migration made', () => {
+  const withEnv = async (value: string, fn: () => Promise<void>) => {
+    const old = process.env.RESUME_TEX;
+    process.env.RESUME_TEX = value;
+    try { await fn(); } finally { if (old === undefined) delete process.env.RESUME_TEX; else process.env.RESUME_TEX = old; }
+  };
+
+  it('gives the template to an admin with own-tex and no file when the server has no RESUME_TEX', async () => {
+    const { user } = await makeUser('admin');
+    await db.userSettings.create({ data: { userId: user.id, resumeMode: 'own-tex' } });
+    await withEnv('', async () => expect((await getSettings(user.id)).resumeMode).toBe('template'));
+    await withEnv('/srv/cv.tex', async () => expect((await getSettings(user.id)).resumeMode).toBe('own-tex'));
+  });
+
+  it('gives the template to a member with own-tex and no file, and keeps own-tex with a file', async () => {
+    const a = await makeUser();
+    await db.userSettings.create({ data: { userId: a.user.id, resumeMode: 'own-tex' } });
+    expect((await getSettings(a.user.id)).resumeMode).toBe('template');
+    const b = await makeUser();
+    await db.userSettings.create({ data: { userId: b.user.id, resumeMode: 'own-tex', ownTex: 'own.tex' } });
+    expect((await getSettings(b.user.id)).resumeMode).toBe('own-tex');
   });
 });

@@ -52,10 +52,11 @@ export function BoardList({ boards }: { boards: FailedBoard[] }) {
 }
 
 /** The fields and the visa status. The onboarding wizard uses this form too. */
-export function SearchForm({ value, onSaved, setToast, formId, hideSave }: { value: SearchSettings; onSaved: (s: SearchSettings) => void | Promise<unknown>; setToast: (s: string) => void; /** The id of the form, for a submit button outside of it. */ formId?: string; /** Leaves out the Save button. The wizard has its own button. */ hideSave?: boolean }) {
+export function SearchForm({ value, onSaved, setToast, formId, hideSave, onBusy }: { value: SearchSettings; onSaved: (s: SearchSettings) => void | Promise<unknown>; setToast: (s: string) => void; /** The id of the form, for a submit button outside of it. */ formId?: string; /** Leaves out the Save button. The wizard has its own button. */ hideSave?: boolean; /** Tells the screen when a save runs, for a button outside of the form. */ onBusy?: (busy: boolean) => void }) {
   const [fields, setFields] = useState(value.fields);
   const [visa, setVisa] = useState(value.visaStatus);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusyState] = useState(false);
+  const setBusy = (b: boolean) => { setBusyState(b); onBusy?.(b); };
   return (
     <form
       id={formId}

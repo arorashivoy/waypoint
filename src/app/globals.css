@@ -1124,10 +1124,12 @@ button { cursor: pointer; }
   border-radius: var(--r-sheet); overflow: clip; min-height: min(44rem, calc(100dvh - 2 * var(--s6)));
 }
 .ob-side { display: flex; flex-direction: column; gap: var(--s6); padding: var(--s6) var(--s5); border-right: 1px solid var(--edge); background: var(--glass); }
-.ob-brand { display: flex; align-items: center; gap: 10px; }
+.ob-brand { display: flex; align-items: center; gap: var(--s3); }
 .ob-brand-name { font-family: var(--f-head); font-weight: 700; font-size: var(--t-20); letter-spacing: -0.01em; }
 .ob-leave { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s1); }
 .ob-leave .btn.link { padding-left: 0; }
+.ob-leave { gap: var(--s1); }
+.ob-error { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s3); margin-bottom: var(--s5); }
 .ob-leave-note { font-size: var(--t-13); color: var(--soft); }
 
 .ob-route-nav { display: flex; flex-direction: column; gap: var(--s3); }
@@ -1141,7 +1143,8 @@ button { cursor: pointer; }
 .ob-route .ob-now::after { box-shadow: 0 0 0 4px color-mix(in srgb, var(--mint) 20%, transparent), 0 0 16px color-mix(in srgb, var(--mint) 60%, transparent); }
 .ob-route .ob-now .ui-stop-word { color: var(--mint); }
 .ob-route .ob-done .ui-stop-word { color: var(--soft); font-weight: 500; }
-.ob-route .ob-later .ui-stop-word { color: var(--soft); font-weight: 500; }
+.ob-route .ob-later .ui-stop-word, .ob-route .ob-skipped .ui-stop-word { color: var(--soft); font-weight: 500; }
+.ob-route .ob-skipped .ui-stop-label { color: var(--soft); }
 .ob-where { display: none; margin: 0; font-size: var(--t-13); color: var(--soft); }
 
 .ob-main { display: flex; flex-direction: column; min-width: 0; padding: var(--s7) var(--s7) 0; }
@@ -1183,7 +1186,7 @@ button { cursor: pointer; }
     flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s3) var(--s4);
     padding: calc(var(--s4) + env(safe-area-inset-top)) var(--s4) var(--s4); border-right: 0; border-bottom: 1px solid var(--edge);
   }
-  .ob-leave { margin: 0; flex-direction: row; align-items: center; }
+  .ob-leave { margin: 0; flex-direction: row; align-items: center; gap: var(--s2); }
   .ob-leave-note { display: none; }
   .ob-route-nav { order: 3; flex: 1 1 100%; gap: var(--s2); }
   .ob-route { display: flex; align-items: center; }

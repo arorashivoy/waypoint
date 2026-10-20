@@ -50,10 +50,12 @@ function parseFields(text: string): string[] {
 export async function getSettings(userId: string): Promise<Settings> {
   const row = await db.userSettings.findUnique({ where: { userId } });
   if (!row) return { fields: [], visaStatus: '', resumeMode: await defaultResumeMode(userId), ownTex: null, templateId: 'classic' };
+  // A row with own-tex and no file is the default of the admin (the migration made it). Without RESUME_TEX the default is the template.
+  const resumeMode = row.resumeMode === 'own-tex' ? (row.ownTex ? 'own-tex' : await defaultResumeMode(userId)) : 'template';
   return {
     fields: parseFields(row.fields),
     visaStatus: row.visaStatus,
-    resumeMode: row.resumeMode === 'own-tex' ? 'own-tex' : 'template',
+    resumeMode,
     ownTex: row.ownTex,
     templateId: row.templateId,
   };
