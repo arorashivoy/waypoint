@@ -605,12 +605,12 @@ describe('GlyphIndex', () => {
       for (let y = 0; y < 100; y++) for (let x = 0; x < 100; x++) data.fill(px(x, y), (y * 100 + x) * 3, (y * 100 + x) * 3 + 3);
       return { width: 100, height: 100, data };
     };
-    // Ink at x 26..29 (a glyph of another span, 6 px from the part) and at x 12..18 (the lead).
-    const ink = picture((x, y) => (y >= 36 && y < 50 && ((x >= 26 && x < 29) || (x >= 12 && x < 18)) ? 0 : 255));
+    // Ink at x 22..25 (a glyph of another span, 2 px from the part: less than a word gap of 0.15 font size) and at x 12..18 (the lead).
+    const ink = picture((x, y) => (y >= 36 && y < 50 && ((x >= 22 && x < 25) || (x >= 12 && x < 18)) ? 0 : 255));
     const white = picture(() => 255);
     const lead: Glyph = { c: 'f', x: 10, y: 50, dx: 1, dy: 0, len: 10, size: 20, span: 0, steep: false };
     const part: Glyph = { ...lead, c: 'i', x: 20, len: 0, lead: 0 };
-    const far: Glyph = { ...lead, c: 'w', x: 26, len: 10, span: 1 };
+    const far: Glyph = { ...lead, c: 'w', x: 22, len: 10, span: 1 };
     const touching: Glyph = { ...lead, c: 'e', x: 20, len: 4, span: 3 };
     const later: Glyph = { ...lead, c: 'w', x: 40, len: 10, span: 2 };
     const r = glyphInk([lead, part, far, later], ink, white, 1)!;
@@ -619,6 +619,10 @@ describe('GlyphIndex', () => {
     // A glyph of another span that touches the part (a kerning pair inside a word) keeps its ink.
     const inkT = picture((x, y) => (y >= 36 && y < 50 && x >= 20 && x < 24 ? 0 : 255));
     expect(glyphInk([lead, part, touching], inkT, white, 1)!.share[2]).toBeGreaterThan(0.08);
+    // A glyph that starts a word gap (0.15 font size) after the part keeps its own ink.
+    const next: Glyph = { ...lead, c: 'w', x: 24, len: 10, span: 4 };
+    const inkN = picture((x, y) => (y >= 36 && y < 50 && x >= 24 && x < 30 ? 0 : 255));
+    expect(glyphInk([lead, part, next], inkN, white, 1)!.share[2]).toBeGreaterThan(0.08);
     // A glyph further than 1 font size from the part keeps its own ink.
     const ink2 = picture((x, y) => (y >= 36 && y < 50 && x >= 40 && x < 48 ? 0 : 255));
     expect(glyphInk([lead, part, far, later], ink2, white, 1)!.share[3]).toBeGreaterThan(0.08);
