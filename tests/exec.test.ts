@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
+import { chmodSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -348,5 +349,32 @@ describe('rclone and systemctl templates', () => {
     await expect(
       runProgram('rclone', ['copy', '--no-traverse', file, 'g:w'], { ...o('rclone'), env: { PATH: '/usr/bin', RCLONE_CONFIG: '/x', HOME: '/h' } }),
     ).rejects.toThrow(/did not start/);
+  });
+});
+
+describe('runProgram with an abort signal', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'exec-abort-bin-'));
+  const work = mkdtempSync(join(tmpdir(), 'exec-abort-cwd-'));
+  const bin = join(dir, 'pdftotext');
+  writeFileSync(bin, '#!/bin/sh\nsleep 30\n');
+  chmodSync(bin, 0o755);
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(work, { recursive: true, force: true });
+  });
+
+  it('stops a running program when the signal aborts', async () => {
+    const ac = new AbortController();
+    const started = Date.now();
+    const run = runProgram('pdftotext', ['-v'], { cwd: work, timeoutMs: 20_000, bin, signal: ac.signal });
+    setTimeout(() => ac.abort(), 100);
+    await expect(run).rejects.toThrow(/aborted/);
+    expect(Date.now() - started).toBeLessThan(5000);
+  });
+
+  it('does not start a program when the signal has aborted already', async () => {
+    const ac = new AbortController();
+    ac.abort();
+    await expect(runProgram('pdftotext', ['-v'], { cwd: work, timeoutMs: 20_000, bin, signal: ac.signal })).rejects.toThrow(/aborted/);
   });
 });

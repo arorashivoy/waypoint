@@ -33,6 +33,8 @@ export type RunOptions = {
   /** An absolute binary path, for WAYPOINT_CLAUDE_BIN or RESUME_ENGINE. It
    *  must be outside cwd, and its file name must be the program name. */
   bin?: string;
+  /** Stops the program when the signal aborts. */
+  signal?: AbortSignal;
 };
 export type RunResult = { code: number; stdout: string; stderr: string };
 
@@ -294,6 +296,8 @@ export async function runProgram(program: Program, args: readonly string[], opts
     cmd = prlimit;
   }
 
+  if (opts.signal?.aborted) throw new ExecError(`${program} was aborted`);
+
   return new Promise((resolvePromise, reject) => {
     const env = (opts.env ?? baseEnv()) as NodeJS.ProcessEnv;
     const child = spawn(cmd, argv, { cwd: opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], shell: false, detached: true });
@@ -314,10 +318,13 @@ export async function runProgram(program: Program, args: readonly string[], opts
       if (failed) return;
       failed = true;
       clearTimeout(timer);
+      opts.signal?.removeEventListener('abort', abort);
       kill();
       reject(e);
     };
     const timer = setTimeout(() => fail(new ExecError(`${program} took longer than ${opts.timeoutMs} ms`)), opts.timeoutMs);
+    const abort = () => fail(new ExecError(`${program} was aborted`));
+    opts.signal?.addEventListener('abort', abort, { once: true });
     const take = (which: 'out' | 'err') => (d: string) => {
       size += Buffer.byteLength(d);
       if (size > MAX_OUTPUT) return fail(new ExecError(`${program} output is larger than 5 MB`));
@@ -332,10 +339,12 @@ export async function runProgram(program: Program, args: readonly string[], opts
       if (failed) return;
       failed = true;
       clearTimeout(timer);
+      opts.signal?.removeEventListener('abort', abort);
       reject(new ExecError(`${program} did not start: ${e.message}`));
     });
     child.on('close', (code) => {
       clearTimeout(timer);
+      opts.signal?.removeEventListener('abort', abort);
       if (failed) return;
       resolvePromise({ code: code ?? 1, stdout, stderr });
     });

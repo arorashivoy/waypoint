@@ -31,6 +31,7 @@ async function fill(u: U, jobId: string) {
   await db.profileImport.create({ data: { userId: id, filename: 'a.yml', counts: '{}' } });
   await db.invite.create({ data: { tokenHash: `h-${id}`, kind: 'invite', createdById: id, expiresAt: new Date(Date.now() + 86_400_000) } });
   await db.jobAnalysis.create({ data: { userId: id, jobId, analysis: '{}' } });
+  await db.appState.create({ data: { key: `base-failed:${id}`, value: JSON.stringify({ version: 1, reason: 'timeout', at: Date.now() }) } });
   await createSession(id, 'second device');
   writeFileSync(join(userDir(id, 'imports'), 'resume.pdf'), 'x');
 }
@@ -48,6 +49,7 @@ async function counts(id: string) {
     imp: await db.profileImport.count({ where: { userId: id } }),
     invite: await db.invite.count({ where: { createdById: id } }),
     analysis: await db.jobAnalysis.count({ where: { userId: id } }),
+    baseFailed: await db.appState.count({ where: { key: `base-failed:${id}` } }),
   };
 }
 

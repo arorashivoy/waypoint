@@ -6,7 +6,7 @@ import { coerceText, jobCheckSchema, BLOCKER_TYPES, LEGITIMACY_FLAGS } from './s
 import { jobCheckPrompt, jobCheckSystem, PROMPT_VERSIONS } from './prompts';
 import { claimsFor, profileSummary } from './user';
 import { fieldFit, levelFit, rankRoutes, routeLabel } from './match';
-import { checkEvidence, checkReply, citableClaims, fieldChoices, jobCheckProfileText, postedText, scoreCheck, type Blocker, type JobCheck, type Requirement, type ScorePart } from './jobcheck';
+import { checkEvidence, checkReply, citableClaims, fieldChoices, jobCheckProfileText, limitedParts, postedText, scoreCheck, type Blocker, type JobCheck, type Requirement, type ScorePart } from './jobcheck';
 import { getSettings } from './settings';
 import { CV_COUNTRY_RULES, FIELD_QUERIES } from './countries';
 import { type ClaimsDoc } from './claims';
@@ -259,6 +259,7 @@ function viewOf(job: Job, profile: Profile, contacts: { company: string | null; 
   const provisional = analysis.by !== 'claude';
   // A keyword guess is never allowed to outrank a posting Claude actually read.
   const match = provisional ? Math.min(analysis.score, 65) : analysis.score;
+  if (match !== analysis.score) analysis.parts = limitedParts(analysis.parts, match, 'Limit for an estimate without Claude');
 
   return { analysis, routes, match, provisional, path: routeLabel(routes, job.company), hints: cvHints(job, profile, fit) };
 }

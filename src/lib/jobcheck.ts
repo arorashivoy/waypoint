@@ -28,7 +28,7 @@ export type JobCheckReply = JobCheckReplyT;
 export type Requirement = JobCheck['requirements'][number];
 export type Blocker = JobCheck['blockers'][number];
 
-export type ScorePart = { kind: 'requirement' | 'blocker' | 'field' | 'level'; label: string; points: number };
+export type ScorePart = { kind: 'requirement' | 'blocker' | 'field' | 'level' | 'limit'; label: string; points: number };
 
 /** Points that one blocker takes from the score. */
 export const BLOCKER_PENALTY = 25;
@@ -186,5 +186,15 @@ export function scoreCheck(check: Pick<JobCheck, 'requirements' | 'blockers'>, f
     { kind: 'field', label: 'Field fit', points: tenth(40 * fieldFit) },
     { kind: 'level', label: 'Level fit', points: tenth(40 * levelFit) },
   ];
-  return { score, parts };
+  return { score, parts: limitedParts(parts, score, 'Lowest possible score') };
+}
+
+/**
+ * The parts, plus one `limit` part when the final score is not their sum (the score stops at 0, or an
+ * estimate without Claude stops at 65). So the list on the screen always adds up to the badge.
+ * A gap under half a point is rounding and stays out.
+ */
+export function limitedParts(parts: readonly ScorePart[], final: number, label: string): ScorePart[] {
+  const gap = final - parts.reduce((n, p) => n + p.points, 0);
+  return Math.abs(gap) < 0.5 ? [...parts] : [...parts, { kind: 'limit', label, points: tenth(gap) }];
 }

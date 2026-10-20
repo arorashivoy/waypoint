@@ -6,9 +6,10 @@ import type { Claim, ClaimsDoc } from './claims';
 import { FIELD_QUERIES } from './countries';
 import { compileLatex, findEngine } from './latex';
 import { DEPTH_WEIGHT } from './resume/depth';
-import { hasOwnTex, ownTexPath } from './resume/own-tex';
+import { checkOwnTex, hasOwnTex, ownTexPath } from './resume/own-tex';
 import { baseOrder, baseResumePath, escapeLatex, hasResumeContent, renderTemplate, tailorOrder, templateAssetsDir } from './resume/template';
 import { db } from './db';
+import { scrub } from './log';
 import { getSettings } from './settings';
 import { isAdmin } from './user';
 
@@ -42,6 +43,11 @@ export class ResumeEngineError extends Error {
   constructor() {
     super('Your résumé source needs pdflatex or xelatex on the server. Ask the admin to install one.');
   }
+}
+
+/** Why a compile failed, for the user: the error text, with no key or token. */
+export function compileReason(e: unknown): string {
+  return `the CV did not compile: ${scrub((e as Error)?.message ?? String(e))}`;
 }
 
 export type ResumeConfig = {
@@ -358,8 +364,10 @@ export function tailorTex(tex: string, doc: ClaimsDoc, ranked: EvidencePick[], m
   // zero-score stranger replacing a zero-score entry he chose is churn.
   const onCv = new Set(rows.map((r) => r.id));
   const offCv = doc.targets.projects.filter((p) => !onCv.has(p.id) && score(p.id) > 0);
+  // A `tex` row that the profile saved before the own-tex check existed is checked again: it goes into a compile.
+  const usable = (p: { tex?: string | null }) => !!p.tex && checkOwnTex(p.tex).ok;
   const extras = offCv
-    .filter((p) => p.tex)
+    .filter(usable)
     .map((p) => ({ raw: p.tex!.trim(), id: p.id, title: headingOf(p.tex!) || p.title, score: score(p.id), onCv: false }));
 
   const pool = [...rows, ...extras];
@@ -379,8 +387,8 @@ export function tailorTex(tex: string, doc: ClaimsDoc, ranked: EvidencePick[], m
 
   // The hint that turns a missed swap into a one-time fix in claims.yml.
   const notes = offCv
-    .filter((p) => !p.tex && score(p.id) > floor)
-    .map((p) => `${p.title} fits this posting better than what made the cut, but has no tex in claims.yml to put on the CV`);
+    .filter((p) => !usable(p) && score(p.id) > floor)
+    .map((p) => `${p.title} fits this posting better than what made the cut, but has no usable tex in claims.yml to put on the CV`);
 
   const unchanged = kept.length === rows.length && kept.every((r, i) => r.raw === rows[i].raw);
   if (unchanged) return { tex, order: kept.map((r) => r.title), dropped, added, notes };
@@ -920,7 +928,7 @@ export async function buildResume(
     await compileLatex({ source, assetsDir: cfg.assetsDir, outPdf: out, engine, timeoutMs: cfg.timeoutMs });
     return result;
   } catch (e) {
-    return bail(`the CV did not compile: ${(e as Error).message.split('\n')[0]}`, skipped);
+    return bail(compileReason(e), skipped);
   }
 }
 

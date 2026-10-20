@@ -4,7 +4,7 @@ import { basename } from 'path';
 import { db } from '@/lib/db';
 import { handle } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
-import { NO_RESUME, buildCv } from '@/lib/cv';
+import { CvError, NO_RESUME, buildCv } from '@/lib/cv';
 import { isAdmin } from '@/lib/user';
 import { resumeConfig } from '@/lib/resume';
 
@@ -22,7 +22,14 @@ export const GET = handle<{ params: { id: string } }>(async (req, { params }) =>
   const app = await db.application.findFirst({ where: { id: params.id, userId: user.id }, include: { job: true } });
   if (!app) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
-  const resume = await buildCv(app, app.job, { compile: false });
+  let resume;
+  try {
+    resume = await buildCv(app, app.job, { compile: false });
+  } catch (e) {
+    // A CvError is a refusal for the user, for example "no LaTeX engine". It is not a fault.
+    if (e instanceof CvError) return NextResponse.json({ error: e.message }, { status: 409 });
+    throw e;
+  }
   if (!resume || !resume.path) {
     return NextResponse.json({ error: (await isAdmin(user.id)) ? 'No CV configured. Set RESUME_PDF, and RESUME_TEX to tailor it.' : NO_RESUME }, { status: 404 });
   }

@@ -317,6 +317,14 @@ describe('a failed base build', () => {
     }
   });
 
+  it('deletes an expired record when it reads it', async () => {
+    const { user } = await makeUser();
+    const key = `base-failed:${user.id}`;
+    await db.appState.create({ data: { key, value: JSON.stringify({ version: 1, reason: 'timeout', at: Date.now() - 31 * 60_000 }) } });
+    expect(await baseFailure(user.id)).toBeNull();
+    expect(await db.appState.count({ where: { key } })).toBe(0);
+  });
+
   it('a good build clears the record', async () => {
     const { user } = await makeUser();
     await saveProfile(user.id, sampleDoc(), 'First');

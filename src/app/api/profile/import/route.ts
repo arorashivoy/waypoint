@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { handle, HttpError } from '@/lib/auth/http';
 import { requireUser } from '@/lib/auth/guard';
+import { scrub } from '@/lib/log';
 import { createDrafts, MAX_PENDING } from '@/lib/profile/drafts';
 import { checkExportUpload, checkUploadLength, linkedinDrafts, parseExport } from '@/lib/linkedin-import';
 
@@ -27,7 +28,7 @@ export const POST = handle(async (req) => {
     parsed = parseExport(buf);
   } catch (e) {
     if (e instanceof HttpError) throw e;
-    return NextResponse.json({ error: `Could not read that archive: ${(e as Error).message}` }, { status: 400 });
+    return NextResponse.json({ error: `Could not read that archive: ${scrub((e as Error).message)}` }, { status: 400 });
   }
 
   const userId = user.id;

@@ -18,15 +18,18 @@ export function cliDisabled(): Promise<Disabled | null> {
 /**
  * Run the canary once, when the worker starts. A fail turns CLI mode off until
  * the next start passes. It never throws: an error counts as a fail.
+ * `signal` stops the canary when the worker gets SIGTERM during the start.
  */
-export async function runCliSelfTestAtStart(test: () => Promise<Verdict> = cliSelfTest): Promise<SelfTestRun> {
+export async function runCliSelfTestAtStart(test: (signal?: AbortSignal) => Promise<Verdict> = cliSelfTest, signal?: AbortSignal): Promise<SelfTestRun> {
   if (!cliBinary()) return { ran: false };
   let verdict: Verdict;
   try {
-    verdict = await test();
+    verdict = await test(signal);
   } catch (e) {
     verdict = { ok: false, why: e instanceof Error ? e.message : 'The self-test threw an error.' };
   }
+  // The worker is stopping. A stopped canary is not a fail, so the stored verdict stays as it was.
+  if (signal?.aborted) return { ran: false };
   try {
     if (verdict.ok) {
       await clearState(KEY);

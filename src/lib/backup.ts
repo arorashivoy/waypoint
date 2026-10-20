@@ -7,7 +7,7 @@ import * as tar from 'tar';
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { programEnv, runProgram, RCLONE_REMOTE } from '@/lib/exec';
-import { log } from '@/lib/log';
+import { log, scrub } from '@/lib/log';
 
 /**
  * Backups of the database and of the user folders (spec 4.6).
@@ -169,7 +169,7 @@ async function runningUnits(): Promise<string[]> {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (/is not installed|ENOENT/.test(msg)) continue;
-      running.push(`${unit} (systemctl could not be asked: ${msg.slice(0, 120)})`);
+      running.push(`${unit} (systemctl could not be asked: ${scrub(msg).slice(0, 120)})`);
     }
   }
   return running;

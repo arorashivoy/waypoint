@@ -4,6 +4,7 @@ import { db } from './db';
 import { cliBinary } from './claude/cli';
 import { cliDisabled } from './claude/selftest';
 import { env } from './env';
+import { scrub } from './log';
 import { lastBeat } from './tasks/queue';
 
 export type Check = { ok: boolean; detail: string };
@@ -17,7 +18,7 @@ async function guarded(fn: () => Promise<Check>): Promise<Check> {
   try {
     return await fn();
   } catch (e) {
-    return { ok: false, detail: `The check failed: ${e instanceof Error ? e.message.slice(0, 120) : 'unknown error'}` };
+    return { ok: false, detail: `The check failed: ${e instanceof Error ? scrub(e.message).slice(0, 120) : 'unknown error'}` };
   }
 }
 
@@ -57,10 +58,11 @@ export async function runChecks(now: Date = new Date(), opts: { beatId?: string 
         : { ok: false, detail: `The last heartbeat was ${Math.round(age / 1000)} seconds ago. The limit is 90.` };
     }),
     guarded(async () => {
-      const off = cliBinary() ? await cliDisabled() : null;
+      const hasCli = cliBinary() !== null;
+      const off = hasCli ? await cliDisabled() : null;
       const cliNote = off ? ` The Claude CLI is off: it failed its self-test at ${off.at}.` : '';
       if (env().ANTHROPIC_API_KEY) return { ok: true, detail: `The shared API key is set.${cliNote}` };
-      if (cliBinary() && !off) return { ok: true, detail: 'The Claude CLI is available to the admin.' };
+      if (hasCli && !off) return { ok: true, detail: 'The Claude CLI is available to the admin.' };
       const own = await db.userSecret.count({ where: { kind: 'anthropic' } });
       if (own > 0) return { ok: true, detail: `At least one user saved an API key.${cliNote}` };
       return off

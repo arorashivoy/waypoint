@@ -29,6 +29,8 @@ export const DELETE = handle(async (req) => {
     db.job.deleteMany({ where: { pastedBy: user.id, applications: { none: { userId: { not: user.id } } }, analyses: { none: { userId: { not: user.id } } } } }),
     db.job.updateMany({ where: { pastedBy: user.id }, data: { pastedBy: null } }),
     db.rateLimit.deleteMany({ where: { key: { endsWith: `:${user.id}` } } }),
+    // The failure record of the base résumé has no foreign key to the user.
+    db.appState.deleteMany({ where: { key: `base-failed:${user.id}` } }),
     db.user.deleteMany({ where: { id: user.id } }),
   ]);
   try {

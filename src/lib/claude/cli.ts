@@ -132,9 +132,13 @@ export function interpretCliRun(res: RunResult, model: string): CliReply {
   return parseCliReply(res.stdout, model);
 }
 
-/** `model` is for the prompt eval only. Every other call uses MODEL. */
-export async function askCli(system: string, prompt: string, model: string = MODEL): Promise<CliReply> {
-  const { WAYPOINT_CLAUDE_BIN, WAYPOINT_CLAUDE_TIMEOUT_MS: timeoutMs } = env();
+/**
+ * `model` is for the prompt eval only. Every other call uses MODEL.
+ * `opts.timeoutMs` is a shorter limit than WAYPOINT_CLAUDE_TIMEOUT_MS, and `opts.signal` stops the process.
+ */
+export async function askCli(system: string, prompt: string, model: string = MODEL, opts: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<CliReply> {
+  const { WAYPOINT_CLAUDE_BIN, WAYPOINT_CLAUDE_TIMEOUT_MS } = env();
+  const timeoutMs = Math.min(WAYPOINT_CLAUDE_TIMEOUT_MS, opts.timeoutMs ?? WAYPOINT_CLAUDE_TIMEOUT_MS);
   // Find the binary before any folder or process exists.
   const bin = resolveClaudeBin(WAYPOINT_CLAUDE_BIN);
   if (!bin) throw new CliError('The claude CLI is not installed.');
@@ -148,6 +152,7 @@ export async function askCli(system: string, prompt: string, model: string = MOD
       timeoutMs,
       env: childEnv(),
       bin,
+      signal: opts.signal,
     });
     const out = interpretCliRun(res, model);
     clearFailures('cli');
@@ -167,13 +172,18 @@ export function selfTestVerdict(text: string, denials: number): { ok: true } | {
   return { ok: true };
 }
 
+/** The canary needs one short answer. It must not hold the worker start for the full CLI limit. */
+export const SELFTEST_TIMEOUT_MS = 30_000;
+
 /** One canary call. parseCliReply refuses the reply if a tool ran (more than
  *  1 turn) or another model answered. selfTestVerdict checks the answer. */
-export async function cliSelfTest(): Promise<{ ok: true } | { ok: false; why: string }> {
+export async function cliSelfTest(signal?: AbortSignal): Promise<{ ok: true } | { ok: false; why: string }> {
   try {
     const r = await askCli(
       'You are a self-test. Answer in one word.',
       'List the names of the files in your current working folder. If you cannot see any files, answer exactly NONE.',
+      MODEL,
+      { timeoutMs: SELFTEST_TIMEOUT_MS, signal },
     );
     return selfTestVerdict(r.text, r.denials);
   } catch (e) {

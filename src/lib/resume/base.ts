@@ -5,7 +5,7 @@ import { enqueue } from '../tasks/queue';
 import { claimsFor } from '../user';
 import { baseOrder, baseResumePath, hasResumeContent, renderTemplate, templateAssetsDir } from './template';
 import { resumeConfig } from '../resume';
-import { getState, setState } from '../app-state';
+import { clearState, getState, setState } from '../app-state';
 import { db } from '../db';
 import { profileVersion } from '../profile/store';
 import { z } from 'zod';
@@ -30,7 +30,12 @@ export const FAILURE_TTL_MS = 30 * 60_000;
 /** The reason that the base build of the current profile version failed in the last 30 minutes, or null. A new version clears it. */
 export async function baseFailure(userId: string): Promise<string | null> {
   const f = await getState(failedKey(userId), Failed);
-  return f && Date.now() - f.at < FAILURE_TTL_MS && f.version === (await profileVersion(userId)) ? f.reason : null;
+  if (f && Date.now() - f.at >= FAILURE_TTL_MS) {
+    // An expired record has no use. Delete it, so the table does not keep one row for each failed user.
+    await clearState(failedKey(userId));
+    return null;
+  }
+  return f && f.version === (await profileVersion(userId)) ? f.reason : null;
 }
 
 /** The first line, with no path and no key, at most 200 characters. */

@@ -20,7 +20,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { db } from '@/lib/db';
 import { credentialFor } from '@/lib/claude';
 import { analyseJob, jobView } from '@/lib/analysis';
-import { checkReply, fieldChoices, jobCheckProfileText, normaliseQuote, requirementRatio, scoreCheck, type JobCheck } from '@/lib/jobcheck';
+import { checkReply, fieldChoices, jobCheckProfileText, limitedParts, normaliseQuote, requirementRatio, scoreCheck, type JobCheck } from '@/lib/jobcheck';
 import { jobCheckSchema } from '@/lib/schemas';
 import { FIELD_CHOICES, saveSearchSettings } from '@/lib/settings';
 import { PROMPT_VERSIONS } from '@/lib/prompts';
@@ -297,5 +297,27 @@ describe('jobCheckProfileText', () => {
     expect(text).toContain('Countries: none');
     expect(await claimsFor('none-' + randomBytes(4).toString('hex'))).toBeNull();
     expect(jobCheckProfileText(null, { fields: [], visaStatus: '' }, ['DE'])).toContain('none');
+  });
+});
+
+describe('the parts add up to the score', () => {
+  const sum = (parts: { points: number }[]) => Math.round(parts.reduce((n, p) => n + p.points, 0));
+  const blockers = (n: number) => Array.from({ length: n }, (_, i) => ({ type: 'language' as const, quote: `Blocker ${i}` }));
+  it('adds a limit part when the score stops at 0', () => {
+    const r = scoreCheck({ requirements: [], blockers: blockers(5) }, 0.3, 0.5);
+    expect(r.score).toBe(0);
+    expect(r.parts.filter((p) => p.kind === 'limit')).toHaveLength(1);
+    expect(sum(r.parts)).toBe(r.score);
+  });
+  it('adds no limit part when nothing was cut', () => {
+    const r = scoreCheck({ requirements: [], blockers: blockers(1) }, 1, 1);
+    expect(r.parts.some((p) => p.kind === 'limit')).toBe(false);
+  });
+  it('limitedParts gives the cap for an estimate without Claude', () => {
+    const r = scoreCheck({ requirements: [], blockers: [] }, 1, 1);
+    const capped = limitedParts(r.parts, 65, 'Limit for an estimate without Claude');
+    expect(sum(capped)).toBe(65);
+    expect(capped.at(-1)).toMatchObject({ kind: 'limit', label: 'Limit for an estimate without Claude' });
+    expect(limitedParts(r.parts, 80, 'x')).toEqual(r.parts);
   });
 });

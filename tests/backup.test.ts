@@ -223,6 +223,15 @@ describe('restoreBackup', () => {
     unchanged(s);
   });
 
+  it('keeps a secret out of the refusal when systemctl fails', async () => {
+    const s = await setup();
+    run.mockRejectedValue(new Error('systemctl failed: token=plaintoken123456'));
+    const err = await restoreBackup({ dbFile: s.made.db, dataDir: s.dataDir, usersDir: s.usersDir }).catch((e: Error) => e);
+    expect((err as Error).message).toMatch(/could not be asked/);
+    expect((err as Error).message).not.toContain('plaintoken123456');
+    unchanged(s);
+  });
+
   it.each(['inactive', 'failed', 'unknown'])('accepts the answer %s', async (out) => {
     const s = await setup();
     run.mockResolvedValue({ code: 3, stdout: `${out}\n`, stderr: '' });

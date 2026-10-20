@@ -20,7 +20,7 @@ async function main() {
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);
   // Each start runs the CLI canary again. A fail turns CLI mode off.
-  await runCliSelfTestAtStart();
+  await runCliSelfTestAtStart(undefined, ac.signal);
   log.info('worker started');
   await startWorker({ signal: ac.signal });
   log.info('worker stopped');

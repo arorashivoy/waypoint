@@ -13,7 +13,7 @@ vi.mock('@/lib/resume', async (orig) => {
 
 import { db } from '@/lib/db';
 import { NO_RESUME, buildCv, publishCv, refineCv, CvError } from '@/lib/cv';
-import { buildResume } from '@/lib/resume';
+import { buildResume, ResumeEngineError } from '@/lib/resume';
 import { usersRoot } from '@/lib/user-files';
 import { runOnce } from '@/lib/tasks/worker';
 import '@/lib/tasks/handlers';
@@ -151,6 +151,18 @@ describe('the PDF folder', () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+});
+
+describe('the PDF route with no LaTeX engine', () => {
+  it('gives 409 with the engine message, not 500', async () => {
+    const a = await makeUser('admin');
+    const job = await newJob();
+    const app = await db.application.create({ data: { userId: a.user.id, jobId: job.id } });
+    vi.mocked(buildResume).mockRejectedValueOnce(new ResumeEngineError());
+    const res = await resumeFile.GET(request(`/api/resume/${app.id}`, { cookie: a.cookie }), ctx({ id: app.id }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toContain('needs pdflatex or xelatex');
   });
 });
 

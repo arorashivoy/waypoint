@@ -28,7 +28,7 @@ import { shareResume } from '@/lib/gdrive';
 import { checkOwnTex, ownTexDir, ownTexPath } from '@/lib/resume/own-tex';
 import { templateAssetsDir } from '@/lib/resume/template';
 import { db } from '@/lib/db';
-import { buildResume, resumeConfig } from '@/lib/resume';
+import { buildResume, compileReason, resumeConfig } from '@/lib/resume';
 import { getSettings } from '@/lib/settings';
 import * as route from '@/app/api/resume/own-tex/route';
 import { ctx, formRequest, makeUser, request } from './helpers/http';
@@ -235,6 +235,11 @@ describe('resumeConfig and buildResume', () => {
     expect(arg.source).toContain('Jane Doe');
     // The folder holds resume.cls only, so an own source may use \documentclass{resume}.
     expect(arg.assetsDir).toBe(templateAssetsDir());
+  });
+
+  it('gives a compile error with no secret', () => {
+    const reason = compileReason(new Error('pdflatex failed:\n! Undefined control sequence. api_key=plainkey123456'));
+    expect(reason).toBe('the CV did not compile: pdflatex failed:\n! Undefined control sequence. api_key=[removed]');
   });
 
   it('gives a member with no source no CV', async () => {

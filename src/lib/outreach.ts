@@ -76,19 +76,20 @@ const userSettings = async (userId: string) => {
  * quarter of the output tokens of writing the message from scratch.
  */
 async function draftReferral(app: Application, job: Job, profile: ResolvedProfile, contactName: string, fields: string[]) {
-  const cred = await credentialFor(app.userId);
-  const candidates = [...profile.projects.map((p) => p.title), ...profile.positions.map((p) => p.title)].filter(Boolean);
-  const slots: Slots =
-    !cred
-      ? { highlight: candidates[0] || '', hook: 'it lines up closely with what I build today', proof: `I ${profile.headline.toLowerCase()}` }
-      : await askJsonCached('referral', PROMPT_VERSIONS.referral, { system: REFERRAL_SYSTEM, prompt: referralPrompt(profile, job, contactName, fields), schema: SlotsReply, effort: 'low' }, { userId: app.userId, kind: 'referral' });
-
+  // The CV comes first. When the build fails (for example, no LaTeX engine), the task fails before the paid Claude call.
   // Which projects lead is decided from the claim graph against this
   // posting's own words, plus whatever was chosen in "Refine with Claude".
   // Uploaded before the message is written, because the message quotes the
   // link. Only the worker starts LaTeX: if the tailored PDF is not built yet,
   // the message links the base PDF.
   const { resume, driveReason } = await publishCv(app, job, { compile: false });
+
+  const cred = await credentialFor(app.userId);
+  const candidates = [...profile.projects.map((p) => p.title), ...profile.positions.map((p) => p.title)].filter(Boolean);
+  const slots: Slots =
+    !cred
+      ? { highlight: candidates[0] || '', hook: 'it lines up closely with what I build today', proof: `I ${profile.headline.toLowerCase()}` }
+      : await askJsonCached('referral', PROMPT_VERSIONS.referral, { system: REFERRAL_SYSTEM, prompt: referralPrompt(profile, job, contactName, fields), schema: SlotsReply, effort: 'low' }, { userId: app.userId, kind: 'referral' });
 
   const message = renderReferral({
     firstName: contactName.split(' ')[0],

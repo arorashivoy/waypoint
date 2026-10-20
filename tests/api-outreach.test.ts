@@ -21,7 +21,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { db } from '@/lib/db';
-import { buildResume } from '@/lib/resume';
+import { buildResume, ResumeEngineError } from '@/lib/resume';
 import { BASE_CV_REASON } from '@/lib/cv';
 import { POST as outreach } from '@/app/api/outreach/route';
 import { runOnce } from '@/lib/tasks/worker';
@@ -87,6 +87,31 @@ describe('POST /api/outreach referral', () => {
     expect(body.resume).toMatchObject({ path: base, tailored: false, reason: BASE_CV_REASON });
     const app = await db.application.findFirstOrThrow({ where: { userId: user.id, jobId: job.id } });
     expect(app.cvPath).toBe(base);
+  });
+});
+
+describe('POST /api/outreach referral with no LaTeX engine', () => {
+  it('fails with a clear message before the paid Claude call', async () => {
+    const tag = randomBytes(6).toString('hex');
+    const company = `Noengine ${tag}`;
+    const job = await db.job.create({
+      data: { externalId: `out-${tag}`, source: 'Test', role: 'Engineer', company, city: 'Berlin', cc: 'DE', url: 'https://x.test' },
+    });
+    const { user, cookie } = await makeUser();
+    await db.contact.create({ data: { userId: user.id, firstName: 'Ana', lastName: 'Ref', company, position: 'Engineer' } });
+    vi.mocked(credentialFor).mockResolvedValue({ kind: 'key' } as never);
+    vi.mocked(askJsonCached).mockClear();
+    vi.mocked(buildResume).mockRejectedValueOnce(new ResumeEngineError());
+    try {
+      const res = await outreach(request('/api/outreach', { method: 'POST', cookie, body: { jobId: job.id, action: 'referral' } }), ctx());
+      await runOnce(undefined, { userId: user.id });
+      const row = await db.task.findUniqueOrThrow({ where: { id: (await res.json()).taskId } });
+      expect(row.status).toBe('failed');
+      expect(row.lastError).toContain('needs pdflatex or xelatex');
+      expect(askJsonCached).not.toHaveBeenCalled();
+    } finally {
+      vi.mocked(credentialFor).mockResolvedValue(null);
+    }
   });
 });
 

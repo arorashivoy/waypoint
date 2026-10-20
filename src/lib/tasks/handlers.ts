@@ -258,7 +258,8 @@ registerHandler(
     try {
       return await runOutreach(userId, payload);
     } catch (e) {
-      if (e instanceof NoCredentialError) throw new TaskFatal(e.message);
+      // The user must read these two errors. A retry cannot change them.
+      if (e instanceof CvError || e instanceof NoCredentialError) throw new TaskFatal(e.message);
       throw e;
     }
   },

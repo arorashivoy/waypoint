@@ -7,6 +7,7 @@ vi.mock('@/lib/claude/cli', async (orig) => ({ ...(await orig<typeof import('@/l
 import { GET } from '@/app/api/health/route';
 import { GET as ADMIN_GET } from '@/app/api/admin/health/route';
 import { db } from '@/lib/db';
+import { cliBinary } from '@/lib/claude/cli';
 import { cliDisabled } from '@/lib/claude/selftest';
 import { resetEnvForTests } from '@/lib/env';
 import { runChecks } from '@/lib/health';
@@ -101,6 +102,27 @@ describe('GET /api/admin/health', () => {
     const c = await runChecks(new Date(), { beatId });
     expect(c.claude.ok).toBe(true);
     expect(c.claude.detail).toMatch(/CLI is off/);
+  });
+
+  it('keeps a secret out of the detail of a failed check', async () => {
+    const spy = vi.spyOn(db, '$queryRawUnsafe').mockRejectedValueOnce(new Error('connect failed: api_key=plainkey123456'));
+    try {
+      const c = await runChecks(new Date(), { beatId });
+      expect(c.db.ok).toBe(false);
+      expect(c.db.detail).not.toContain('plainkey123456');
+      expect(c.db.detail).toContain('[removed]');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('looks for the CLI one time', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    resetEnvForTests();
+    vi.mocked(cliBinary).mockClear();
+    vi.spyOn(db.userSecret, 'count').mockResolvedValueOnce(0);
+    await runChecks(new Date(), { beatId });
+    expect(cliBinary).toHaveBeenCalledTimes(1);
   });
 
   it('gives 403 to a member', async () => {

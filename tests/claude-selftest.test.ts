@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/claude/cli', async (orig) => ({ ...(await orig<typeof import('@/lib/claude/cli')>()), cliBinary: vi.fn(() => '/usr/bin/claude') }));
 
 import { clearState, setState } from '@/lib/app-state';
+import { db } from '@/lib/db';
 import { cliBinary, parseCliReply, selfTestVerdict } from '@/lib/claude/cli';
 import { cliDisabled, runCliSelfTestAtStart } from '@/lib/claude/selftest';
 
@@ -69,6 +70,34 @@ describe('runCliSelfTestAtStart', () => {
     await setState('cliDisabled', { reason: 'old', at: new Date().toISOString() });
     expect(await runCliSelfTestAtStart(canary({ result: 'NONE' }))).toEqual({ ran: true, ok: true });
     expect(await cliDisabled()).toBeNull();
+  });
+
+  it('gives the abort signal to the canary', async () => {
+    const ac = new AbortController();
+    const test = vi.fn(async () => ({ ok: true as const }));
+    await runCliSelfTestAtStart(test, ac.signal);
+    expect(test).toHaveBeenCalledWith(ac.signal);
+  });
+
+  it('keeps the stored verdict when the worker stops during the canary', async () => {
+    await setState('cliDisabled', { reason: 'keep', at: '2026-01-01T00:00:00.000Z' });
+    const ac = new AbortController();
+    const r = await runCliSelfTestAtStart(async () => {
+      ac.abort();
+      return { ok: false, why: 'claude was aborted' };
+    }, ac.signal);
+    expect(r).toEqual({ ran: false });
+    expect(await cliDisabled()).toEqual({ reason: 'keep', at: '2026-01-01T00:00:00.000Z' });
+  });
+
+  it('reports a fail and does not throw when the database fails', async () => {
+    const spy = vi.spyOn(db.appState, 'upsert').mockRejectedValueOnce(new Error('database is locked'));
+    try {
+      const r = await runCliSelfTestAtStart(async () => ({ ok: false, why: 'tools are on' }));
+      expect(r).toMatchObject({ ran: true, ok: false });
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('does not run and does not change the row when no CLI is set up', async () => {

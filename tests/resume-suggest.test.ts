@@ -138,6 +138,25 @@ describe('checkSuggestion', () => {
     expect(verdict(sug({ text: 'Built a streaming parser in Rust that reads 2 TB per day on 4 nodes.' }))).toEqual({ ok: true });
   });
 
+  it('treats the multiply sign and fraction words as numbers', () => {
+    for (const text of [
+      'Built a streaming parser in Rust with 2\u00d7 the speed.',
+      'Built a streaming parser in Rust and cut the time by a third.',
+      'Built a streaming parser in Rust for two thirds of the services.',
+      'Built a streaming parser in Rust and saved a quarter of the cost.',
+    ]) expect(verdict(sug({ text })).ok, text).toBe(false);
+    // "Third-party" is not a fraction.
+    expect(verdict(sug({ text: 'Built a streaming parser in Rust with a third-party library.' })).ok).toBe(true);
+  });
+
+  it('needs the same unit as the evidence for a number', () => {
+    const ctx = { sourceText: 'Served 5 million users with the ingest service.', proofs: [] as string[] };
+    const check = (text: string) => checkSuggestion({ bulletId: 'job/b1', text, claims: [] }, ctx);
+    expect(check('Served 5 million users with the ingest service.')).toEqual({ ok: true });
+    expect(check('Served 5 users with the ingest service.').ok).toBe(false);
+    expect(check('Served 5k users with the ingest service.').ok).toBe(false);
+  });
+
   it('lets the posting supply wording but not a technology that the evidence lacks', () => {
     // "Docker" is in the proofs of the claim docker, so a suggestion that names this claim passes.
     const s = sug({ bulletId: 'job/b2', text: 'Ran the on-call rota and packed the services in Docker.', claims: ['docker'] });

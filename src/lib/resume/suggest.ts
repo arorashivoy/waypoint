@@ -86,7 +86,7 @@ type Ctx = {
 
 export type Check = { ok: true } | { ok: false; why: string };
 
-const NUMBER = /(\d+(?:[.,]\d+)*)\s?(%|percent|(?:hundred|thousand|million|billion|trillion)(?![\p{L}\p{N}])|[kmbx](?![\p{L}\p{N}]))?/giu;
+const NUMBER = /(\d+(?:[.,]\d+)*)\s?(%|percent|(?:hundred|thousand|million|billion|trillion)(?![\p{L}\p{N}])|[kmbx\u00d7](?![\p{L}\p{N}]))?/giu;
 const canon = (n: string, suffix?: string) => n.replace(/,(?=\d{3}(?!\d))/g, '') + (suffix ? (suffix === 'percent' ? '%' : suffix) : '');
 const numbersOf = (text: string) => [...fold(text).matchAll(NUMBER)].map((m) => ({ run: canon(m[1]), form: canon(m[1], m[2]), shown: m[0].trim() }));
 
@@ -104,7 +104,7 @@ export const RESUME_VERBS = new Set(
 
 /** Number words. Each one in a suggestion must be in the bullet or the proofs, as a digit run must. */
 const NUMBER_WORD = new RegExp(
-  `(?<![\\p{L}\\p{N}])(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|trillion|percent|half|dozen|twice|(?:double|triple|quadruple)[d]?|\\p{L}*fold)(?![\\p{L}\\p{N}])`,
+  `(?<![\\p{L}\\p{N}])(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|trillion|percent|half|dozen|twice|(?:double|triple|quadruple)[d]?|\\p{L}*fold|(?:(?:a|one|two|three|four|five|six|seven|eight|nine)\\s+)(?:third|quarter|fifth|sixth|eighth|tenth)s?(?!-))(?![\\p{L}\\p{N}])`,
   'gu',
 );
 
@@ -131,7 +131,7 @@ export function checkSuggestion(s: Suggestion, ctx: Ctx): Check {
   const runs = new Set(known.map((n) => n.run));
   const forms = new Set(known.map((n) => n.form));
   for (const n of numbersOf(text)) {
-    if (!runs.has(n.run) || (n.form !== n.run && !forms.has(n.form))) return { ok: false, why: `the number "${n.shown}" is not in the bullet or the proofs` };
+    if (!runs.has(n.run) || !forms.has(n.form)) return { ok: false, why: `the number "${n.shown}" is not in the bullet or the proofs` };
   }
 
   const shown = fold(text);
