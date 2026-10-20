@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -50,7 +50,8 @@ describe('migration 7_onboarding', () => {
         `SELECT "userId","fields","visaStatus","resumeMode","templateId","onboardedAt","wizardStep" FROM "UserSettings" ORDER BY "userId"`,
       );
       expect(rows).toHaveLength(2);
-      expect(rows[0]).toMatchObject({ userId: 'u1', fields: '[]', visaStatus: '', resumeMode: 'template', templateId: 'classic', wizardStep: null });
+      // The admin keeps RESUME_TEX: 'own-tex' with no own file is the admin default of resumeConfig.
+      expect(rows[0]).toMatchObject({ userId: 'u1', fields: '[]', visaStatus: '', resumeMode: 'own-tex', templateId: 'classic', wizardStep: null });
       expect(rows[1]).toMatchObject({ userId: 'u2', fields: '["Backend"]', visaStatus: 'I need a visa', wizardStep: null });
       for (const r of rows) {
         expect(Number(r.onboardedAt)).toBeGreaterThanOrEqual(Math.floor(start / 1000) * 1000);
@@ -65,6 +66,23 @@ describe('migration 7_onboarding', () => {
       await applyMigrations(c);
       expect(await c.$queryRawUnsafe(`SELECT COUNT(*) AS n FROM "UserSettings"`)).toEqual([{ n: 0n }]);
     });
+  });
+});
+
+describe('the admin row that the migration makes', () => {
+  it('keeps RESUME_TEX for the admin', async () => {
+    vi.stubEnv('RESUME_TEX', '/srv/waypoint-test/resume.tex');
+    try {
+      const { user } = await makeUser('admin');
+      // The same row that 7_onboarding inserts for an admin with no settings row.
+      await db.userSettings.upsert({ where: { userId: user.id }, update: { resumeMode: 'own-tex' }, create: { userId: user.id, fields: '[]', visaStatus: '', resumeMode: 'own-tex' } });
+      const { resumeConfig } = await import('@/lib/resume');
+      const cfg = await resumeConfig(user.id);
+      expect(cfg.tex).toBe('/srv/waypoint-test/resume.tex');
+      expect(cfg.template).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 
