@@ -780,7 +780,7 @@ export async function resumeMenu(doc: ClaimsDoc, userId: string): Promise<Resume
       onCv: onCv.has(p.id),
       // An unmappable projects section is left alone by `tailorTex`, so no
       // project can be steered into it either.
-      usable: !('why' in cv) && (onCv.has(p.id) || !!p.tex),
+      usable: !('why' in cv) && (onCv.has(p.id) || (!!p.tex && checkOwnTex(p.tex).ok)),
     })),
     bullets: doc.targets.positions.flatMap((p) => (p.bullets || []).map((b) => ({ id: `${p.id}/${b.id}`, position: `${p.title}, ${p.company}`, match: b.match }))),
     skills: doc.claims

@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClaimsDoc } from '@/lib/claims';
-import { tailorTex, type EvidencePick } from '@/lib/resume';
+import { resumeMenu, tailorTex, type EvidencePick } from '@/lib/resume';
+import { makeUser } from './helpers/http';
 
 const TEX = [
   '\\begin{rSection}{PROJECTS}',
@@ -41,5 +45,18 @@ describe('tailorTex with the project tex of the profile', () => {
     const r = tailorTex(TEX, doc('\\item \\textbf{Kafka streams} \\immediate\\write18{id}'), ranked, 2);
     if ('added' in r) expect(r.added).toEqual([]);
     expect(JSON.stringify(r)).not.toContain('write18');
+  });
+});
+
+describe('the Refine menu', () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it('offers a project off the CV only when its tex passes the own-tex check', async () => {
+    const admin = await makeUser('admin');
+    const file = join(mkdtempSync(join(tmpdir(), 'menu-')), 'cv.tex');
+    writeFileSync(file, TEX);
+    vi.stubEnv('RESUME_TEX', file);
+    const menu = async (tex: string) => (await resumeMenu(doc(tex), admin.user.id))!.projects.find((p) => p.id === 'kafka')!.usable;
+    expect(await menu('\\item \\textbf{Kafka streams} safe text')).toBe(true);
+    expect(await menu('\\item \\textbf{Kafka streams} \\immediate\\write18{id}')).toBe(false);
   });
 });

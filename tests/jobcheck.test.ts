@@ -309,6 +309,16 @@ describe('the parts add up to the score', () => {
     expect(r.parts.filter((p) => p.kind === 'limit')).toHaveLength(1);
     expect(sum(r.parts)).toBe(r.score);
   });
+  it('adds no limit part for a rounding gap of half a point', () => {
+    const reqs = [
+      { text: 'a', importance: 'must' as const, status: 'partial' as const, evidence: ['x'] },
+      { text: 'b', importance: 'nice' as const, status: 'met' as const, evidence: ['x'] },
+    ];
+    for (const [f, l] of [[1, 1], [0.3, 0.5], [1, 0.5], [0.3, 1]]) {
+      const r = scoreCheck({ requirements: reqs, blockers: [] }, f, l);
+      expect(r.parts.some((p) => p.kind === 'limit'), `${f} ${l}`).toBe(false);
+    }
+  });
   it('adds no limit part when nothing was cut', () => {
     const r = scoreCheck({ requirements: [], blockers: blockers(1) }, 1, 1);
     expect(r.parts.some((p) => p.kind === 'limit')).toBe(false);

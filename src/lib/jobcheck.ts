@@ -175,7 +175,8 @@ const tenth = (n: number) => Math.round(n * 10) / 10;
 export function scoreCheck(check: Pick<JobCheck, 'requirements' | 'blockers'>, fieldFit: number, levelFit: number): { score: number; parts: ScorePart[] } {
   const ratio = requirementRatio(check.requirements);
   const total = check.requirements.reduce((n, r) => n + IMPORTANCE_WEIGHT[r.importance], 0);
-  const score = Math.max(0, Math.min(100, matchScore(ratio, fieldFit, levelFit) - BLOCKER_PENALTY * check.blockers.length));
+  const raw = matchScore(ratio, fieldFit, levelFit) - BLOCKER_PENALTY * check.blockers.length;
+  const score = Math.max(0, Math.min(100, raw));
   const parts: ScorePart[] = [
     ...check.requirements.map((r): ScorePart => ({
       kind: 'requirement',
@@ -186,7 +187,8 @@ export function scoreCheck(check: Pick<JobCheck, 'requirements' | 'blockers'>, f
     { kind: 'field', label: 'Field fit', points: tenth(40 * fieldFit) },
     { kind: 'level', label: 'Level fit', points: tenth(40 * levelFit) },
   ];
-  return { score, parts: limitedParts(parts, score, 'Lowest possible score') };
+  // The parts add up to the score, except when the blockers take it below 0. A gap from rounding is not a limit.
+  return { score, parts: raw < 0 ? [...parts, { kind: 'limit', label: 'Lowest possible score', points: tenth(score - parts.reduce((n, p) => n + p.points, 0)) }] : parts };
 }
 
 /**

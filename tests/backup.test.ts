@@ -168,6 +168,17 @@ describe('uploadBackup', () => {
   });
 });
 
+describe('uploadBackup errors', () => {
+  it('keeps a secret of rclone stderr out of the error', async () => {
+    vi.stubEnv('WAYPOINT_BACKUP_REMOTE', 'gdrive:waypoint-backups');
+    resetEnvForTests();
+    run.mockResolvedValue({ code: 1, stdout: '', stderr: 'auth failed: token=plaintoken123456' });
+    const err = await uploadBackup(['/x/2026-10-17.db']).catch((e: Error) => e);
+    expect((err as Error).message).toContain('rclone failed with code 1');
+    expect((err as Error).message).not.toContain('plaintoken123456');
+  });
+});
+
 describe('restoreBackup', () => {
   async function setup() {
     const dataDir = fresh('data');

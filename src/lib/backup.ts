@@ -148,7 +148,7 @@ export async function uploadBackup(files: string[]): Promise<void> {
       timeoutMs: 600_000,
       env: programEnv('rclone'),
     });
-    if (r.code !== 0) throw new Error(`rclone failed with code ${r.code}: ${r.stderr.trim().slice(0, 300)}`);
+    if (r.code !== 0) throw new Error(`rclone failed with code ${r.code}: ${scrub(r.stderr.trim()).slice(0, 300)}`);
   }
 }
 
