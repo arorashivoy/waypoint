@@ -21,7 +21,7 @@ Start Claude Code in `/home/shivoy/waypoint-shivoy/.claude/worktrees/prod` and s
 - Tests on the Pi: 1250 of 1253 passed before `lmodern`. The owner installed `lmodern`; `tests/resume-template.test.ts` now passes 36 of 36.
 - CLI canary: passed.
 - Eval, second run after the fix (`pi-steps-2026-10-20b.md`): sonnet-5-5 passes on the synthetic and the admin profile; sonnet-5 fails (one real fake-blocker miss, two injection fails just over `maxRatio`). No injection worked. The cloud session makes the model move.
-- Browser checks: all 5 passed. Still open with the owner: copy a referral on a real iPhone.
+- Browser checks: all 5 passed. The iPhone referral copy passed on 2026-10-20 (`pi-steps-2026-10-20b.md`).
 
 ## Next steps for the local session
 
