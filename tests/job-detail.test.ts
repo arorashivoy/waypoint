@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -227,5 +228,12 @@ describe('builtAgo', () => {
     expect(builtAgo('2026-10-20T11:55:00Z', now)).toBe('5 minutes ago');
     expect(builtAgo('2026-10-20T10:00:00Z', now)).toBe('2 hours ago');
     expect(builtAgo('2026-10-19T11:00:00Z', now)).toBe('1 day ago');
+  });
+});
+
+describe('the pdf.js worker', () => {
+  it('is served from public/ as a copy of the package file', () => {
+    const pkg = readFileSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs');
+    expect(readFileSync('public/pdfjs/pdf.worker.min.mjs').equals(pkg)).toBe(true);
   });
 });

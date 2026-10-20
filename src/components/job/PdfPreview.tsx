@@ -35,7 +35,7 @@ export function PdfPreview({ url, rev }: { url: string; rev: number }) {
     (async () => {
       try {
         const pdfjs = await import('pdfjs-dist');
-        pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+        pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
         const task = pdfjs.getDocument({ url });
         const pdf = await task.promise;
         doc = pdf;
