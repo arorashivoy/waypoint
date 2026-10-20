@@ -1,11 +1,16 @@
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   Badge,
   Button,
   EmptyState,
   type FieldControlProps,
+  isFocusableState,
+  pickOpener,
+  scheduleHide,
+  sheetKeyAction,
+  TOAST_MS,
   ErrorNote,
   Field,
   Fold,
@@ -243,5 +248,101 @@ describe('small parts', () => {
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain('Copied');
     expect(render(h(Toast, { message: null, onHide: () => {} }))).not.toContain('Copied');
+  });
+});
+
+describe('isFocusableState', () => {
+  const ok = { hiddenAncestor: false, inertAncestor: false, disabled: false, display: 'block', visibility: 'visible' };
+  it('accepts a visible control', () => {
+    expect(isFocusableState(ok)).toBe(true);
+  });
+  it('skips hidden, inert, disabled, display:none and visibility:hidden controls', () => {
+    expect(isFocusableState({ ...ok, hiddenAncestor: true })).toBe(false);
+    expect(isFocusableState({ ...ok, inertAncestor: true })).toBe(false);
+    expect(isFocusableState({ ...ok, disabled: true })).toBe(false);
+    expect(isFocusableState({ ...ok, display: 'none' })).toBe(false);
+    expect(isFocusableState({ ...ok, visibility: 'hidden' })).toBe(false);
+  });
+});
+
+describe('sheetKeyAction', () => {
+  it('closes on Esc', () => {
+    expect(sheetKeyAction('Escape', false, 3, 1)).toEqual({ type: 'close' });
+  });
+  it('wraps Tab at the last item and Shift+Tab at the first', () => {
+    expect(sheetKeyAction('Tab', false, 3, 2)).toEqual({ type: 'focus', index: 0 });
+    expect(sheetKeyAction('Tab', true, 3, 0)).toEqual({ type: 'focus', index: 2 });
+  });
+  it('lets the browser move focus inside the list', () => {
+    expect(sheetKeyAction('Tab', false, 3, 0)).toEqual({ type: 'none' });
+    expect(sheetKeyAction('Tab', true, 3, 2)).toEqual({ type: 'none' });
+  });
+  it('pulls focus in when it is outside the list, and holds it on the panel when the list is empty', () => {
+    expect(sheetKeyAction('Tab', false, 3, -1)).toEqual({ type: 'focus', index: 0 });
+    expect(sheetKeyAction('Tab', false, 0, -1)).toEqual({ type: 'focus', index: -1 });
+  });
+  it('ignores other keys', () => {
+    expect(sheetKeyAction('a', false, 3, 0)).toEqual({ type: 'none' });
+  });
+});
+
+describe('pickOpener', () => {
+  const el = (isConnected: boolean) => ({ isConnected });
+  it('prefers the opener from the screen, then the pointer target, then the active element', () => {
+    const [a, b, c] = [el(true), el(true), el(true)];
+    expect(pickOpener(a, b, c)).toBe(a);
+    expect(pickOpener(null, b, c)).toBe(b);
+    expect(pickOpener(null, null, c)).toBe(c);
+  });
+  it('skips an element that left the page', () => {
+    const [gone, b] = [el(false), el(true)];
+    expect(pickOpener(gone, b, null)).toBe(b);
+    expect(pickOpener(null, null, null)).toBeNull();
+  });
+});
+
+describe('scheduleHide', () => {
+  it('calls the handler after 4 seconds', () => {
+    vi.useFakeTimers();
+    const fn = vi.fn();
+    scheduleHide({ current: fn });
+    vi.advanceTimersByTime(TOAST_MS - 1);
+    expect(fn).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(fn).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+  it('does not call after cancel, and reads the newest handler', () => {
+    vi.useFakeTimers();
+    const first = vi.fn();
+    const second = vi.fn();
+    const ref = { current: first };
+    const cancel = scheduleHide(ref);
+    ref.current = second;
+    vi.advanceTimersByTime(TOAST_MS);
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledTimes(1);
+    const cancel2 = scheduleHide(ref);
+    cancel2();
+    cancel();
+    vi.advanceTimersByTime(TOAST_MS);
+    expect(second).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+});
+
+describe('markup fixes', () => {
+  it('ScorePill is an image with its label', () => {
+    expect(render(h(ScorePill, { score: 86 }))).toContain('role="img"');
+  });
+  it('Fold aria-controls names the body id', () => {
+    const html = render(h(Fold, { title: 'Your CV', status: 'Ready', children: 'Body' }));
+    const id = /aria-controls="([^"]+)"/.exec(html)![1];
+    expect(html).toContain(`<div id="${id}" class="ui-fold-body" hidden="">`);
+  });
+  it('Button confirm uses one polite region outside the button', () => {
+    const html = render(h(Button, { confirm: 'Copied', children: 'Copy message' }));
+    expect(html.match(/aria-live="polite"/g)).toHaveLength(1);
+    expect(html.indexOf('</button>')).toBeLessThan(html.indexOf('aria-live'));
   });
 });

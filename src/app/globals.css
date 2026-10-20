@@ -169,16 +169,16 @@ button { cursor: pointer; }
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   text-decoration: none; white-space: nowrap;
 }
-.btn:hover { background: var(--glass-hi); color: var(--text); }
+@media (hover: hover) { .btn:hover { background: var(--glass-hi); color: var(--text); } }
 .btn:disabled, .btn-accent:disabled, .chip:disabled, .btn.go:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn.go, .btn-accent {
   border: 0; color: var(--ink-on);
   background: linear-gradient(135deg, var(--mint), #BFE9D4 55%, var(--lav));
   box-shadow: 0 8px 24px -10px rgba(166, 228, 196, 0.55);
 }
-.btn.go:hover, .btn-accent:hover { color: var(--ink-on); background: linear-gradient(135deg, var(--mint), #BFE9D4 55%, var(--lav)); }
+@media (hover: hover) { .btn.go:hover, .btn-accent:hover { color: var(--ink-on); background: linear-gradient(135deg, var(--mint), #BFE9D4 55%, var(--lav)); } }
 .btn.link { border-color: transparent; background: transparent; color: var(--lav); padding: 0 6px; }
-.btn.link:hover { color: var(--text); }
+@media (hover: hover) { .btn.link:hover { color: var(--text); } }
 .btn-dark { border: 0; background: var(--text); color: var(--ink-on); }
 .btn-dark:hover { background: var(--text); color: var(--ink-on); }
 .btn-accent { height: 48px; font-size: 16px; width: 100%; }
@@ -420,6 +420,10 @@ button { cursor: pointer; }
   .field, select.field { min-height: 44px; }
 }
 
+.ui-btn-swap { display: inline-grid; }
+.ui-btn-swap > span { grid-area: 1 / 1; text-align: center; }
+.ui-btn-swap > span[data-on='false'] { visibility: hidden; }
+
 /* Field */
 .ui-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .ui-field > label { font-weight: 500; }
@@ -434,14 +438,19 @@ button { cursor: pointer; }
 .ui-panel-title { margin: 0; font-size: var(--t-20); font-weight: 600; letter-spacing: -0.01em; }
 
 /* Fold */
-.ui-fold { border-radius: var(--r-panel); }
+.ui-fold { border-radius: var(--r-panel); --fold-mode: inline; }
+/* Under 640 px a fold with onOpen opens a screen: the header calls onOpen and the inline body never shows. */
+@media (max-width: 639px) {
+  .ui-fold[data-onopen] { --fold-mode: screen; }
+  .ui-fold[data-onopen] .ui-fold-body { display: none; }
+}
 .ui-fold-head {
   width: 100%; display: flex; align-items: center; gap: var(--s3); text-align: left;
   padding: var(--s4) var(--s5); border: 0; background: transparent; border-radius: var(--r-panel); color: var(--text);
 }
-.ui-fold-head:hover { background: var(--glass); }
+@media (hover: hover) { .ui-fold-head:hover { background: var(--glass); } }
 .ui-fold-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ui-fold-title { font-family: var(--f-head); font-size: var(--t-16); font-weight: 600; }
+.ui-fold-title { font-size: var(--t-16); font-weight: 600; } /* Onest: Syne is for 20 px and up */
 .ui-fold-status { color: var(--soft); font-size: var(--t-13); overflow-wrap: anywhere; }
 .ui-chevron { flex-shrink: 0; color: var(--lav); transition: transform 0.2s ease; }
 .ui-fold[data-open='true'] .ui-chevron { transform: rotate(90deg); }
@@ -459,7 +468,7 @@ button { cursor: pointer; }
 .ui-sheet-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); padding: var(--s5) var(--s5) var(--s3); }
 .ui-sheet-head h2 { margin: 0; font-size: var(--t-20); font-weight: 600; line-height: 1.2; }
 .ui-sheet-head .btn { height: 40px; }
-.ui-sheet-body { padding: 0 var(--s5) var(--s5); overflow-y: auto; display: flex; flex-direction: column; gap: var(--s4); }
+.ui-sheet-body { padding: 0 var(--s5) var(--s5); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: var(--s4); }
 @media (min-width: 640px) {
   .ui-sheet { flex-direction: row; justify-content: flex-end; }
   .ui-sheet-panel {
@@ -475,7 +484,7 @@ button { cursor: pointer; }
   height: 44px; padding: 0 var(--s4); border: 0; border-bottom: 2px solid transparent; background: transparent;
   color: var(--soft); white-space: nowrap; font-weight: 500;
 }
-.ui-tab:hover { color: var(--text); }
+@media (hover: hover) { .ui-tab:hover { color: var(--text); } }
 .ui-tab[aria-selected='true'] { color: var(--text); font-weight: 600; border-bottom-color: var(--lav); }
 .ui-tabs[data-orientation='vertical'] { flex-direction: row; align-items: flex-start; }
 .ui-tabs[data-orientation='vertical'] .ui-tablist { flex-direction: column; border-bottom: 0; overflow: visible; min-width: 160px; }
@@ -487,7 +496,7 @@ button { cursor: pointer; }
 /* Badge */
 .ui-badge {
   display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 var(--s2);
-  border-radius: 11px; font-size: var(--t-13); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums;
+  border-radius: var(--r-ctl); font-size: var(--t-13); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums;
 }
 .ui-badge-coral { background: var(--coral); color: var(--ink-on); }
 .ui-badge-mint { background: var(--mint); color: var(--ink-on); }
@@ -571,7 +580,7 @@ button { cursor: pointer; }
 .ui-skels { display: flex; flex-direction: column; gap: var(--s3); }
 .ui-skel { border-radius: var(--r-row); padding: var(--s4); display: grid; grid-template-columns: minmax(0, 1fr) 56px; gap: var(--s2); background: var(--glass); border: 1px solid var(--edge); }
 .ui-skel span {
-  border-radius: 6px; height: 12px; background: linear-gradient(90deg, var(--glass-hi), color-mix(in srgb, var(--lav) 16%, transparent), var(--glass-hi));
+  border-radius: var(--r-ctl); height: 12px; background: linear-gradient(90deg, var(--glass-hi), color-mix(in srgb, var(--lav) 16%, transparent), var(--glass-hi));
   background-size: 200% 100%; animation: ui-sheen 2.4s linear infinite;
 }
 .ui-skel .t { height: 16px; width: 75%; }

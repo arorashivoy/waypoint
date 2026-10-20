@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Badge, Button, EmptyState, ErrorNote, Field, Fold, Panel, Route, ScorePill, ScoreRing, Sheet, Skeleton, Tabs, TaskIndicator, Toast, WayIn,
 } from '@/components/ui';
@@ -16,7 +16,10 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** The parts that need the browser: they hold state or take focus. */
 export function DesignDemos({ sheetOpen = false }: { sheetOpen?: boolean }) {
   const [sheet, setSheet] = useState(sheetOpen);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToastText] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0);
+  const opener = useRef<HTMLButtonElement>(null);
+  const setToast = (text: string | null) => { setToastText(text); setNonce((n) => n + 1); };
   const [busy, setBusy] = useState(false);
   const [url, setUrl] = useState('https://careers.example.com/123');
 
@@ -98,7 +101,7 @@ export function DesignDemos({ sheetOpen = false }: { sheetOpen?: boolean }) {
             />
           </div>
           <div className="ds-wrap">
-            <Button variant="go" onClick={() => setSheet(true)}>Open the filters</Button>
+            <Button ref={opener} variant="go" onClick={() => setSheet(true)}>Open the filters</Button>
           </div>
         </div>
       </section>
@@ -121,7 +124,7 @@ export function DesignDemos({ sheetOpen = false }: { sheetOpen?: boolean }) {
         </div>
       </section>
 
-      <Sheet open={sheet} onClose={() => setSheet(false)} title="Filters">
+      <Sheet open={sheet} onClose={() => setSheet(false)} title="Filters" opener={opener}>
         <Field label="Level" hint="Show jobs at this level and above.">
           {(c) => (
             <select {...c} defaultValue="senior" data-autofocus>
@@ -133,7 +136,7 @@ export function DesignDemos({ sheetOpen = false }: { sheetOpen?: boolean }) {
         <Field label="City">{(c) => <input {...c} defaultValue="Berlin" />}</Field>
         <Button variant="go" onClick={() => setSheet(false)}>Show 48 jobs</Button>
       </Sheet>
-      <Toast message={toast} onHide={() => setToast(null)} />
+      <Toast message={toast} nonce={nonce} onHide={() => setToastText(null)} />
     </>
   );
 }

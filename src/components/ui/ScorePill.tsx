@@ -9,7 +9,7 @@ export function scoreTone(score: number): ScoreTone {
 
 export function ScorePill({ score }: { score: number }) {
   return (
-    <span className={`ui-pill ui-pill-${scoreTone(score)}`} aria-label={`Match ${score} of 100`}>
+    <span className={`ui-pill ui-pill-${scoreTone(score)}`} role="img" aria-label={`Match ${score} of 100`}>
       {score}
     </span>
   );

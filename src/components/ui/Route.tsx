@@ -37,8 +37,8 @@ export function Route({ items, blockers = [] }: RouteProps) {
       <p className="sr-only">{routeSummary(items, blockers)}</p>
       {blockers.length > 0 && (
         <ul className="ui-blockers">
-          {blockers.map((b) => (
-            <li key={b.label}>{b.label}</li>
+          {blockers.map((b, i) => (
+            <li key={`${i}-${b.label}`}>{b.label}</li>
           ))}
         </ul>
       )}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 
 export interface FoldProps {
   title: string;
@@ -16,8 +16,12 @@ export function Fold({ title, status, children, defaultOpen = false, onOpen }: F
   const [open, setOpen] = useState(defaultOpen);
   const bodyId = useId();
 
-  function toggle() {
-    if (onOpen && typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches) {
+  const root = useRef<HTMLDivElement>(null);
+
+  /* CSS decides the mode (the --fold-mode property, set by a media query). It is read at click time, so nothing changes in the layout after load. */
+  function toggle(event: MouseEvent) {
+    if (onOpen && root.current && getComputedStyle(root.current).getPropertyValue('--fold-mode').trim() === 'screen') {
+      event.preventDefault();
       onOpen();
       return;
     }
@@ -25,7 +29,7 @@ export function Fold({ title, status, children, defaultOpen = false, onOpen }: F
   }
 
   return (
-    <div className="glass ui-fold" data-open={open}>
+    <div ref={root} className="glass ui-fold" data-open={open} data-onopen={onOpen ? true : undefined}>
       <button type="button" className="ui-fold-head" aria-expanded={open} aria-controls={bodyId} onClick={toggle}>
         <span className="ui-fold-text">
           <span className="ui-fold-title">{title}</span>
