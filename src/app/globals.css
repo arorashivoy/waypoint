@@ -813,7 +813,7 @@ button { cursor: pointer; }
 
 .ui-error-detail {
   margin: 0; max-width: 100%; overflow-x: auto; padding: var(--s3); border-radius: var(--r-ctl); background: color-mix(in srgb, var(--night) 60%, transparent);
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: var(--t-13); line-height: 1.5; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere;
+  font-size: var(--t-13); line-height: 1.5; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere;
 }
 
 .jd { display: flex; flex-direction: column; min-height: 0; min-width: 0; height: 100%; border-radius: var(--r-panel); overflow: hidden;
@@ -845,7 +845,7 @@ button { cursor: pointer; }
 }
 .jd-blockers strong { color: var(--coral); font-weight: 600; }
 .jd-blockers ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s2); }
-.jd-blockers li { display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.jd-blockers li { display: flex; flex-direction: column; gap: var(--s1); overflow-wrap: anywhere; }
 .jd-blockers q { color: var(--soft); font-size: var(--t-13); line-height: 1.45; quotes: '\201C' '\201D'; }
 .jd-note { margin: 0; width: 100%; box-sizing: border-box; padding: var(--s3) var(--s4); border-radius: var(--r-row); line-height: 1.5; overflow-wrap: anywhere; }
 .jd-note-warn { background: color-mix(in srgb, var(--butter) 9%, transparent); border: 1px solid color-mix(in srgb, var(--butter) 30%, transparent); color: var(--butter); }
@@ -898,7 +898,7 @@ button { cursor: pointer; }
 
 .jd-back { display: none; }
 .jd-bar {
-  flex-shrink: 0; display: flex; gap: var(--s3); justify-content: flex-end; padding: var(--s4) var(--s7);
+  flex-shrink: 0; display: flex; flex-wrap: wrap; gap: var(--s3); justify-content: flex-end; padding: var(--s4) var(--s7);
   border-top: 1px solid var(--edge); background: color-mix(in srgb, var(--night) 40%, transparent);
 }
 
@@ -928,7 +928,7 @@ button { cursor: pointer; }
   .jd-ring .ui-ring::before { inset: 7px; }
   .jd-ring .ui-ring b { font-size: var(--t-20); }
   .jd-main { padding: 0 var(--gutter) var(--s5); }
-  .jd-summary { font-size: 1.0625rem; }
+  .jd-summary { font-size: var(--t-16); }
   .jd-bar {
     position: sticky; bottom: 0; z-index: 5; justify-content: stretch; padding: var(--s3) var(--gutter) calc(var(--s4) + env(safe-area-inset-bottom));
     background: color-mix(in srgb, var(--night) 88%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
@@ -940,7 +940,7 @@ button { cursor: pointer; }
   .jd[data-part] .jd-header, .jd[data-part] .jd-fit, .jd[data-part] .jd-bar { display: none; }
   .jd[data-part='wayin'] .jd-cv, .jd[data-part='cv'] .jd-wayin { display: none; }
   .jd[data-part] .jd-main { padding-top: 0; }
-  .jd[data-part] .jd-back { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 56px; padding-top: env(safe-area-inset-top); }
+  .jd[data-part] .jd-back { display: flex; align-items: center; gap: var(--s3); min-height: 56px; padding-top: env(safe-area-inset-top); }
   .jd[data-part] .jd-back h2 { font-size: var(--t-20); }
   .jd[data-part] .ui-fold { background: transparent; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
   .jd[data-part] .ui-fold-head { display: none; }
@@ -949,3 +949,6 @@ button { cursor: pointer; }
 @media (min-width: 640px) {
   .jd-bar .jd-bar-open { display: inline-flex; }
 }
+
+.jd-bar .ui-error { flex-basis: 100%; }
+.jd .jd-back h2:focus-visible { outline: 3px solid var(--lav); outline-offset: 4px; border-radius: var(--r-ctl); }

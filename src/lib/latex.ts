@@ -26,7 +26,7 @@ export function compileBudget(timeoutMs: number): number {
 
 /** The first 20 lines of the log that start with "!". A path in the work folder
  *  shows relative to it, and any other absolute path shows as its base name. */
-function cleanLog(text: string, work: string): string {
+export function cleanLog(text: string, work: string): string {
   return latexLogExcerpt(text.split('\n').filter((l) => l.startsWith('!')).join('\n'), work);
 }
 

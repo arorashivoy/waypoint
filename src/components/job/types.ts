@@ -82,6 +82,8 @@ export interface JobDetailState {
   blocked: boolean;
   /** The error of the way in actions, shown next to them. */
   wayError: string | null;
+  /** Why "Mark as applied" failed, shown in the apply bar. */
+  applyError: string | null;
   /** Counts up each time a CV action ends, so the preview loads the file again. */
   cvRev: number;
   /** Why "Suggest wording" cannot run, in words for the user. Null when Claude is on. */

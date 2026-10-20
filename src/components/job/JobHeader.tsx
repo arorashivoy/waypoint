@@ -10,7 +10,7 @@ export function postedLine(postedAt: string, now = Date.now()): string {
 
 /** Role, company, place, the score ring and a link to the posting. On a phone the top row holds "‹ Jobs" and "Open posting". */
 export function JobHeader({ job, onBack }: { job: JobView; onBack: () => void }) {
-  const where = [job.company, job.city, job.mode.toLowerCase()].filter(Boolean).join(', ');
+  const where = [job.company, job.city, job.mode.toLowerCase(), job.visa].filter(Boolean).join(', ');
   return (
     <header className="jd-header">
       <div className="jd-top">

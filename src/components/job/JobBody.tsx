@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { ApplyBar } from './ApplyBar';
 import { CvSection } from './CvSection';
 import { FitSection } from './FitSection';
@@ -14,8 +15,21 @@ import { WayInSection } from './WayInSection';
  */
 export function JobBody({ d, part, onPart, onClose }: { d: JobDetailState; part: Part | null; onPart: (p: Part | null) => void; onClose: () => void }) {
   const back = () => onPart(null);
+  const root = useRef<HTMLDivElement>(null);
+  const last = useRef<Part | null>(null);
+
+  // A part is its own screen on a phone. The fold head that had focus is hidden then, so focus moves with the screen:
+  // to the heading of the part when it opens, and back to the fold head that opened it when it closes.
+  useEffect(() => {
+    const el = root.current;
+    const was = last.current;
+    last.current = part;
+    if (!el || part === was) return;
+    if (part) el.querySelector<HTMLElement>(`.jd-${part} .jd-back h2`)?.focus();
+    else if (was) el.querySelector<HTMLElement>(`.jd-${was} .ui-fold-head`)?.focus();
+  }, [part]);
   return (
-    <div className="jd" data-part={part ?? undefined}>
+    <div className="jd" data-part={part ?? undefined} ref={root}>
       <div className="jd-scroll">
         <JobHeader job={d.job} onBack={onClose} />
         <div className="jd-main">
@@ -24,7 +38,7 @@ export function JobBody({ d, part, onPart, onClose }: { d: JobDetailState; part:
           <CvSection d={d} onPart={onPart} onBack={back} />
         </div>
       </div>
-      <ApplyBar url={d.job.url} applied={d.job.isApplied} onApply={d.markApplied} />
+      <ApplyBar url={d.job.url} applied={d.job.isApplied} error={d.applyError} onApply={d.markApplied} />
     </div>
   );
 }

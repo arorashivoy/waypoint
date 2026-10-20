@@ -7,7 +7,7 @@ export const BLOCKER_LABEL: Record<string, string> = {
   clearance: 'Needs a security clearance',
   language: 'Needs a language you may not speak',
   location: 'Needs you to work in a set place',
-  seniority: 'Asks for more years of work than the posting expects from a new hire',
+  seniority: 'Asks for more years of work than you may have',
   other: 'Needs something that may exclude you',
 };
 

@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { latexLogExcerpt } from '@/lib/latex-log';
+import { cleanLog, compileLatex, findEngine } from '@/lib/latex';
 import { BLOCKER_LABEL, LEGITIMACY_LABEL } from '@/lib/jobcheck-text';
 import { topRequirements, type Requirement } from '@/components/job/requirements';
 import { builtAgo } from '@/components/job/time';
@@ -27,6 +31,10 @@ describe('latexLogExcerpt', () => {
   it('keeps the relative form of a path under the user folder', () => {
     expect(latexLogExcerpt(`! Error in ${dir}/sub/cv.tex line 4`, dir)).toBe('! Error in sub/cv.tex line 4');
     expect(latexLogExcerpt(`(${dir}/cv.tex`, dir)).toBe('(cv.tex');
+  });
+
+  it('does not let ".." climb out of the user folder', () => {
+    expect(latexLogExcerpt(`! File ${dir}/../../etc/shadow not found`, dir)).toBe('! File shadow not found');
   });
 
   it('leaves no absolute path', () => {
@@ -60,9 +68,8 @@ describe('topRequirements', () => {
 });
 
 describe('reworded labels', () => {
-  it('does not say what the user lacks in the seniority label', () => {
-    expect(BLOCKER_LABEL.seniority).toBe('Asks for more years of work than the posting expects from a new hire');
-    expect(BLOCKER_LABEL.seniority).not.toMatch(/\byou\b/);
+  it('hedges the seniority label, so it claims no fact about the user', () => {
+    expect(BLOCKER_LABEL.seniority).toBe('Asks for more years of work than you may have');
   });
   it('names the place in the location label', () => {
     expect(BLOCKER_LABEL.location).toBe('Needs you to work in a set place');
@@ -120,6 +127,7 @@ const state = (job: JobView, o: Partial<JobDetailState> = {}): JobDetailState =>
   cvError: null,
   blocked: false,
   wayError: null,
+  applyError: null,
   cvRev: 0,
   claudeNote: null,
   findContact: vi.fn(async () => {}),
@@ -205,6 +213,13 @@ describe('the job detail', () => {
     expect(html).toContain('class="ui-error');
   });
 
+  it('shows a failed apply next to the button, with Try again', () => {
+    const html = render(view(), { applyError: 'The server is not reachable.' });
+    expect(html).toContain('The server is not reachable.');
+    expect(html).toContain('Try again');
+    expect(render(view())).not.toContain('Try again');
+  });
+
   it('marks the open part for the phone screen', () => {
     expect(render(view(), {}, { part: 'wayin' })).toContain('data-part="wayin"');
     expect(render(view())).not.toContain('data-part');
@@ -235,5 +250,27 @@ describe('the pdf.js worker', () => {
   it('is served from public/ as a copy of the package file', () => {
     const pkg = readFileSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs');
     expect(readFileSync('public/pdfjs/pdf.worker.min.mjs').equals(pkg)).toBe(true);
+  });
+});
+
+describe('the LaTeX error the server sends', () => {
+  it('cleanLog keeps only error lines, at most 20, with no host path', () => {
+    const log = ['This is pdfTeX', ...Array.from({ length: 40 }, (_, i) => `! Error ${i} in /home/x/secret/a.tex`)].join('\n');
+    const out = cleanLog(log, '/tmp/waypoint-cv-abc');
+    expect(out.split('\n')).toHaveLength(20);
+    expect(out).not.toMatch(/\/home|\/tmp/);
+    expect(out).toContain('a.tex');
+  });
+
+  it.skipIf(!findEngine())('a failed compile throws only the excerpt', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'jd-'));
+    try {
+      const err = await compileLatex({ source: '\\documentclass{article}\\begin{document}\\badcommand \\input{/etc/hostname}\\end{document}', assetsDir: null, outPdf: join(dir, 'o.pdf'), engine: findEngine()!, timeoutMs: 60_000 }).then(() => null, (e: Error) => e);
+      expect(err).not.toBeNull();
+      expect(err!.message.split('\n').length).toBeLessThanOrEqual(21);
+      expect(err!.message).not.toMatch(/(^|[\s(])\/[\w.]/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

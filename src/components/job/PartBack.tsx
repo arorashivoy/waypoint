@@ -8,7 +8,7 @@ export function PartBack({ label, onBack }: { label: string; onBack: () => void 
         </svg>
         Back
       </button>
-      <h2>{label}</h2>
+      <h2 tabIndex={-1}>{label}</h2>
     </div>
   );
 }

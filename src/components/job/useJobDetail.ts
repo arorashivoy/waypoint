@@ -23,6 +23,7 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
   const [wording, setWording] = useState<Wording | null>(null);
   const [cvError, setCvError] = useState<string | null>(null);
   const [wayError, setWayError] = useState<string | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const [cvRev, setCvRev] = useState(0);
   const [tries, setTries] = useState(0);
   const shown = useRef(id);
@@ -38,6 +39,7 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
     setCvBusy(null);
     setCvError(null);
     setWayError(null);
+    setApplyError(null);
     api<JobView>(`/api/jobs/${id}`)
       .then(async (j) => {
         if (!live) return;
@@ -109,7 +111,14 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
   const markApplied = useCallback(async () => {
     if (!job) return;
     const next = !job.isApplied;
-    await patch(`/api/jobs/${id}`, { applied: next });
+    setApplyError(null);
+    try {
+      await patch(`/api/jobs/${id}`, { applied: next });
+    } catch (e) {
+      // The bar shows the error next to the button. The throw stops the "Marked as applied" text of the button.
+      if (shown.current === id) setApplyError((e as Error).message);
+      throw e;
+    }
     if (shown.current === id) setJob((cur) => cur && { ...cur, isApplied: next });
     await refresh();
   }, [id, job, refresh]);
@@ -159,6 +168,6 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
   return {
     error: null,
     retry,
-    state: { job, cv, wording, busy, cvBusy, cvError, blocked, wayError, cvRev, claudeNote: suggestBlockedNote(claude), findContact, findAlumni, markApplied, generate, refine, reset, suggest, decide, setToast },
+    state: { job, cv, wording, busy, cvBusy, cvError, blocked, wayError, applyError, cvRev, claudeNote: suggestBlockedNote(claude), findContact, findAlumni, markApplied, generate, refine, reset, suggest, decide, setToast },
   };
 }

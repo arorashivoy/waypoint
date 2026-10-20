@@ -1,4 +1,4 @@
-import { basename } from 'node:path';
+import { basename, posix } from 'node:path';
 
 const MAX_LINES = 20;
 
@@ -17,9 +17,11 @@ export function latexLogExcerpt(log: string, userDir: string): string {
     .slice(0, MAX_LINES)
     .map((line) =>
       line.replace(ABSOLUTE_PATH, (path) => {
-        if (dir && path === dir) return '.';
-        if (dir && path.startsWith(`${dir}/`)) return path.slice(dir.length + 1);
-        return basename(path);
+        // Resolve "." and ".." first, so "<dir>/../../etc/shadow" cannot pass as a path under the folder.
+        const clean = posix.normalize(path);
+        if (dir && clean === dir) return '.';
+        if (dir && clean.startsWith(`${dir}/`)) return clean.slice(dir.length + 1);
+        return basename(clean);
       }),
     )
     .join('\n');
