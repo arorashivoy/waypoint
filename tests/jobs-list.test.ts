@@ -10,6 +10,8 @@ import {
   type Filters,
   type ListJob,
 } from '@/components/jobs/filters';
+import { activeChips } from '@/components/jobs/FilterSheet';
+import { blockerLine } from '@/lib/jobcheck-text';
 import { isTyping, jobKeyAction, moveSelection } from '@/components/jobs/keys';
 
 const job = (o: Partial<ListJob> & { id: string }): ListJob => ({
@@ -86,14 +88,52 @@ describe('filterJobs', () => {
 });
 
 describe('activeFilterCount', () => {
-  const base = defaultFilters(['Mid']);
-  it('is 0 for the defaults and ignores the sort', () => {
-    expect(activeFilterCount(base, base)).toBe(0);
-    expect(activeFilterCount({ ...base, sort: 'date' }, base)).toBe(0);
+  it('is 0 for the cleared filters, and ignores the sort', () => {
+    expect(activeFilterCount(clearedFilters, clearedFilters)).toBe(0);
+    expect(activeFilterCount({ ...clearedFilters, sort: 'date' }, clearedFilters)).toBe(0);
   });
-  it('counts each change and each switch', () => {
-    expect(activeFilterCount({ ...base, field: 'Backend', mode: 'Remote' }, base)).toBe(2);
-    expect(activeFilterCount({ ...base, sponsorOnly: true, topOnly: true, posted: 'Any time' }, base)).toBe(3);
+  it('counts the default filters that hide jobs, so "Clear the filters" gives 0', () => {
+    expect(activeFilterCount(defaultFilters(['Mid']), clearedFilters)).toBe(2);
+    expect(activeFilterCount(defaultFilters([]), clearedFilters)).toBe(1);
+    expect(activeFilterCount({ ...defaultFilters(['Mid']), sort: 'date' }, clearedFilters)).toBe(2);
+  });
+  it('counts each filter and each switch', () => {
+    expect(activeFilterCount({ ...clearedFilters, field: 'Backend', mode: 'Remote' }, clearedFilters)).toBe(2);
+    expect(activeFilterCount({ ...clearedFilters, sponsorOnly: true, topOnly: true, posted: 'This week' }, clearedFilters)).toBe(3);
+  });
+});
+
+describe('activeChips', () => {
+  it('has no chip after the filters are cleared', () => {
+    expect(activeChips(clearedFilters, clearedFilters)).toEqual([]);
+  });
+  it('has one chip for each filter that hides jobs, and each chip undoes its filter', () => {
+    const chips = activeChips(defaultFilters(['Mid']), clearedFilters);
+    expect(chips.map((c) => c.label)).toEqual(['Level: Your level', 'Posted: This week']);
+    expect(chips[0].undo).toEqual({ level: 'Any' });
+    expect(chips[1].undo).toEqual({ posted: 'Any time' });
+  });
+});
+
+describe('blockerLine', () => {
+  it('gives a plain lead for each blocker type, then the quote of the posting', () => {
+    expect(blockerLine('citizenship', 'US citizens only')).toBe('Needs a work permit: “US citizens only”');
+    expect(blockerLine('clearance', 'TS/SCI')).toBe('Needs a security clearance: “TS/SCI”');
+    expect(blockerLine('language', 'Fluent German')).toBe('Needs a language: “Fluent German”');
+    expect(blockerLine('location', 'On site in Zug')).toBe('Must work in a set place: “On site in Zug”');
+    expect(blockerLine('seniority', '8+ years')).toBe('Needs more experience: “8+ years”');
+    expect(blockerLine('other', 'Must own a car')).toBe('Has a hard requirement: “Must own a car”');
+  });
+  it('uses the "other" lead for an unknown type, and the lead alone for an empty quote', () => {
+    expect(blockerLine('weird', 'x')).toBe('Has a hard requirement: “x”');
+    expect(blockerLine('clearance', '  \n ')).toBe('Needs a security clearance');
+  });
+  it('cuts a long quote to 60 characters with an ellipsis and joins its lines', () => {
+    const line = blockerLine('citizenship', `${'word '.repeat(30)}\nend`);
+    expect(line.startsWith('Needs a work permit: “word word')).toBe(true);
+    expect(line.endsWith('…”')).toBe(true);
+    expect(line).not.toContain('\n');
+    expect(line.length).toBeLessThanOrEqual('Needs a work permit: “”'.length + 61);
   });
 });
 
@@ -148,7 +188,7 @@ describe('listLine', () => {
     expect(listLine(['Germany', 'Ireland', 'Belgium'], 9, 'match')).toBe('9 jobs in Germany, Ireland and 1 more country, best match first');
   });
   it('can say that only the level of the profile shows', () => {
-    expect(listLine(['Germany'], 4, 'match', true)).toBe('4 jobs in Germany, best match first. Your level only.');
+    expect(listLine(['Germany'], 4, 'match', true)).toBe('4 jobs in Germany, best match first. Shows jobs at your level.');
   });
 });
 

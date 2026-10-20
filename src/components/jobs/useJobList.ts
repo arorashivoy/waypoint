@@ -21,6 +21,8 @@ export function useJobList({ me, jobs, selected, openJob, closeJob }: Args) {
   const defaults = useMemo(() => defaultFilters(me.levels), [me.levels]);
   const filters = picked ?? defaults;
   const searchRef = useRef<HTMLInputElement>(null);
+  // Set by j and k. The list scrolls to the new row only then, not on the first load.
+  const scrollPending = useRef(false);
 
   const onCcs = useMemo(() => me.countries.filter((c) => c.on).map((c) => c.cc), [me.countries]);
   const all = useMemo(() => jobs ?? [], [jobs]);
@@ -65,7 +67,10 @@ export function useJobList({ me, jobs, selected, openJob, closeJob }: Args) {
         const next = moveSelection(now.shown.map((j) => j.id), now.activeId, action);
         if (!next) return;
         e.preventDefault();
-        if (next !== now.activeId) now.openJob(next);
+        if (next !== now.activeId) {
+          scrollPending.current = true;
+          now.openJob(next);
+        }
       }
     };
     document.addEventListener('keydown', onKey);
@@ -73,9 +78,9 @@ export function useJobList({ me, jobs, selected, openJob, closeJob }: Args) {
   }, []);
 
   return {
-    q, setQ, searchRef,
+    q, setQ, searchRef, scrollPending,
     filters, defaults, change, clear,
-    filterCount: activeFilterCount(filters, defaults),
+    filterCount: activeFilterCount(filters, clearedFilters),
     all, shown, cause, line, activeId,
   };
 }

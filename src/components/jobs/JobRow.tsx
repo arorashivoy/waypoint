@@ -32,7 +32,7 @@ export default function JobRow({ job, selected, onOpen, riseIndex }: Props) {
         {job.provisional && <small>est.</small>}
       </span>
       <span className="jr-co">{[job.company, job.city].filter(Boolean).join(', ')}</span>
-      {line && <span className={`jr-line jr-${line.kind}`}>{line.text}</span>}
+      {line && <span className={`jr-line jr-${line.kind}`}><span className="jr-text">{line.text}</span></span>}
     </button>
   );
 }

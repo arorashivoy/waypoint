@@ -29,7 +29,7 @@ type RefreshResult = { added: number; total: number; report: { source: string; e
 
 /** The list column: title, search, one Filters button, one plain line, the rows and the empty states. */
 export default function JobList({ me, list, loading, error, onRetry, refresh, setToast, openJob, onSettings }: Props) {
-  const { q, setQ, searchRef, filters, defaults, change, clear, filterCount, shown, cause, line, activeId } = list;
+  const { q, setQ, searchRef, filters, change, clear, filterCount, shown, cause, line, activeId, scrollPending } = list;
   const [filterOpen, setFilterOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const filterBtn = useRef<HTMLButtonElement>(null);
@@ -72,10 +72,12 @@ export default function JobList({ me, list, loading, error, onRetry, refresh, se
     return () => clearTimeout(t);
   }, [shown.length]);
 
-  // The selected row stays in view when j and k move the selection.
+  // The selected row stays in view when j and k move the selection. Not on the first load.
   useEffect(() => {
+    if (!scrollPending.current) return;
+    scrollPending.current = false;
     if (activeId) document.querySelector(`[data-job-id="${CSS.escape(activeId)}"]`)?.scrollIntoView({ block: 'nearest' });
-  }, [activeId]);
+  }, [activeId, scrollPending]);
 
   return (
     <section className="jl" aria-label="Jobs">
@@ -134,7 +136,6 @@ export default function JobList({ me, list, loading, error, onRetry, refresh, se
         onClose={() => setFilterOpen(false)}
         opener={filterBtn}
         filters={filters}
-        defaults={defaults}
         levels={me.levels}
         count={shown.length}
         onChange={change}

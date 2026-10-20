@@ -94,7 +94,7 @@ export function filterJobs<T extends ListJob>(jobs: readonly T[], f: Filters, ct
   return f.sort === 'date' ? out.sort((a, b) => Date.parse(b.postedAt) - Date.parse(a.postedAt)) : out;
 }
 
-/** How many filters differ from the defaults. The sort does not count. */
+/** How many filters differ from `base`. The list compares with the cleared filters. The sort does not count. */
 export function activeFilterCount(f: Filters, base: Filters): number {
   return (['field', 'mode', 'level', 'posted'] as const).filter((k) => f[k] !== base[k]).length + Number(f.sponsorOnly !== base.sponsorOnly) + Number(f.topOnly !== base.topOnly);
 }
@@ -151,7 +151,7 @@ export function listLine(countries: readonly string[], count: number, sort: Sort
   const rest = countries.length - 2;
   const places = countries.length <= 2 ? and(countries.map(named)) : `${countries.slice(0, 2).map(named).join(', ')} and ${rest} more ${rest === 1 ? 'country' : 'countries'}`;
   const line = `${count} ${count === 1 ? 'job' : 'jobs'} in ${places}, ${sort === 'match' ? 'best match first' : 'newest first'}`;
-  return yourLevel ? `${line}. Your level only.` : line;
+  return yourLevel ? `${line}. Shows jobs at your level.` : line;
 }
 
 export type RowLine = { kind: 'referral' | 'blocker'; text: string };

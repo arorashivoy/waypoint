@@ -79,10 +79,12 @@ export interface SheetProps {
   title: string;
   /** The element that opened the sheet. Focus goes back to it on close. */
   opener?: RefObject<HTMLElement | null> | HTMLElement | null;
+  /** An extra class for the panel, for a screen that needs another width. */
+  className?: string;
   children?: ReactNode;
 }
 
-export function Sheet({ open, onClose, title, opener, children }: SheetProps) {
+export function Sheet({ open, onClose, title, opener, className, children }: SheetProps) {
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -134,7 +136,7 @@ export function Sheet({ open, onClose, title, opener, children }: SheetProps) {
   return (
     <div className="ui-sheet" onKeyDown={onKeyDown}>
       <div className="ui-sheet-backdrop" onClick={onClose} aria-hidden="true" />
-      <div ref={panel} className="glass ui-sheet-panel" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
+      <div ref={panel} className={`glass ui-sheet-panel${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
         <div className="ui-sheet-head">
           <h2 id={titleId}>{title}</h2>
           <button type="button" className="btn link" onClick={onClose}>Close</button>

@@ -2,14 +2,13 @@
 
 import type { RefObject } from 'react';
 import { Button, Sheet } from '../ui';
-import { FILTER_OPTIONS, YOUR_LEVEL, type Filters } from './filters';
+import { clearedFilters, FILTER_OPTIONS, YOUR_LEVEL, type Filters } from './filters';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   opener: RefObject<HTMLElement | null>;
   filters: Filters;
-  defaults: Filters;
   levels: readonly string[];
   /** How many jobs the list shows with these filters. */
   count: number;
@@ -17,7 +16,7 @@ interface Props {
   onClear: () => void;
 }
 
-/** The changes from the defaults, each with the patch that undoes it. */
+/** The filters that hide jobs now, each with the patch that removes it. */
 export function activeChips(f: Filters, base: Filters): { id: string; label: string; undo: Partial<Filters> }[] {
   const chips: { id: string; label: string; undo: Partial<Filters> }[] = [];
   if (f.field !== base.field) chips.push({ id: 'field', label: `Field: ${f.field}`, undo: { field: base.field } });
@@ -29,8 +28,8 @@ export function activeChips(f: Filters, base: Filters): { id: string; label: str
   return chips;
 }
 
-export default function FilterSheet({ open, onClose, opener, filters, defaults, levels, count, onChange, onClear }: Props) {
-  const chips = activeChips(filters, defaults);
+export default function FilterSheet({ open, onClose, opener, filters, levels, count, onChange, onClear }: Props) {
+  const chips = activeChips(filters, clearedFilters);
   return (
     <Sheet open={open} onClose={onClose} title="Filters" opener={opener}>
       {chips.length > 0 && (
@@ -67,7 +66,8 @@ export default function FilterSheet({ open, onClose, opener, filters, defaults, 
         </div>
       ))}
 
-      <div role="group" aria-label="More filters" className="fs-group">
+      <div role="group" aria-label="Show only" className="fs-group">
+        <span className="fs-label">Show only</span>
         <div className="fs-options">
           <button type="button" className="chip" data-on={filters.sponsorOnly} aria-pressed={filters.sponsorOnly} onClick={() => onChange({ sponsorOnly: !filters.sponsorOnly })}>
             Sponsors a visa

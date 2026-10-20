@@ -8,7 +8,7 @@ import { claimsFor, profileSummary } from './user';
 import { projectPicks } from './resume';
 import { isAlumniRequest } from './match';
 import { watchlist } from './sources';
-import { BLOCKER_LABEL } from './jobcheck-text';
+import { blockerLine } from './jobcheck-text';
 
 // An export can carry several thousand 1st-degree connections. The counts and
 // the company breakdown are computed in the database over all of them; only the
@@ -99,8 +99,8 @@ export async function buildJobs(userId: string) {
       analysed: analysis.by === 'claude',
       // The list needs only this flag. The detail route sends the full check.
       hasBlocker: analysis.blockers.length > 0,
-      // The row shows one line for the first blocker, else one for the contacts who can refer the user.
-      blocker: analysis.blockers.length ? (BLOCKER_LABEL[analysis.blockers[0].type] ?? BLOCKER_LABEL.other) : null,
+      // The row shows one line for the first blocker (its type and the posting's own words), else one for the contacts who can refer the user.
+      blocker: analysis.blockers.length ? blockerLine(analysis.blockers[0].type, analysis.blockers[0].quote) : null,
       referrers: routes.length,
       referrer: routes[0]?.name ?? null,
     };

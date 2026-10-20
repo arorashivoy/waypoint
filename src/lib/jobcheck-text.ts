@@ -11,6 +11,27 @@ export const BLOCKER_LABEL: Record<string, string> = {
   other: 'Needs something that may exclude you',
 };
 
+/** The short lead of the blocker line in the job list, by blocker type. */
+export const BLOCKER_LEAD: Record<string, string> = {
+  citizenship: 'Needs a work permit',
+  clearance: 'Needs a security clearance',
+  language: 'Needs a language',
+  location: 'Must work in a set place',
+  seniority: 'Needs more experience',
+  other: 'Has a hard requirement',
+};
+
+const QUOTE_MAX = 60;
+
+/** One line for a blocker: the lead, then the posting's own words, cut to 60 characters. */
+export function blockerLine(type: string, quote: string): string {
+  const lead = BLOCKER_LEAD[type] ?? BLOCKER_LEAD.other;
+  const words = quote.replace(/\s+/g, ' ').trim();
+  if (!words) return lead;
+  const cut = words.length > QUOTE_MAX ? `${words.slice(0, QUOTE_MAX).trimEnd()}…` : words;
+  return `${lead}: “${cut}”`;
+}
+
 export const LEGITIMACY_LABEL: Record<string, string> = {
   'no-company': 'does not name the company',
   'pay-to-apply': 'asks you to pay to apply',
