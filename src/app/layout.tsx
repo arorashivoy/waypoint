@@ -8,6 +8,15 @@ const onest = Onest({ subsets: ['latin'], weight: ['400', '500', '600'], variabl
 export const metadata: Metadata = {
   title: 'Waypoint',
   description: 'Jobs in your countries, a referral route through people you already know, and a CV tuned to each posting.',
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: [
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: '/icons/apple-touch-icon.png',
+  },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent' },
 };
 
 export const viewport: Viewport = {

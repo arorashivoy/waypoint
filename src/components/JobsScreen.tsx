@@ -4,20 +4,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { runTask } from './tasks';
 import { api, copyAndOpen, copyText, del, draftCopyOpen, patch, post } from './api';
 import { FILTER_GROUPS, POSTED_WINDOWS } from '@/lib/countries';
-import type { Screen } from './Waypoint';
 import { BLOCKER_LABEL, STATUS_LABEL, legitimacyLine } from '@/lib/jobcheck-text';
 
 type Props = {
   state: any;
-  screen: Screen;
   refresh: () => Promise<any>;
   setToast: (s: string) => void;
   openJob: (id: string) => void;
   selected: string | null;
-  setSelected: (id: string | null) => void;
   toggleCountry: (cc: string, on: boolean) => void;
-  go: (s: Screen) => void;
-  phone: boolean;
 };
 
 // Defaults to the last 7 days: an advert older than that is usually filled, and
@@ -26,7 +21,7 @@ type Props = {
 // the way until asked for.
 const DEFAULT_FILTERS = { field: 'All', mode: 'Any', level: 'From LinkedIn', posted: 'This week' } as Record<string, string>;
 
-export default function JobsScreen({ state, screen, refresh, setToast, openJob, selected, setSelected, toggleCountry, go, phone }: Props) {
+export default function JobsScreen({ state, refresh, setToast, openJob, selected, toggleCountry }: Props) {
   const [q, setQ] = useState('');
   const [f, setF] = useState(DEFAULT_FILTERS);
   const [sponsorOnly, setSponsorOnly] = useState(false);
@@ -37,7 +32,6 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
   const [pasteUrl, setPasteUrl] = useState('');
   const [pasting, setPasting] = useState(false);
   // A pasted job can be in a country that is off. The list does not hold it, but its detail must still open.
-  const [pastedId, setPastedId] = useState<string | null>(null);
 
   const onCcs = new Set(state.countries.filter((c: any) => c.on).map((c: any) => c.cc));
 
@@ -63,7 +57,8 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
     [state.jobs, state.countries, state.levels, f, sponsorOnly, topOnly, q],
   );
 
-  const activeId = selected && (selected === pastedId || jobs.some((j: any) => j.id === selected)) ? selected : phone ? selected : jobs[0]?.id ?? null;
+  // The open job comes from the URL, so a filter that hides it does not swap it for another job.
+  const activeId = selected ?? jobs[0]?.id ?? null;
 
   const activeFilters =
     Object.entries(f).filter(([k, v]) => v !== DEFAULT_FILTERS[k]).length + (sponsorOnly ? 1 : 0) + (topOnly ? 1 : 0);
@@ -101,7 +96,6 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
       const res = await runTask<{ jobId: string; warning: string | null; note?: string | null }>(() => post<{ taskId: string }>('/api/jobs/paste', { url: pasteUrl.trim() }));
       setPasteUrl('');
       await refresh();
-      setPastedId(res.jobId);
       openJob(res.jobId);
       setToast([res.warning, res.note].filter(Boolean).join(' ') || 'Job added.');
     } catch (e) {
@@ -110,10 +104,6 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
       setPasting(false);
     }
   };
-
-  if (screen === 'detail' && activeId) {
-    return <JobDetail id={activeId} state={state} refresh={refresh} setToast={setToast} onBack={() => { setSelected(null); go('jobs'); }} phone={phone} />;
-  }
 
   return (
     <>
@@ -224,7 +214,7 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
             </div>
           )}
           {jobs.map((j: any) => (
-            <button key={j.id} className="job-card" data-on={!phone && j.id === activeId} onClick={() => openJob(j.id)}>
+            <button key={j.id} className="job-card" data-on={j.id === activeId} onClick={() => openJob(j.id)}>
               <div className="row" style={{ gap: 8, width: '100%' }}>
                 <span className="mono grow" style={{ fontSize: 12, color: 'var(--muted)' }}>{j.place} · {j.mode}</span>
                 {j.hasBlocker && <span className="tag" title="The posting has a blocker" style={{ color: 'var(--danger)' }}>Blocker</span>}
@@ -242,7 +232,7 @@ export default function JobsScreen({ state, screen, refresh, setToast, openJob, 
           ))}
         </div>
 
-        {!phone && activeId && (
+        {activeId && (
           <section className="jobs-detail">
             <JobDetail id={activeId} state={state} refresh={refresh} setToast={setToast} phone={false} />
           </section>

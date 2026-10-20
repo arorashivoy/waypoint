@@ -88,7 +88,7 @@ body::before {
   backdrop-filter: blur(18px) saturate(1.2);
 }
 @supports not (backdrop-filter: blur(1px)) {
-  .glass, .sidebar, .tabbar, .field, .card, .panel, .sheet-body { background: #1A1724; }
+  .glass, .sh-sidebar, .sh-rail, .sh-tabbar, .sh-topbar, .field, .card, .panel, .sheet-body { background: #1A1724; }
 }
 
 h1, h2, h3 { font-family: var(--f-head); }
@@ -118,52 +118,13 @@ button { cursor: pointer; }
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-/* ---------- shell ---------- */
-
-.shell { display: flex; min-height: 100dvh; }
-
-.sidebar {
-  width: 264px;
-  flex-shrink: 0;
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(18px) saturate(1.2);
-  backdrop-filter: blur(18px) saturate(1.2);
-  border-right: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  padding: 28px 18px;
-  gap: 28px;
-  box-sizing: border-box;
-  height: 100dvh;
-  position: sticky;
-  top: 0;
-  overflow-y: auto;
-}
-
-.wordmark { font-family: var(--f-head); font-size: var(--t-25); font-weight: 700; letter-spacing: -0.02em; padding: 0 10px; }
-
-.nav-item {
-  display: flex; align-items: center; gap: 10px;
-  height: 44px; padding: 0 12px;
-  border: 0; border-radius: var(--r-ctl);
-  text-align: left; font-size: 16px; color: var(--soft);
-  background: transparent; width: 100%;
-}
-.nav-item[data-on='true'] { background: var(--glass-hi); color: var(--text); font-weight: 600; }
+/* ---------- shell: the old classes that screens still use ---------- */
 
 .badge {
   min-width: 24px; height: 24px; border-radius: 12px;
   background: var(--coral); color: var(--ink-on); font-size: 13px; font-weight: 600;
   display: flex; align-items: center; justify-content: center; padding: 0 6px;
 }
-
-.country-row {
-  display: flex; align-items: center; gap: 10px;
-  min-height: 44px; padding: 0 12px;
-  border: 0; border-radius: var(--r-ctl); background: transparent; color: var(--text);
-  text-align: left; width: 100%;
-}
-.country-box { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--soft); flex-shrink: 0; }
 
 .avatar {
   width: 40px; height: 40px; border-radius: 20px;
@@ -175,6 +136,7 @@ button { cursor: pointer; }
 .avatar-sm { width: 36px; height: 36px; border-radius: 18px; font-size: 13px; }
 
 .main { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; }
+.wordmark { font-family: var(--f-head); font-size: var(--t-25); font-weight: 700; letter-spacing: -0.02em; padding: 0 10px; }
 
 /* Desktop matches the design's fixed-height frame: the page itself never
    scrolls, the job list and the detail pane each scroll on their own. On phone
@@ -331,7 +293,6 @@ button { cursor: pointer; }
 
 /* ---------- phone ---------- */
 
-.tabbar { display: none; }
 .sheet { display: none; }
 /* Each utility only ever *hides*, scoped to its own breakpoint. Nothing forces a
    display value back on, so an element keeps whatever layout its own class or
@@ -339,24 +300,16 @@ button { cursor: pointer; }
 @media (min-width: 1024px) { .mobile-only { display: none !important; } }
 
 @media (max-width: 1023px) {
-  .shell { flex-direction: column; }
-  .sidebar { display: none; }
   .desktop-only { display: none !important; }
 
-  /* viewport-fit=cover lets content run under the notch and rounded corners.
-     The bottom padding is the tab bar's full height: 72px plus the home
-     indicator inset, so the end of each screen stays above the bar. */
-  .main {
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) calc(72px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
-    --gutter: 20px;
-  }
+  /* The shell section sets the padding of .main for each device. */
+  .main { --gutter: 20px; }
 
   .screen-head { padding: 20px var(--gutter) 12px; border-bottom: 0; }
   .screen-head h1 { font-size: 28px; }
 
   .filters { display: none; }
 
-  .jobs-split { flex-direction: column; }
   .jobs-list { width: 100%; padding: 4px var(--gutter) 24px; gap: 10px; overflow: visible; }
   .jobs-detail { padding: 0 var(--gutter) 28px; overflow: visible; }
   .job-card { background: var(--surface); padding: 14px; }
@@ -367,30 +320,6 @@ button { cursor: pointer; }
 
   .board { display: flex; flex-direction: column; gap: 14px; padding: 4px var(--gutter) 28px; }
 
-  .tabbar {
-    position: fixed; bottom: 0; left: 0; right: 0;
-    height: 72px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
-    border-top: 1px solid var(--line); background: var(--surface); z-index: 20;
-    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
-    /* content-box: the 72px is for the tabs, and the inset adds below them. */
-    box-sizing: content-box;
-    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-  }
-  .tab {
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-    border: 0; background: transparent; font-size: 12px; color: var(--soft);
-    padding: 0 2px; min-width: 0;
-  }
-  /* Six tabs at 375px leave ~62px a column; the longest label must not wrap
-     the row taller than the bar. */
-  .tab > .row { max-width: 100%; }
-  .tab[data-on='true'] { font-weight: 600; color: var(--mint); }
-  .tab-bar-mark { width: 22px; height: 3px; border-radius: 2px; background: transparent; }
-  .tab[data-on='true'] .tab-bar-mark { background: var(--mint); }
-  .tab .badge { min-width: 18px; height: 18px; border-radius: 9px; font-size: 11px; padding: 0 4px; }
-  /* The badge sits on the top-right of the label so it adds no width to the column. */
-  .tab .tab-label { position: relative; }
-  .tab .tab-label .badge { position: absolute; top: -9px; right: -6px; }
   .settings-body { overflow: visible; padding: 4px var(--gutter) 28px; }
   .tabs { padding: 0 var(--gutter); gap: 0; }
   .tab-btn { flex: 1 1 auto; justify-content: center; min-width: 0; padding: 0 6px; gap: 4px; font-size: 14px; }
@@ -455,7 +384,7 @@ button { cursor: pointer; }
   font-size: 15px; line-height: 1.4; max-width: min(520px, calc(100vw - 32px));
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
-@media (max-width: 1023px) { .toast { bottom: calc(88px + env(safe-area-inset-bottom)); } }
+@media (max-width: 639px) { .toast { bottom: calc(112px + env(safe-area-inset-bottom)); } }
 
 /* Nothing moves under this setting. */
 @media (prefers-reduced-motion: reduce) {
@@ -660,4 +589,176 @@ button { cursor: pointer; }
   padding: var(--s3) var(--s4); font-size: var(--t-16); line-height: 1.4; max-width: 520px; box-shadow: 0 8px 24px color-mix(in srgb, var(--night) 70%, transparent);
   animation: ui-rise 0.2s ease-out;
 }
-@media (max-width: 1023px) { .ui-toast-region { bottom: calc(88px + env(safe-area-inset-bottom)); } }
+@media (max-width: 639px) { .ui-toast-region { bottom: calc(112px + env(safe-area-inset-bottom)); } }
+
+/* ---------- app shell ---------- */
+/* One element per nav. CSS shows one of them: sidebar from 1024 px, rail from 640 px, tab bar and top bar under 640 px.
+   The sidebar choice (data-collapsed) swaps the sidebar for the rail on a wide screen. */
+
+.sh { display: flex; min-height: 100dvh; }
+.sh-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sh-view { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.sh-icon { width: 22px; height: 22px; flex-shrink: 0; }
+
+.sh-mark {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; display: inline-block;
+  background: conic-gradient(var(--mint), var(--lav), var(--mint)); box-shadow: 0 0 16px var(--glow-lav);
+}
+
+.sh-sidebar, .sh-rail, .sh-tabbar, .sh-topbar {
+  background: var(--glass); border: 1px solid var(--edge);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2);
+}
+.sh-sidebar, .sh-rail, .sh-tabbar, .sh-topbar { display: none; box-sizing: border-box; }
+
+/* Sidebar (desktop) */
+.sh-sidebar {
+  width: 248px; flex-shrink: 0; flex-direction: column; gap: var(--s2);
+  margin: var(--s4) 0 var(--s4) calc(var(--s4) + env(safe-area-inset-left));
+  height: calc(100dvh - 2 * var(--s4)); position: sticky; top: var(--s4); align-self: flex-start;
+  border-radius: var(--r-panel); padding: var(--s5) 14px var(--s4); overflow-y: auto;
+}
+.sh-brand { display: flex; align-items: center; gap: 10px; padding: 0 12px var(--s5); }
+.sh-brand-name { font-family: var(--f-head); font-weight: 700; font-size: var(--t-20); letter-spacing: -0.01em; flex: 1; }
+.sh-collapse {
+  width: 36px; height: 36px; border: 0; border-radius: var(--r-ctl); background: transparent; color: var(--soft);
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
+}
+.sh-collapse:hover { background: var(--glass-hi); color: var(--text); }
+.sh-collapse .sh-icon { width: 20px; height: 20px; }
+.sh-nav { display: flex; flex-direction: column; gap: var(--s1); flex: 1; }
+.sh-nav-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 0 14px;
+  border: 0; border-radius: var(--r-ctl); background: transparent; color: var(--soft); font-weight: 500; text-align: left;
+}
+.sh-nav-item:hover { background: var(--glass); color: var(--text); }
+.sh-nav-item[aria-current='page'] { background: var(--glass-hi); color: var(--text); }
+.sh-nav-item[aria-current='page']::after {
+  content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 10px var(--mint); flex-shrink: 0;
+}
+.sh-work { padding: 12px 14px; border-radius: var(--r-ctl); background: color-mix(in srgb, var(--mint) 8%, transparent); }
+.sh-user { display: flex; align-items: center; gap: 12px; padding: var(--s3) 12px 0; border-top: 1px solid var(--edge); margin-top: var(--s2); }
+.sh-user-text { min-width: 0; }
+.sh-user-name { font-weight: 600; overflow-wrap: anywhere; line-height: 1.3; }
+.sh-user-claude { font-size: var(--t-13); color: var(--soft); line-height: 1.3; }
+
+/* Rail (tablet, and desktop with the sidebar closed) */
+.sh-rail {
+  width: 84px; flex-shrink: 0; flex-direction: column; align-items: center; gap: var(--s5);
+  height: 100dvh; position: sticky; top: 0; align-self: flex-start; border-width: 0 1px 0 0;
+  padding: calc(var(--s5) + env(safe-area-inset-top)) var(--s2) calc(var(--s4) + env(safe-area-inset-bottom)) calc(var(--s2) + env(safe-area-inset-left));
+  overflow-y: auto;
+}
+.sh-rail-brand { height: 36px; display: flex; align-items: center; }
+.sh-rail-nav { display: flex; flex-direction: column; gap: var(--s1); width: 100%; flex: 1; }
+.sh-rail-item {
+  position: relative; width: 100%; min-height: 60px; border: 0; border-radius: var(--r-ctl); background: transparent; color: var(--soft);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: var(--t-13); font-weight: 500; padding: var(--s2) 0;
+}
+.sh-rail-item:hover { background: var(--glass); color: var(--text); }
+.sh-rail-item[aria-current='page'] { background: var(--glass-hi); color: var(--mint); }
+.sh-rail-badge { position: absolute; top: 0; right: 0; }
+.sh-rail-badge .ui-badge, .sh-tab-badge .ui-badge { min-width: 20px; height: 20px; padding: 0 6px; }
+.sh-rail-foot { display: flex; flex-direction: column; align-items: center; gap: var(--s3); }
+.sh-rail-task .ui-task { font-size: 0; gap: 0; }
+.sh-rail-task .ui-task-dot { width: 10px; height: 10px; }
+.sh-expand { display: none; }
+
+/* Top bar (phone) */
+.sh-topbar {
+  position: sticky; top: 0; z-index: 15; align-items: center; justify-content: space-between; gap: var(--s3);
+  min-height: 56px; border-width: 0 0 1px 0; background: color-mix(in srgb, var(--night) 70%, transparent);
+  padding: env(safe-area-inset-top) max(20px, env(safe-area-inset-right)) 0 max(20px, env(safe-area-inset-left));
+}
+.sh-topbar-brand { display: flex; align-items: center; gap: 10px; font-family: var(--f-head); font-weight: 700; font-size: var(--t-20); letter-spacing: -0.01em; }
+.sh-back {
+  display: inline-flex; align-items: center; gap: var(--s1); min-height: 44px; margin-left: -10px; padding: 0 10px;
+  border: 0; background: transparent; color: var(--lav); font-weight: 600;
+}
+.sh-back:hover { color: var(--text); }
+.sh-pill { padding: 6px 12px; border-radius: 999px; background: color-mix(in srgb, var(--mint) 10%, transparent); }
+
+/* Tab bar (phone): a glass bar that floats above the safe area */
+.sh-tabbar {
+  position: fixed; z-index: 20; left: calc(14px + env(safe-area-inset-left)); right: calc(14px + env(safe-area-inset-right));
+  bottom: calc(14px + env(safe-area-inset-bottom)); border-radius: 22px; padding: var(--s2) var(--s1);
+  grid-template-columns: repeat(4, minmax(0, 1fr)); background: color-mix(in srgb, var(--night) 66%, transparent); box-shadow: 0 12px 32px color-mix(in srgb, var(--night) 60%, transparent);
+}
+.sh-tab {
+  position: relative; min-height: 48px; border: 0; border-radius: var(--r-ctl); background: transparent; color: var(--soft);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: var(--t-13); font-weight: 500; padding: 0;
+}
+.sh-tab[aria-current='page'] { color: var(--mint); }
+.sh-tab-badge { position: absolute; top: 0; left: calc(50% + 6px); }
+
+/* Loading */
+.sh-loading {
+  min-height: 100dvh; box-sizing: border-box; max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; justify-content: center; gap: var(--s5);
+  padding: calc(var(--s6) + env(safe-area-inset-top)) max(var(--s4), env(safe-area-inset-right)) calc(var(--s6) + env(safe-area-inset-bottom)) max(var(--s4), env(safe-area-inset-left));
+}
+.sh-loading .sh-brand { padding: 0 var(--s1); }
+
+/* Error banner for Claude */
+.sh-banner { padding: var(--s3) 36px 0; flex-shrink: 0; }
+.sh-banner .ui-error { max-width: 720px; }
+
+/* Interim homes of Profile and Settings (the Profile and Settings tasks replace them) */
+.sh-split { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.sh-split .ui-tabs { flex: 1; min-height: 0; gap: 0; }
+.sh-split .ui-tablist { padding: var(--s3) 36px 0; flex-shrink: 0; }
+.sh-split .ui-tabpanel { display: flex; flex-direction: column; min-height: 0; }
+.ui-tabpanel[hidden] { display: none; }
+.sh-stack { flex: 1; min-height: 0; overflow-y: auto; }
+.sh-stack .screen-head { display: none; }
+.sh-title { padding: 24px 36px 8px; }
+.sh-title h1 { margin: 0; font-size: var(--t-31); font-weight: 700; letter-spacing: -0.02em; }
+.sh-section { margin: var(--s4) 0 0; padding: 0 36px; font-size: var(--t-20); font-weight: 600; letter-spacing: -0.01em; }
+
+/* Wide screens: sidebar, or the rail when the user closed the sidebar */
+@media (min-width: 1024px) {
+  .sh-sidebar { display: flex; }
+  .sh[data-collapsed='true'] .sh-sidebar { display: none; }
+  .sh[data-collapsed='true'] .sh-rail { display: flex; }
+  .sh-expand { display: inline-flex; }
+  .main { --gutter: 36px; padding-right: env(safe-area-inset-right); }
+}
+
+/* A narrow desktop: the list gives room to the job */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .jobs-list { width: 340px; }
+}
+
+/* Tablet: the rail */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .sh-rail { display: flex; }
+  .main { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0; }
+  /* The list and the job sit side by side, as on a desktop. */
+  .jobs-split { flex-direction: row; align-items: flex-start; }
+  .jobs-list { width: 320px; flex-shrink: 0; padding: 4px var(--s3) 24px var(--gutter); }
+  .jobs-detail { flex: 1; min-width: 0; padding: 0 var(--gutter) 28px var(--s2); }
+}
+
+/* Phone: top bar and floating tab bar. A job opens on its own screen. */
+@media (max-width: 639px) {
+  .sh { flex-direction: column; }
+  .sh-topbar { display: flex; }
+  .sh-tabbar { display: grid; }
+  .main {
+    padding: 0 env(safe-area-inset-right) calc(110px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
+  }
+  .jobs-split { flex-direction: column; }
+  .sh[data-job='none'] .jobs-detail { display: none; }
+  .jobs-detail { padding-top: var(--s3); }
+  .sh[data-job='open'][data-place='jobs'] .jobs-list,
+  .sh[data-job='open'][data-place='jobs'] .sh-view > :not(.jobs-split) { display: none !important; } /* some of them set display inline */
+  .sh-banner { padding: var(--s3) var(--gutter) 0; }
+  .sh-split .ui-tablist { padding: var(--s2) var(--gutter) 0; }
+  .sh-title { padding: 16px var(--gutter) 4px; }
+  .sh-title h1 { font-size: 28px; }
+  .sh-section { padding: 0 var(--gutter); }
+  .sh-stack { overflow: visible; }
+}
+
+@media (pointer: coarse) {
+  .sh-collapse { min-width: 44px; min-height: 44px; }
+}

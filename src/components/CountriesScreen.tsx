@@ -8,7 +8,7 @@ export default function CountriesScreen({ state, toggleCountry }: { state: any; 
         <span className="sub">Ranked by your list · every board is searched for each country you keep on</span>
       </header>
 
-      <div style={{ flexGrow: 1, minHeight: 0, overflowY: 'auto', padding: '24px 36px 48px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ flexGrow: 1, minHeight: 0, overflowY: 'auto', padding: '16px var(--gutter) 48px', display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
           <span className="label" style={{ letterSpacing: '0.08em' }}>All countries</span>
           {state.globalSites.map((s: string) => (
