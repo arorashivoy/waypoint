@@ -307,8 +307,7 @@ button { cursor: pointer; }
   padding: var(--s4) var(--s1); border-top: 1px solid var(--edge); min-width: 0;
 }
 .pn-item:first-child { border-top: 0; }
-.pn-needs { border-left: 2px solid var(--coral); padding-left: var(--s3); margin-left: calc(var(--s1) * -1); }
-.pn-actions .btn.link { margin-left: calc(var(--s2) * -1); }
+.pn-needs { box-shadow: inset 2px 0 0 var(--coral); padding-left: var(--s3); }
 .pn-needs:first-child { margin-top: var(--s1); }
 .pn-item > * { max-width: 100%; }
 .pn-person { display: flex; gap: var(--s3); align-items: center; min-width: 0; }
@@ -325,17 +324,20 @@ button { cursor: pointer; }
 .pn-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
 .pn-form { display: flex; flex-direction: column; align-items: stretch; gap: var(--s2); width: 100%; }
 .pn-form .btn { align-self: flex-start; }
+.pn-sec .btn { white-space: normal; height: auto; min-height: 46px; padding-block: var(--s2); }
+.pn-sec .btn.link { min-height: 44px; }
 .pn-form .note-area { min-height: 100px; width: 100%; }
 .pn-applied strong { font-weight: 600; overflow-wrap: anywhere; }
 .quote, .sent-body { overflow-wrap: anywhere; white-space: pre-wrap; }
 
 /* A phone stacks the sections. A tablet shows 2 × 2 and the page scrolls. A desktop shows 4 columns and each column scrolls on its own. */
-@media (min-width: 640px) and (max-width: 1023px) {
+@media (min-width: 640px) and (max-width: 1279px) {
   .pn-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); overflow-y: auto; }
 }
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .pn-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); align-items: start; padding-bottom: var(--s5); }
   .pn-sec { min-height: 0; max-height: 100%; }
+  .ui-panel.pn-sec { padding: var(--s4); }
   .pn-body { overflow-y: auto; overscroll-behavior: contain; flex: 1 1 auto; }
 }
 .quote { margin: 0; font-size: 14px; line-height: 1.5; padding: 10px; border-radius: var(--r-ctl); background: var(--quote); }

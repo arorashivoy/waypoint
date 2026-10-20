@@ -30,25 +30,26 @@ export const needsCount = (data: { needs: unknown[] }) => data.needs.length;
 export interface EmptyText {
   cause: string;
   detail: string;
-  action: string;
+  /** The one action, or null when the user has nothing to do. */
+  action: string | null;
 }
 
-/** Why a section is empty, in plain words. Each one has one action: go to the jobs. */
+/** Why a section is empty, in plain words. A section with a next step has one action. Both go to the jobs. */
 export const EMPTY_TEXT: Record<SectionKey, EmptyText> = {
   needs: {
     cause: 'Nothing needs you now.',
     detail: 'A reply that Waypoint cannot answer on its own shows here, with the reason.',
-    action: 'See the jobs',
+    action: null,
   },
   awaiting: {
     cause: 'No referral request is waiting for a reply.',
     detail: 'Ask a contact for a referral from a job. The request waits here.',
-    action: 'See the jobs',
+    action: 'Find a contact in a job',
   },
   safe: {
     cause: 'No reply was safe to send on its own.',
     detail: 'A reply shows here when every answer in it was already on file.',
-    action: 'See the jobs',
+    action: null,
   },
   applied: {
     cause: 'You have not marked a job as applied.',

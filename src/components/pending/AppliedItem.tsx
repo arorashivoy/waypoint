@@ -8,7 +8,7 @@ export default function AppliedItem({ item }: { item: Item }) {
       <span className="pn-role">{[item.company, item.city].filter(Boolean).join(', ')}</span>
       {item.cvUrl && (
         <span className="pn-when">
-          <a href={item.cvUrl} target="_blank" rel="noreferrer">The CV they read</a>
+          <a href={item.cvUrl} target="_blank" rel="noreferrer" aria-label={`The CV ${item.company} read`}>The CV they read</a>
           {item.cvLead ? `. It leads with ${item.cvLead}` : ''}
           {item.cvSent ? `. Sent ${item.cvSent}` : ''}
         </span>

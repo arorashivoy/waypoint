@@ -20,7 +20,7 @@ export default function SafeItem({ item, actions }: { item: Item; actions: Pendi
         <span className="pn-when">You sent this reply.</span>
       ) : (
         <div className="pn-actions">
-          <Button busy={busy} onClick={() => actions.send({ id: item.id, draft: item.sent })}>{busy ? 'Copying…' : 'Copy and open LinkedIn'}</Button>
+          <Button busy={busy} aria-label={`Copy and open LinkedIn for ${item.who}`} onClick={() => actions.send({ id: item.id, draft: item.sent })}>{busy ? 'Copying…' : 'Copy and open LinkedIn'}</Button>
         </div>
       )}
     </li>

@@ -10,6 +10,8 @@ export interface PendingActions {
   busy: string | null;
   /** The error of an action, by item id. It shows next to the action. */
   errors: Record<string, string>;
+  /** Remove the error of an item, for example when its form opens again. */
+  clearError: (id: string) => void;
   /** Copy the message, open LinkedIn and mark the reply as handled. `body` is the text to send. */
   send: (item: Pick<NeedsItem, 'id' | 'draft'>, body?: string) => Promise<boolean>;
   /** An alumnus accepted: draft the referral message with the CV link. */
@@ -44,6 +46,7 @@ export function usePendingActions(refresh: () => Promise<unknown>, setToast: (s:
   return {
     busy,
     errors,
+    clearError: (id) => setErrors(({ [id]: _gone, ...rest }) => rest),
     send: (item, body) =>
       run(item.id, async () => {
         const res = await patch<{ copy: string; open: string | null }>(`/api/outreach/${item.id}`, { handled: true, body: body ?? item.draft });

@@ -19,12 +19,12 @@ function Section({ id, title, count, loading, onJobs, children }: { id: SectionK
       <div className="pn-head">
         <h2 id={`pn-${id}`} className="ui-panel-title">{title}</h2>
         {!loading && (id === 'needs' && count > 0
-          ? <Badge tone="coral">{count}<span className="sr-only"> need you</span></Badge>
-          : <span className="pn-count">{count}</span>)}
+          ? <Badge tone="coral">{count}<span className="sr-only"> {count === 1 ? 'item needs' : 'items need'} you</span></Badge>
+          : <span className="pn-count">{count}<span className="sr-only"> {count === 1 ? 'item' : 'items'}</span></span>)}
       </div>
       <div className="pn-body">
         {loading ? <Skeleton rows={2} /> : count === 0 ? (
-          <EmptyState cause={empty.cause} detail={empty.detail} action={{ label: empty.action, onClick: onJobs }} />
+          <EmptyState cause={empty.cause} detail={empty.detail} action={empty.action ? { label: empty.action, onClick: onJobs } : undefined} />
         ) : (
           <ul className="pn-list">{children}</ul>
         )}

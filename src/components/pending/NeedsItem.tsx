@@ -19,16 +19,21 @@ export default function NeedsItem({ item, actions }: { item: Item; actions: Pend
       <Person init={item.init} who={item.who} org={item.org} />
       <span className="pn-role">{item.role}</span>
       {item.quote && <p className="quote">“{item.quote}”</p>}
-      <label className="pn-label" htmlFor={`draft-${item.id}`}>{item.draftLabel}</label>
       {editing ? (
-        <textarea id={`draft-${item.id}`} className="note-area pn-draft" value={body} onChange={(e) => setText(e.target.value)} />
+        <>
+          <label className="pn-label" htmlFor={`draft-${item.id}`}>{item.draftLabel}</label>
+          <textarea id={`draft-${item.id}`} className="note-area pn-draft" value={body} onChange={(e) => setText(e.target.value)} />
+        </>
       ) : (
-        <p id={`draft-${item.id}`} className="pn-text">{body}</p>
+        <>
+          <span className="pn-label" id={`draft-${item.id}`}>{item.draftLabel}</span>
+          <p className="pn-text" aria-labelledby={`draft-${item.id}`}>{body}</p>
+        </>
       )}
       {item.reason && <p className="pn-reason">{item.reason}</p>}
-      {error && <ErrorNote live what="Waypoint could not send this reply." fix={error} />}
+      {error && <ErrorNote live what="Waypoint could not copy this reply." fix={error} />}
       <div className="pn-actions">
-        <Button variant="go" busy={busy} onClick={() => actions.send(item, body)}>{busy ? 'Copying…' : item.action}</Button>
+        <Button variant="go" busy={busy} aria-label={`${item.action} to ${item.who}`} onClick={() => actions.send(item, body)}>{busy ? 'Copying…' : item.action}</Button>
         <Button variant="link" aria-label={`${editing ? 'Finish editing' : 'Edit'} the reply to ${item.who}`} onClick={() => setEditing(!editing)}>{editing ? 'Done' : 'Edit'}</Button>
       </div>
     </li>
