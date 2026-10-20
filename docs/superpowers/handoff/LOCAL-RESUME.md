@@ -14,13 +14,13 @@ Start Claude Code in `/home/shivoy/waypoint-shivoy/.claude/worktrees/prod` and s
 - Goal: a production-ready, multi-user Waypoint in 6 parts (spec `docs/superpowers/specs/2026-10-15-production-ready-design.md`). Parts 1–4 are done. Part 5 (AI prompts and prompt safety, plan `docs/superpowers/plans/2026-10-17-prod-part5-prompts.md`) is done up to its final review; a cloud session did Tasks 11–14 and the part 5 final review. Part 6 (UI/UX and devices) has no plan yet.
 - The cloud session continues the plan; it reads `docs/superpowers/handoff/README.md`. It cannot push to `multi-user`; it pushes to `claude/epic-lovelace-0vqgu7`, and the local session fast-forwards `multi-user` to it (`git fetch origin`, `git merge --ff-only origin/<branch>`, `npx prisma generate`) after a quick look at the commit list and `package.json`.
 - The local session does only what needs the Pi: real Claude CLI runs, the real eval, browser checks on port 3150 with a scratch database, LaTeX/Ghostscript test runs, and anything that reads `.env`, the live `claims.yml` or `RESUME_TEX`. It writes the results to a file in `docs/superpowers/handoff/`, commits, and pushes `multi-user`.
-- Records: `docs/superpowers/handoff/part5-ledger.md` (all rulings and deferred items), `part5-final-review.md`, `part3-final-review.md`, `part4-final-review.md`, `part4-ledger.md`, and the latest local results `pi-steps-2026-10-20.md`.
+- Records: `docs/superpowers/handoff/part5-ledger.md` (all rulings and deferred items), `part5-final-review.md`, `part3-final-review.md`, `part4-final-review.md`, `part4-ledger.md`, and the local results `pi-steps-2026-10-20.md` and `pi-steps-2026-10-20b.md`.
 
 ## State on 2026-10-20 (HEAD `13eb9d5` on `multi-user`, pushed)
 
 - Tests on the Pi: 1250 of 1253 pass. The 3 fails need the `lmodern` package (`sudo apt install lmodern`, which the owner runs), then `npx vitest run tests/resume-template.test.ts`.
 - CLI canary: passed.
-- Eval: all 3 runs (sonnet-5, sonnet-5-5, admin profile) fail the bar, but no injection worked; the fails are fixture labels and checks tuned to the synthetic profile. The cloud session fixes the fixtures, then asks the owner to run the eval again. `MODEL` stays `claude-sonnet-5` until an eval passes.
+- Eval, second run after the fix (`pi-steps-2026-10-20b.md`): sonnet-5-5 passes on the synthetic and the admin profile; sonnet-5 fails (one real fake-blocker miss, two injection fails just over `maxRatio`). No injection worked. The cloud session makes the model move.
 - Browser checks: all 5 passed. Still open with the owner: copy a referral on a real iPhone.
 
 ## Next steps for the local session
