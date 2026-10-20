@@ -27,6 +27,8 @@ export type Repo = {
   stars: number;
   pushedAt: string | null;
   private: boolean;
+  /** True when the user has a token and the token belongs to another GitHub user than the owner of the list. */
+  other?: boolean;
 };
 
 export const githubToken = (userId: string) => readSecret(userId, 'github');
@@ -86,11 +88,13 @@ export async function listRepos(userId: string, username: string): Promise<Repo[
   if (!GITHUB_USER.test(username)) throw new HttpError(400, 'This is not a GitHub user name.');
   const token = await githubToken(userId);
   let path = `/users/${username}/repos?per_page=100&sort=pushed&type=owner`;
+  let other = false;
   if (token) {
     const me = await get(userId, '/user', token);
     if (me.status !== 200) fail(me.status);
     const login = String((json(me.body) as { login?: unknown }).login ?? '');
     if (login.toLowerCase() === username.toLowerCase()) path = '/user/repos?per_page=100&sort=pushed&affiliation=owner';
+    else other = true;
   }
   const r = await get(userId, path, token);
   if (r.status !== 200) fail(r.status);
@@ -113,6 +117,7 @@ export async function listRepos(userId: string, username: string): Promise<Repo[
         stars: Number.isFinite(x.stargazers_count) ? Number(x.stargazers_count) : 0,
         pushedAt: typeof x.pushed_at === 'string' ? x.pushed_at : null,
         private: x.private === true,
+        ...(other ? { other: true } : {}),
       },
     ];
   });

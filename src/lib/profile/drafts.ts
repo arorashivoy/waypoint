@@ -1,8 +1,8 @@
 import { db } from '../db';
 import { HttpError } from '../auth/http';
 import { checkForInjection } from '../injection';
-import { checkDoc, diffDocs, emptyDoc, type ClaimsDoc, type DiffLine } from './doc';
-import { applyDrafts, findItem, itemKey, ITEM_KINDS, type DraftType, type Item, type ItemKind } from './apply';
+import { checkDoc, diffDocs, emptyDoc, type Claim, type ClaimsDoc, type DiffLine } from './doc';
+import { applyDrafts, findItem, itemKey, ITEM_KINDS, retarget, type DraftType, type Item, type ItemKind } from './apply';
 import { parseItem } from './item-schemas';
 import { loadProfileDoc, ProfileError, saveProfile } from './store';
 
@@ -112,17 +112,41 @@ function findMatch(doc: ClaimsDoc | null, type: DraftType, data: unknown): strin
   return doc.claims.find((c) => norm(c.label) === norm(d.label) || c.aliases.some((a) => norm(a) === norm(d.label)))?.slug ?? null;
 }
 
-export async function createDrafts(userId: string, batch: { batchId: string; source: string; items: NewDraft[]; warnings?: string[] }): Promise<number> {
-  const pending = await db.profileDraft.count({ where: { userId, status: 'pending' } });
+/**
+ * Writes the drafts of one batch. With `replaceType`, the pending drafts of that type are rejected in the same
+ * transaction as the write, and they do not count toward the cap. So a refused batch leaves them as they were.
+ */
+export async function createDrafts(userId: string, batch: { batchId: string; source: string; items: NewDraft[]; warnings?: string[]; replaceType?: DraftType }): Promise<number> {
+  const pending = await db.profileDraft.count({ where: { userId, status: 'pending', ...(batch.replaceType ? { type: { not: batch.replaceType } } : {}) } });
   if (pending + batch.items.length > MAX_PENDING) throw new HttpError(409, `More than ${MAX_PENDING} drafts would wait. Accept or reject some drafts first.`);
   await db.profileDraft.deleteMany({ where: { userId, status: { not: 'pending' }, updatedAt: { lt: new Date(Date.now() - KEEP_DONE_DAYS * 86_400_000) } } });
 
   const doc = await loadProfileDoc(userId);
-  const rows = batch.items.map((item) => {
+  const parsed = batch.items.map((item) => {
     const data = parseItem(item.type, item.data);
     if (item.type === 'profile') {
       const c = checkDoc(data);
       if (!c.doc) throw new ProfileError(c.errors);
+    }
+    return { item, data, matches: findMatch(doc, item.type, data) };
+  });
+  // An item draft that matches an item of the profile under another key merges into that item when it is
+  // accepted. The claim drafts of the same batch name the new key, so they point at the kept key now. Then a
+  // claim accepted alone, before or after the item, still finds its target.
+  const renames: [ItemKind, string, string][] = [];
+  for (const p of parsed) {
+    if (!p.matches || !(ITEM_KINDS as readonly string[]).includes(p.item.type)) continue;
+    const kind = p.item.type as ItemKind;
+    const own = itemKey(kind, p.data as Item);
+    if (own !== p.matches) renames.push([kind, own, p.matches]);
+  }
+  const rows = parsed.map(({ item, data, matches }) => {
+    if (item.type === 'claim' && renames.length) {
+      const c = data as Claim;
+      for (const [k, from, to] of renames) {
+        c.evidence = c.evidence.map((e) => ({ ...e, target: retarget(e.target, k, from, to) }));
+        if (k === 'claim') c.links = c.links.map((l) => (l.to === from ? { ...l, to } : l));
+      }
     }
     const warnings = [...new Set([...(batch.warnings ?? []), ...(item.warnings ?? []), ...scanWarnings(data)])];
     return {
@@ -132,10 +156,17 @@ export async function createDrafts(userId: string, batch: { batchId: string; sou
       type: item.type,
       data: JSON.stringify(data),
       warnings: JSON.stringify(warnings),
-      matches: findMatch(doc, item.type, data),
+      matches,
     };
   });
-  if (rows.length) await db.profileDraft.createMany({ data: rows });
+  if (batch.replaceType) {
+    await db.$transaction([
+      db.profileDraft.updateMany({ where: { userId, type: batch.replaceType, status: 'pending' }, data: { status: 'rejected' } }),
+      db.profileDraft.createMany({ data: rows }),
+    ]);
+  } else if (rows.length) {
+    await db.profileDraft.createMany({ data: rows });
+  }
   return rows.length;
 }
 
@@ -158,7 +189,7 @@ export async function listDrafts(userId: string): Promise<DraftView[]> {
       warningsApproved: r.warningsApproved,
       matches: r.matches,
       existing: doc && kind && r.matches ? findItem(doc, kind, r.matches) : type === 'meta' && doc ? doc.profile : null,
-      diff: type === 'profile' ? diffDocs(doc, data as ClaimsDoc) : null,
+      diff: type === 'profile' && data ? diffDocs(doc, data as ClaimsDoc) : null,
       createdAt: r.createdAt.toISOString(),
     };
   });

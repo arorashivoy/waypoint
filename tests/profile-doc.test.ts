@@ -80,6 +80,15 @@ describe('checkDoc', () => {
     expect(c.errors.join('\n')).toMatch(/targets\.projects\[0\]\.description: 4001 characters, limit 4000/);
   });
 
+  it('gives a name-like field (org, location) the limit of one line', () => {
+    const doc = checkYaml(SAMPLE).doc!;
+    const long = 'x'.repeat(LIMITS.line + 1);
+    const withOrg = { ...doc, targets: { ...doc.targets, projects: [{ ...doc.targets.projects[0], org: long }, ...doc.targets.projects.slice(1)] } };
+    expect(checkDoc(withOrg).errors.join('\n')).toMatch(/targets\.projects\[0\]\.org: 401 characters, limit 400/);
+    const withPlace = { ...doc, targets: { ...doc.targets, positions: [{ ...doc.targets.positions[0], location: long }, ...doc.targets.positions.slice(1)] } };
+    expect(checkDoc(withPlace).errors.join('\n')).toMatch(/targets\.positions\[0\]\.location: 401 characters, limit 400/);
+  });
+
   it('reports YAML syntax errors as errors, not throws', () => {
     expect(checkYaml('version: [1').errors[0]).toMatch(/^yaml:/);
     expect(checkText('version: [1').errors[0]).toMatch(/^yaml:/);
@@ -124,6 +133,15 @@ describe('diffDocs', () => {
       { kind: 'claim', key: 'go', label: 'Go', change: 'added' },
       { kind: 'claim', key: 'gpa', label: 'GPA', change: 'removed' },
     ]);
+  });
+
+  it('sees no change when only the order of the keys differs', () => {
+    const before = sample();
+    const flip = (v: unknown): unknown =>
+      Array.isArray(v) ? v.map(flip) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).reverse().map(([k, x]) => [k, flip(x)])) : v;
+    const after = flip(before) as ClaimsDoc;
+    expect(JSON.stringify(after)).not.toBe(JSON.stringify(before));
+    expect(diffDocs(before, after)).toEqual([]);
   });
 
   it('lists every item as added when there is no profile yet', () => {

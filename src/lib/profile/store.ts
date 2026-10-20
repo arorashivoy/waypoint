@@ -22,7 +22,7 @@ type Client = Tx | PrismaClient;
 const REVISIONS_KEPT = 50;
 
 export class ProfileError extends HttpError {
-  constructor(public errors: string[]) {
+  constructor(errors: string[]) {
     super(422, 'The profile has errors. Fix them and save again.', { errors });
   }
 }
@@ -293,5 +293,11 @@ export async function restoreRevision(userId: string, id: string, expectedVersio
   const rev = await db.profileRevision.findFirst({ where: { id, userId } });
   if (!rev) throw new HttpError(404, 'Not found.');
   const day = rev.createdAt.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
-  return saveProfile(userId, JSON.parse(rev.snapshot) as ClaimsDoc, `Restored the profile from ${day} UTC`, undefined, expectedVersion);
+  let snapshot: ClaimsDoc;
+  try {
+    snapshot = JSON.parse(rev.snapshot) as ClaimsDoc;
+  } catch {
+    throw new HttpError(422, 'This saved copy of the profile is damaged. Choose another one.');
+  }
+  return saveProfile(userId, snapshot, `Restored the profile from ${day} UTC`, undefined, expectedVersion);
 }

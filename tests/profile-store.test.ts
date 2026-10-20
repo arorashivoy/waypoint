@@ -71,6 +71,25 @@ describe('profile store', () => {
     expect((await listRevisions(user.id))[0].note).toMatch(/^Restored the profile from /);
   });
 
+  it('saves an empty headline and an empty claim list (the check of a save is not strict)', async () => {
+    const { user } = await makeUser();
+    const doc = sample();
+    doc.profile.headline = '';
+    doc.claims = [];
+    const r = await saveProfile(user.id, doc, 'Sparse');
+    expect(r.version).toBe(1);
+    expect((await loadProfileDoc(user.id))!.profile.headline).toBe('');
+  });
+
+  it('refuses to restore a damaged revision with a clear message', async () => {
+    const { user } = await makeUser();
+    await saveProfile(user.id, sample(), 'First');
+    const [rev] = await listRevisions(user.id);
+    await db.profileRevision.update({ where: { id: rev.id }, data: { snapshot: '{not json' } });
+    await expect(restoreRevision(user.id, rev.id)).rejects.toMatchObject({ status: 422, message: 'This saved copy of the profile is damaged. Choose another one.' });
+    expect(await profileVersion(user.id)).toBe(1);
+  });
+
   it('keeps the newest 50 revisions', async () => {
     const { user } = await makeUser();
     const d = sample();

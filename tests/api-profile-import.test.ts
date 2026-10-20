@@ -39,6 +39,13 @@ describe('POST /api/profile/import: size checks before the body is read', () => 
     const { cookie } = await makeUser();
     const res = await importExport(await formRequest('/api/profile/import', csvForm(), { cookie, headers: { 'content-length': 'lots' } }), ctx());
     expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'The Content-Length header is not a number.' });
+  });
+
+  it('refuses a Content-Length of 400 digits as too large, with 413', async () => {
+    const { cookie } = await makeUser();
+    const res = await importExport(await formRequest('/api/profile/import', csvForm(), { cookie, headers: { 'content-length': '9'.repeat(400) } }), ctx());
+    expect(res.status).toBe(413);
   });
 
   it('refuses a Content-Length above 50 MB plus 1 MB with 413', async () => {
@@ -102,10 +109,13 @@ const upload = (files: Record<string, string>) => {
 describe('linkedinDrafts', () => {
   it('turns the archive into drafts in the claims.yml shape', () => {
     const drafts = linkedinDrafts(parseExport(archive(FULL)), 'Test User');
-    expect(drafts.map((d) => d.type)).toEqual(['meta', 'position', 'education', 'project', 'claim', 'claim']);
+    expect(drafts.map((d) => d.type)).toEqual(['meta', 'position', 'education', 'project', 'claim']);
     expect(drafts[1].data).toEqual({ id: 'acme-developer', title: 'Developer', company: 'Acme', location: 'Berlin', start: '2024-03', end: null, summary: 'Builds things.', bullets: [] });
     expect(drafts[3].data).toMatchObject({ id: 'parser', url: null, source: 'linkedin' });
-    expect((drafts[5].data as { slug: string }).slug).toBe('java-2');
+    // "Java" twice in the list is one claim.
+    expect((drafts[4].data as { slug: string }).slug).toBe('java');
+    const mixed = linkedinDrafts(parseExport(archive({ ...FULL, 'Skills.csv': 'Name\nJava\n java \nGo\n' })), 'Test User');
+    expect(mixed.filter((d) => d.type === 'claim').map((d) => (d.data as { slug: string }).slug)).toEqual(['java', 'go']);
   });
 });
 
@@ -115,7 +125,7 @@ describe('POST /api/profile/import makes drafts', () => {
     await db.contact.create({ data: { userId: u.user.id, firstName: 'Old', lastName: 'Contact' } });
     const res = await importExport(await formRequest('/api/profile/import', upload(FULL), { cookie: u.cookie }), ctx());
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ ok: true, scope: 'full', drafts: 6 });
+    expect(await res.json()).toMatchObject({ ok: true, scope: 'full', drafts: 5 });
     const contacts = await db.contact.findMany({ where: { userId: u.user.id } });
     expect(contacts.map((c) => c.firstName)).toEqual(['Ada']);
     expect(await db.profileMeta.findUnique({ where: { userId: u.user.id } })).toBeNull();
@@ -136,6 +146,14 @@ describe('POST /api/profile/import makes drafts', () => {
   it('refuses an archive with neither connections nor profile data', async () => {
     const u = await makeUser();
     expect((await importExport(await formRequest('/api/profile/import', upload({ 'Other.csv': 'A\n1\n' }), { cookie: u.cookie }), ctx())).status).toBe(400);
+  });
+
+  it('imports again when the counts of the last import are damaged', async () => {
+    const u = await makeUser();
+    await db.profileImport.create({ data: { userId: u.user.id, filename: 'old.csv', counts: '{broken' } });
+    const res = await importExport(await formRequest('/api/profile/import', csvForm(), { cookie: u.cookie }), ctx());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, counts: { contacts: 1 } });
   });
 
   it('answers scope contacts and 0 drafts for a bare Connections.csv', async () => {

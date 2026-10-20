@@ -28,7 +28,7 @@ export function findItem(doc: ClaimsDoc, kind: ItemKind, key: string): Item | nu
 export const hasItem = (doc: ClaimsDoc, kind: ItemKind, key: string) => findItem(doc, kind, key) !== null;
 
 /** Maps an evidence target that names `kind:from` (or a bullet of it) to `kind:to`. */
-function retarget(target: string, kind: ItemKind, from: string, to: string): string {
+export function retarget(target: string, kind: ItemKind, from: string, to: string): string {
   if (target === `${kind}:${from}`) return `${kind}:${to}`;
   if (kind === 'position' && target.startsWith(`position:${from}/`)) return `position:${to}/${target.slice(`position:${from}/`.length)}`;
   return target;
@@ -101,9 +101,14 @@ export function mergeItem(kind: ItemKind, existing: Item, incoming: Item): Item 
     out.mentions = unite(a.mentions, b.mentions, (m) => m.surface);
   } else if (kind === 'position') {
     out.bullets = unite((existing as PositionTarget).bullets, (incoming as PositionTarget).bullets, (b) => lower(b.text ?? b.match));
-    // Bullet IDs must stay unique in the position.
+    // Bullet IDs must stay unique in the position. A new bullet whose ID is taken keeps its text and gets a free ID.
     const ids = new Set<string>();
-    out.bullets = (out.bullets as NonNullable<PositionTarget['bullets']>).filter((b) => (ids.has(b.id) ? false : (ids.add(b.id), true)));
+    out.bullets = (out.bullets as NonNullable<PositionTarget['bullets']>).map((b) => {
+      let id = b.id;
+      for (let n = 2; ids.has(id); n++) id = `${b.id}-${n}`;
+      ids.add(id);
+      return id === b.id ? b : { ...b, id };
+    });
   } else if (kind === 'education') {
     out.aliases = unite((existing as EducationTarget).aliases, (incoming as EducationTarget).aliases, lower);
   } else {

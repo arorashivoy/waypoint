@@ -174,6 +174,7 @@ export async function draftsFromRepo(userId: string, username: string, name: str
   const [langs, text] = await Promise.all([languages(userId, repo, token), readme(userId, repo, token)]);
   const warnings: string[] = [];
   if (repo.fork) warnings.push('This repository is a fork. Check that the work in it is yours.');
+  if (repo.other) warnings.push(`This repository belongs to ${repo.owner}, and your GitHub token belongs to another user. Check that the work in it is yours.`);
   const scan = checkForInjection(repoSource(repo, langs, text));
   if (scan.suspicious) warnings.push(`The repository facts or README have a warning sign: ${scan.why}. Check the draft.`);
   const data = await askJsonCached('github-import', PROMPT_VERSIONS['github-import'], { system: GITHUB_IMPORT_SYSTEM, prompt: githubPrompt(repo, langs, text), schema: GithubReply, effort: 'low', maxTokens: 2000 }, { userId, kind: 'github-import' }, { perUser: true });

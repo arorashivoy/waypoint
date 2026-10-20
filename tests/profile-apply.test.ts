@@ -65,6 +65,15 @@ describe('mergeItem', () => {
   });
 });
 
+describe('mergeItem bullet ids', () => {
+  it('keeps a new bullet whose id is taken, with a free id', () => {
+    const p = sample().targets.positions[0];
+    const merged = mergeItem('position', p, { ...p, bullets: [{ id: 'ledger', match: 'a different bullet text', text: 'A different bullet.' }, { id: 'ledger-2', match: 'another different bullet', text: 'Another different bullet.' }] }) as { bullets: { id: string; text?: string }[] };
+    expect(merged.bullets.map((b) => b.id)).toEqual(['ledger', 'ledger-2', 'ledger-2-2']);
+    expect(merged.bullets.map((b) => b.text)).toEqual([p.bullets![0].text, 'A different bullet.', 'Another different bullet.']);
+  });
+});
+
 describe('mergeItem end date', () => {
   it('does not end a current position from a matched draft', () => {
     const p = sample().targets.positions[0];

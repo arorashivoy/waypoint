@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
 import { requireUser } from '@/lib/auth/guard';
 import { handle, HttpError } from '@/lib/auth/http';
 import { checkYaml, diffDocs } from '@/lib/profile/doc';
@@ -19,8 +18,8 @@ export const POST = handle(async (req) => {
   const check = checkYaml(sniffYaml(buf, type));
   if (!check.doc) throw new HttpError(422, 'The file has errors. Nothing was imported.', { errors: check.errors.slice(0, 50) });
 
-  // One YAML import waits at a time, so the user does not compare two full profiles.
-  await db.profileDraft.updateMany({ where: { userId: user.id, type: 'profile', status: 'pending' }, data: { status: 'rejected' } });
-  const drafts = await createDrafts(user.id, { batchId: randomUUID(), source: 'yaml', items: [{ type: 'profile', data: check.doc }] });
+  // One YAML import waits at a time, so the user does not compare two full profiles. The old one goes
+  // in the same transaction as the new one: when the new one is refused, the old one stays.
+  const drafts = await createDrafts(user.id, { batchId: randomUUID(), source: 'yaml', items: [{ type: 'profile', data: check.doc }], replaceType: 'profile' });
   return NextResponse.json({ ok: true, drafts, diff: diffDocs(await loadProfileDoc(user.id), check.doc), warnings: check.warnings });
 });

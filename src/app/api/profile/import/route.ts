@@ -8,6 +8,16 @@ import { checkExportUpload, checkUploadLength, linkedinDrafts, parseExport } fro
 
 export const maxDuration = 300;
 
+/** The counts of the last import. Only the app writes them, but a damaged row must not stop a new import. */
+function savedCounts(text: string): Record<string, number> {
+  try {
+    const v = JSON.parse(text);
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  } catch {
+    return {};
+  }
+}
+
 /**
  * An archive makes drafts of the positions, education, projects, skills and
  * headline, and it refreshes the contacts. A bare Connections.csv refreshes
@@ -50,7 +60,7 @@ export const POST = handle(async (req) => {
   // the last count of them.
   const prev = await db.profileImport.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } });
   const profileCounts = Object.fromEntries(Object.entries(parsed.counts).filter(([k]) => k !== 'contacts'));
-  const counts: Record<string, number> = { ...(prev ? JSON.parse(prev.counts) : {}), ...(parsed.archive ? profileCounts : {}) };
+  const counts: Record<string, number> = { ...(prev ? savedCounts(prev.counts) : {}), ...(parsed.archive ? profileCounts : {}) };
   if (parsed.contacts.length) counts.contacts = parsed.contacts.length;
   const record = await db.$transaction(async (tx) => {
     if (parsed.contacts.length) {

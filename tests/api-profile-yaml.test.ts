@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { canonicalDoc, checkYaml } from '@/lib/profile/doc';
 import { loadProfileDoc, saveProfile } from '@/lib/profile/store';
-import { acceptDrafts, listDrafts } from '@/lib/profile/drafts';
+import { db } from '@/lib/db';
+import { acceptDrafts, listDrafts, MAX_PENDING } from '@/lib/profile/drafts';
 import { GET as exportRoute } from '@/app/api/profile/export/route';
 import { POST as yamlRoute } from '@/app/api/profile/yaml/route';
 import { ctx, formRequest, makeUser, request } from './helpers/http';
@@ -35,6 +36,23 @@ describe('YAML export and import', () => {
     expect(draft.type).toBe('profile');
     await acceptDrafts(b.user.id, [draft.id]);
     expect(canonicalDoc((await loadProfileDoc(b.user.id))!)).toEqual(canonicalDoc(checkYaml(SAMPLE).doc!));
+  });
+
+  it('replaces the waiting YAML draft with the new one, also at the cap', async () => {
+    const u = await makeUser();
+    await yamlRoute(await upload(u.cookie, SAMPLE), ctx());
+    await db.profileDraft.createMany({ data: Array.from({ length: MAX_PENDING - 1 }, (_, i) => ({ userId: u.user.id, batchId: 'x', source: 'test', type: 'project', data: JSON.stringify({ id: `p${i}`, title: 'x' }) })) });
+    expect((await yamlRoute(await upload(u.cookie, SAMPLE), ctx())).status).toBe(200);
+    expect(await db.profileDraft.count({ where: { userId: u.user.id, type: 'profile', status: 'pending' } })).toBe(1);
+    expect(await db.profileDraft.count({ where: { userId: u.user.id, type: 'profile', status: 'rejected' } })).toBe(1);
+  });
+
+  it('keeps the waiting YAML draft when the new one is refused', async () => {
+    const u = await makeUser();
+    await yamlRoute(await upload(u.cookie, SAMPLE), ctx());
+    await db.profileDraft.createMany({ data: Array.from({ length: MAX_PENDING }, (_, i) => ({ userId: u.user.id, batchId: 'x', source: 'test', type: 'project', data: JSON.stringify({ id: `p${i}`, title: 'x' }) })) });
+    expect((await yamlRoute(await upload(u.cookie, SAMPLE), ctx())).status).toBe(409);
+    expect(await db.profileDraft.count({ where: { userId: u.user.id, type: 'profile', status: 'pending' } })).toBe(1);
   });
 
   it('exports an empty profile with the user name before the first write', async () => {

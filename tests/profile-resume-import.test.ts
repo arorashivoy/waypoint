@@ -208,6 +208,18 @@ describe('POST /api/profile/resume-import', () => {
     expect((await listDrafts(u.user.id)).every((d) => d.source === 'resume')).toBe(true);
   });
 
+  it('fails with a clear message, makes no draft and removes the file when no item has a quote in the text', async () => {
+    const u = await makeUser();
+    ask.reply = { headline: null, positions: [{ title: 'Developer', company: 'Nowhere', location: null, start: '2021', end: null, quote: 'This text is not in the file at all', bullets: [] }], educations: [], projects: [], skills: [] };
+    const { taskId } = await (await resumeRoute(await pdfUpload(u.cookie, texUpload(), 'cv.tex', ''), ctx())).json();
+    await runOnce(undefined, { userId: u.user.id });
+    const row = await taskOf(taskId);
+    expect(row.status).toBe('failed');
+    expect(row.lastError).toBe('[user] Waypoint found nothing in this résumé that it could use. 1 item had no quote in the file. Check that the file has the text of your résumé.');
+    expect((await listDrafts(u.user.id)).length).toBe(0);
+    expect(filesOf(u.user.id)).toEqual([]);
+  });
+
   it('a second run of the same task makes no second Claude call and no second set of drafts', async () => {
     const u = await makeUser();
     const { taskId } = await (await resumeRoute(await pdfUpload(u.cookie, texUpload(), 'cv.tex', ''), ctx())).json();

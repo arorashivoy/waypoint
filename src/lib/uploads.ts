@@ -16,9 +16,9 @@ export const MAX_YAML_BYTES = 1024 * 1024;
 export function checkUploadLength(headers: Headers, maxBytes: number, tooLarge: string, framing = 1024 * 1024): void {
   const raw = headers.get('content-length');
   if (raw === null) throw new HttpError(411, 'Send the file with a Content-Length header.');
-  const length = /^\d+$/.test(raw.trim()) ? Number(raw) : NaN;
-  if (!Number.isFinite(length)) throw new HttpError(400, 'The Content-Length header is not a number.');
-  if (length > maxBytes + framing) throw new HttpError(413, tooLarge);
+  if (!/^\d+$/.test(raw.trim())) throw new HttpError(400, 'The Content-Length header is not a number.');
+  // A number of 400 digits is too large, not "not a number": Number() gives Infinity.
+  if (Number(raw) > maxBytes + framing) throw new HttpError(413, tooLarge);
 }
 
 /** The file in the form field "file", after the length check. */
@@ -52,19 +52,21 @@ function utf8(buf: Buffer): string | null {
 
 const YAML_TYPES = ['', 'application/yaml', 'application/x-yaml', 'text/yaml', 'text/x-yaml', 'text/plain', 'application/octet-stream'];
 const PDF_TYPES = ['', 'application/pdf', 'application/x-pdf', 'application/octet-stream'];
+/** The content type without its parameters: "text/yaml; charset=utf-8" is "text/yaml". */
+const mediaType = (type: string) => type.split(';')[0].trim().toLowerCase();
 const TEX_TYPES = ['', 'text/x-tex', 'application/x-tex', 'text/plain', 'application/octet-stream'];
 
 /** The text of a YAML upload, or HttpError(400). */
 export function sniffYaml(buf: Buffer, type: string): string {
-  const text = !startsWith(buf, PDF) && !startsWith(buf, ZIP) && YAML_TYPES.includes(type) ? utf8(buf) : null;
+  const text = !startsWith(buf, PDF) && !startsWith(buf, ZIP) && YAML_TYPES.includes(mediaType(type)) ? utf8(buf) : null;
   if (text === null) throw new HttpError(400, 'Upload a claims.yml text file.');
   return text.replace(/^﻿/, '');
 }
 
 /** A résumé upload: a PDF by its bytes, or a .tex file by its name and its text. */
 export function sniffResume(name: string, type: string, buf: Buffer): { kind: 'pdf' } | { kind: 'tex'; text: string } {
-  if (startsWith(buf, PDF) && PDF_TYPES.includes(type)) return { kind: 'pdf' };
-  if (/\.tex$/i.test(name) && TEX_TYPES.includes(type) && !startsWith(buf, ZIP)) {
+  if (startsWith(buf, PDF) && PDF_TYPES.includes(mediaType(type))) return { kind: 'pdf' };
+  if (/\.tex$/i.test(name) && TEX_TYPES.includes(mediaType(type)) && !startsWith(buf, ZIP)) {
     const text = utf8(buf);
     if (text !== null) return { kind: 'tex', text: text.replace(/^﻿/, '') };
   }
@@ -73,7 +75,7 @@ export function sniffResume(name: string, type: string, buf: Buffer): { kind: 'p
 
 /** The text of an own résumé source upload: a .tex name, text bytes, no PDF and no ZIP. Or HttpError(400). */
 export function sniffTex(name: string, type: string, buf: Buffer): string {
-  const text = /\.tex$/i.test(name) && TEX_TYPES.includes(type) && !startsWith(buf, PDF) && !startsWith(buf, ZIP) ? utf8(buf) : null;
+  const text = /\.tex$/i.test(name) && TEX_TYPES.includes(mediaType(type)) && !startsWith(buf, PDF) && !startsWith(buf, ZIP) ? utf8(buf) : null;
   if (text === null) throw new HttpError(400, 'Upload the résumé source as a .tex text file.');
   return text.replace(/^﻿/, '');
 }

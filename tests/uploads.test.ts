@@ -25,6 +25,11 @@ describe('sniffYaml', () => {
   it('accepts UTF-8 text and removes a BOM', () => {
     expect(sniffYaml(Buffer.from('﻿version: 1\n'), 'application/x-yaml')).toBe('version: 1\n');
   });
+  it('accepts a content type with parameters', () => {
+    expect(sniffYaml(Buffer.from('version: 1\n'), 'text/yaml; charset=utf-8')).toBe('version: 1\n');
+    expect(statusOf(() => sniffYaml(Buffer.from('version: 1'), 'image/png; charset=utf-8'))).toBe(400);
+    expect(sniffResume('cv.tex', 'text/x-tex; charset=utf-8', Buffer.from('\\documentclass{article}'))).toMatchObject({ kind: 'tex' });
+  });
   it('refuses a PDF, a zip, a NUL byte, bad UTF-8 and a wrong content type', () => {
     for (const [bytes, type] of [
       [Buffer.from('%PDF-1.7 ...'), ''],

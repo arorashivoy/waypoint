@@ -43,14 +43,19 @@ export function unseal(sealed: Sealed, aad: string, key: Buffer = masterKey()): 
 
 const aadOf = (userId: string, kind: SecretKind) => `${userId}:${kind}`;
 
-export async function saveSecret(userId: string, kind: SecretKind, value: string): Promise<void> {
+/** The write of a secret, not run yet. Put it in `db.$transaction([...])` to save it together with another write. */
+export function secretWrite(userId: string, kind: SecretKind, value: string) {
   const sealed = seal(value, aadOf(userId, kind));
   const last4 = value.slice(-4);
-  await db.userSecret.upsert({
+  return db.userSecret.upsert({
     where: { userId_kind: { userId, kind } },
     create: { userId, kind, ...sealed, last4 },
     update: { ...sealed, last4 },
   });
+}
+
+export async function saveSecret(userId: string, kind: SecretKind, value: string): Promise<void> {
+  await secretWrite(userId, kind, value);
 }
 
 /** Null if there is no secret, or if it does not decrypt (the log says why). */
@@ -71,6 +76,11 @@ export async function secretHint(userId: string, kind: SecretKind): Promise<stri
   return row?.last4 ?? null;
 }
 
+/** The delete of a secret, not run yet. See `secretWrite`. */
+export function secretDelete(userId: string, kind: SecretKind) {
+  return db.userSecret.deleteMany({ where: { userId, kind } });
+}
+
 export async function deleteSecret(userId: string, kind: SecretKind): Promise<void> {
-  await db.userSecret.deleteMany({ where: { userId, kind } });
+  await secretDelete(userId, kind);
 }

@@ -240,6 +240,10 @@ export async function draftsFromResume(userId: string, kind: ResumeKind, buf: Bu
 
   const data = await askJsonCached('resume-import', PROMPT_VERSIONS['resume-import'], { system: RESUME_IMPORT_SYSTEM, prompt: resumeImportPrompt(ex.text), schema: ResumeReply, effort: 'medium', maxTokens: 8000 }, { userId, kind: 'resume-import' }, { perUser: true });
   const { items, dropped } = buildResumeDrafts(data, ex.text, user.name);
+  if (!items.length) {
+    const why = dropped ? ` ${dropped} ${dropped === 1 ? 'item' : 'items'} had no quote in the file.` : '';
+    throw new HttpError(422, `Waypoint found nothing in this résumé that it could use.${why} Check that the file has the text of your résumé.`);
+  }
   const drafts = await createDrafts(userId, { batchId, source: 'resume', items, warnings });
   return { drafts, dropped, hidden: ex.hidden.length };
 }

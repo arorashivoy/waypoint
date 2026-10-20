@@ -188,7 +188,12 @@ export function linkedinDrafts(p: ImportedProfile, name: string): NewDraft[] {
       data: { id: slugify(x.title, taken.project, 'project'), title: x.title.slice(0, 400), org: null, description: clip(x.description, 4000), url: x.url && /^https?:\/\/\S+$/i.test(x.url) ? x.url.slice(0, 4000) : null, source: 'linkedin' },
     });
   }
+  // The same skill twice (also in another case) is one claim, not "java" and "java-2".
+  const seenSkills = new Set<string>();
   for (const s of p.skills.slice(0, 200)) {
+    const key = s.trim().toLowerCase();
+    if (seenSkills.has(key)) continue;
+    seenSkills.add(key);
     out.push({ type: 'claim', data: { slug: slugify(s, taken.claim, 'skill'), kind: 'skill', label: s.slice(0, 400), aliases: [], links: [], evidence: [], mentions: [{ surface: 'linkedin-skills', listed: true }] } });
   }
   return out;

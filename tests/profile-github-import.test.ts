@@ -14,6 +14,7 @@ vi.mock('@/lib/claude', async (orig) => ({
 
 import { NoCredentialError } from '@/lib/claude';
 import { db } from '@/lib/db';
+import { saveSecret } from '@/lib/secrets';
 import { buildRepoDrafts, GithubReply } from '@/lib/profile/github-import';
 import { listDrafts, MAX_PENDING } from '@/lib/profile/drafts';
 import { POST as importRoute } from '@/app/api/profile/github/import/route';
@@ -89,6 +90,19 @@ describe('GitHub import', () => {
     expect(drafts.find((d) => (d.data as { id?: string }).id === 'forked')!.warnings.join('\n')).toMatch(/fork/);
     // untrusted() keeps only [a-z0-9 _-] in the label, so the comma goes.
     expect(ask.prompts[0]).toContain('<untrusted source="README first 4 KB">');
+  });
+
+  it('warns when the token of the user belongs to another GitHub user than the owner', async () => {
+    const u = await makeUser();
+    await saveSecret(u.user.id, 'github', `ghp_${'a'.repeat(36)}`);
+    const base = vi.mocked(fetch).getMockImplementation()!;
+    vi.stubGlobal('fetch', vi.fn(async (input: URL | string, init?: RequestInit) => (new URL(String(input)).pathname === '/user' ? Response.json({ login: 'me-myself' }) : base(input, init))));
+    ask.replies = [parserReply];
+    const { taskIds } = await (await post(u.cookie, ['parser'])).json();
+    await drain(u.user.id);
+    expect((await taskOf(taskIds[0])).status).toBe('done');
+    const project = (await listDrafts(u.user.id)).find((d) => d.type === 'project')!;
+    expect(project.warnings.join('\n')).toMatch(/belongs to octo/);
   });
 
   it('refuses a repo name that is not in the user list, before any Claude call', async () => {

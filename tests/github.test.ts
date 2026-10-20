@@ -47,6 +47,19 @@ describe('github client', () => {
     expect(calls[3].headers['if-none-match']).toBe('"small"');
   });
 
+  it('sends no authorization header without a token, refuses a redirect and has a time limit', async () => {
+    const { user } = await makeUser();
+    const seen: RequestInit[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: URL | string, init?: RequestInit) => {
+      seen.push(init ?? {});
+      return new Response('[]');
+    }));
+    await listRepos(user.id, 'octo');
+    expect(Object.keys(seen[0].headers as Record<string, string>).map((k) => k.toLowerCase())).not.toContain('authorization');
+    expect(seen[0].redirect).toBe('error');
+    expect(seen[0].signal).toBeInstanceOf(AbortSignal);
+  });
+
   it('lists repos from api.github.com only, builds the URL itself and drops bad names', async () => {
     const { user } = await makeUser();
     const calls = stubGithub({ '/users/octo/repos': { body: REPOS } });
@@ -123,5 +136,20 @@ describe('/api/account/github', () => {
     expect(await db.githubCache.count({ where: { userId: u.user.id } })).toBe(0);
     expect((await (await getToken(request('/api/account/github', { cookie: u.cookie }), ctx())).json()).hint).toBe('bbbb');
     expect((await (await deleteToken(request('/api/account/github', { method: 'DELETE', cookie: u.cookie }), ctx())).json()).hint).toBeNull();
+  });
+
+  it('keeps the old token when the cache cannot be cleared (one transaction)', async () => {
+    const u = await makeUser();
+    await saveSecret(u.user.id, 'github', `ghp_${'a'.repeat(36)}`);
+    const spy = vi.spyOn(db.githubCache, 'deleteMany').mockImplementationOnce(() => {
+      throw new Error('cache failed');
+    });
+    try {
+      const res = await putToken(request('/api/account/github', { method: 'PUT', cookie: u.cookie, body: { token: `github_pat_${'b'.repeat(40)}` } }), ctx());
+      expect(res.status).toBe(500);
+    } finally {
+      spy.mockRestore();
+    }
+    expect((await (await getToken(request('/api/account/github', { cookie: u.cookie }), ctx())).json()).hint).toBe('aaaa');
   });
 });

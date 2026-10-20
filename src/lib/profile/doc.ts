@@ -153,6 +153,8 @@ const TEXT_FIELDS: Record<TargetKind, readonly string[]> = {
   position: ['title', 'company', 'location', 'start', 'end', 'summary'],
   education: ['school', 'degree', 'field', 'years'],
 };
+/** Fields that hold a name or a place, not a paragraph. They have the limit of one line. */
+const LINE_FIELDS: ReadonlySet<string> = new Set(['title', 'company', 'school', 'org', 'location']);
 const BULLET_FIELDS = ['id', 'match', 'text'];
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -192,10 +194,9 @@ export function checkDoc(raw: unknown, opts: CheckOptions = {}): Check {
     for (const k of TEXT_FIELDS[kind]) {
       const v = out[k];
       if (v === undefined) continue;
+      const limit = LINE_FIELDS.has(k) ? LIMITS.line : LIMITS.text;
       if (typeof v !== 'string') err(`${p}.${k}`, 'must be a string');
-      else if (v.length > (k === 'title' || k === 'company' || k === 'school' ? LIMITS.line : LIMITS.text)) {
-        err(`${p}.${k}`, `${v.length} characters, limit ${k === 'title' || k === 'company' || k === 'school' ? LIMITS.line : LIMITS.text}`);
-      }
+      else if (v.length > limit) err(`${p}.${k}`, `${v.length} characters, limit ${limit}`);
     }
     return out;
   };
@@ -542,7 +543,9 @@ export type DiffLine = { kind: 'profile' | 'position' | 'education' | 'project' 
 /** What changes when `after` replaces `before`: one line for each item, in the order profile, positions, educations, projects, claims. */
 export function diffDocs(before: ClaimsDoc | null, after: ClaimsDoc): DiffLine[] {
   const out: DiffLine[] = [];
-  const same = (a: unknown, b: unknown) => JSON.stringify(prune(a)) === JSON.stringify(prune(b));
+  // The keys are sorted, so the same data in another key order is no change.
+  const sorted = (_: string, v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : v);
+  const same = (a: unknown, b: unknown) => JSON.stringify(prune(a), sorted) === JSON.stringify(prune(b), sorted);
   if (!before || !same(before.profile, after.profile)) out.push({ kind: 'profile', key: 'profile', label: 'Name and headline', change: before ? 'changed' : 'added' });
   const lists: [DiffLine['kind'], { key: string; label: string; v: unknown }[], { key: string; label: string; v: unknown }[]][] = [
     ['position', (before?.targets.positions ?? []).map((p) => ({ key: p.id, label: `${p.title} · ${p.company}`, v: p })), after.targets.positions.map((p) => ({ key: p.id, label: `${p.title} · ${p.company}`, v: p }))],
