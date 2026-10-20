@@ -18,14 +18,13 @@ Start Claude Code in `/home/shivoy/waypoint-shivoy/.claude/worktrees/prod` and s
 
 ## State on 2026-10-20 (HEAD `13eb9d5` on `multi-user`, pushed)
 
-- Tests on the Pi: 1250 of 1253 pass. The 3 fails need the `lmodern` package (`sudo apt install lmodern`, which the owner runs), then `npx vitest run tests/resume-template.test.ts`.
+- Tests on the Pi: 1250 of 1253 passed before `lmodern`. The owner installed `lmodern`; `tests/resume-template.test.ts` now passes 36 of 36.
 - CLI canary: passed.
 - Eval, second run after the fix (`pi-steps-2026-10-20b.md`): sonnet-5-5 passes on the synthetic and the admin profile; sonnet-5 fails (one real fake-blocker miss, two injection fails just over `maxRatio`). No injection worked. The cloud session makes the model move.
 - Browser checks: all 5 passed. Still open with the owner: copy a referral on a real iPhone.
 
 ## Next steps for the local session
 
-1. When the owner says `lmodern` is installed: run `npx vitest run tests/resume-template.test.ts` and report.
 2. When the cloud session asks again (a message the owner pastes): fast-forward to its branch, run the steps it names, write a new `pi-steps-<date>.md`, commit, push `multi-user`, and give the owner a short message to paste back to the cloud session.
 3. The eval runs: copy the pattern in `pi-steps-2026-10-20.md` — a scratch database, `WAYPOINT_CLAUDE_BIN=/home/shivoy/.local/bin/claude`, no `ANTHROPIC_API_KEY`, and for the admin profile a scratch admin user plus `migrate:claims` from a copy of the live `claims.yml`. Read each failure by hand before you report.
 
