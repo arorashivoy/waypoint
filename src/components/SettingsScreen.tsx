@@ -14,7 +14,8 @@ import { readSection, sectionQuery, visibleSections, type SettingsSection } from
 
 /** True from 640 px: the sections are a list on the left. Under 640 px they are tabs across the top. */
 function useSideList() {
-  const [side, setSide] = useState(false);
+  // The first paint already has the right layout. This screen mounts in the browser only, after the data of the user loads.
+  const [side, setSide] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches);
   useEffect(() => {
     const q = window.matchMedia('(min-width: 640px)');
     const update = () => setSide(q.matches);
@@ -29,7 +30,7 @@ type Props = { state: any; setToast: (s: string) => void; toggleCountry: (cc: st
 
 export default function SettingsScreen({ state, setToast, toggleCountry }: Props) {
   const isAdmin = state?.user?.role === 'admin';
-  const [section, setSection] = useState<SettingsSection>('account');
+  const [section, setSection] = useState<SettingsSection>(() => (typeof window === 'undefined' ? 'account' : readSection(window.location.search, isAdmin)));
   const side = useSideList();
   const settings = useSettings(isAdmin);
 
@@ -44,6 +45,22 @@ export default function SettingsScreen({ state, setToast, toggleCountry }: Props
   useEffect(() => {
     document.querySelector<HTMLElement>('.pf [role="tab"][aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
   }, [section, side]);
+  // On a phone a soft fade shows on the edge of the tab strip that has more tabs behind it.
+  useEffect(() => {
+    const list = document.querySelector<HTMLElement>('.st [role="tablist"]');
+    if (!list) return;
+    const update = () => {
+      list.style.setProperty('--fade-l', list.scrollLeft > 2 ? '28px' : '0px');
+      list.style.setProperty('--fade-r', list.scrollLeft + list.clientWidth < list.scrollWidth - 2 ? '28px' : '0px');
+    };
+    update();
+    list.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      list.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [side, section]);
   const choose = useCallback((next: SettingsSection) => {
     setSection(next);
     window.history.replaceState(window.history.state, '', `${window.location.pathname}${sectionQuery(next)}`);

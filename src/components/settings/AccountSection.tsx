@@ -48,7 +48,6 @@ type Props = {
 export default function AccountSection({ user, sessions, error, retry, run, leave }: Props) {
   const [open, setOpen] = useState(false);
   const opener = useRef<HTMLButtonElement>(null);
-  const others = (sessions ?? []).filter((s) => !s.current).length;
   return (
     <div className="pf-stack">
       <SectionHead
@@ -59,7 +58,7 @@ export default function AccountSection({ user, sessions, error, retry, run, leav
       <section className="pf-section" aria-labelledby="st-devices">
         <div className="pf-head">
           <h3 id="st-devices" className="pf-group-title">Signed-in devices</h3>
-          {others > 0 && <Button variant="link" onClick={() => leave('/api/account/sessions', 'del')}>Sign out on all devices</Button>}
+          <Button variant="link" onClick={() => leave('/api/account/sessions', 'del')}>Sign out on all devices</Button>
         </div>
         <LoadError what="your signed-in devices" error={error} retry={retry} />
         {sessions && (
@@ -74,6 +73,7 @@ export default function AccountSection({ user, sessions, error, retry, run, leav
             ))}
           </ul>
         )}
+        <p className="pf-note">Sign out on all devices also signs out this device.</p>
       </section>
       <Sheet open={open} onClose={() => setOpen(false)} title="Change password" opener={opener} className="pf-sheet">
         <PasswordForm run={run} onDone={() => setOpen(false)} />

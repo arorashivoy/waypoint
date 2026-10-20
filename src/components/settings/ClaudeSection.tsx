@@ -63,7 +63,7 @@ export default function ClaudeSection({ claude, error, retry, run, isAdmin }: Pr
         action={
           claude &&
           (claude.keyHint ? (
-            <Button ref={opener} onClick={() => run(() => del('/api/account/claude'), 'Removed your API key.')}>Remove key</Button>
+            <Button onClick={() => run(() => del('/api/account/claude'), 'Removed your API key.')}>Remove key</Button>
           ) : (
             <Button ref={opener} variant="go" onClick={() => setOpen(true)}>Add your own key</Button>
           ))

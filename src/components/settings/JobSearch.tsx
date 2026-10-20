@@ -3,7 +3,8 @@
 import { useRef, useState } from 'react';
 import { patch } from '../api';
 import type { FailedBoard, SearchSettings } from '../data';
-import { Badge, Button, Field, Sheet } from '../ui';
+import { Badge, Button, Field, Sheet, Switch } from '../ui';
+import { changeCountry } from './countries';
 import { plural, when } from './model';
 import { LoadError, Row, SectionHead } from './parts';
 
@@ -13,7 +14,9 @@ const MAX_FIELDS = 6;
 
 /** The countries in the order of the user. A country that is paused gets no search. The onboarding wizard uses this list too. */
 export function CountryList({ countries, onToggle }: { countries: CountryRow[]; onToggle: (cc: string, on: boolean) => void | Promise<unknown> }) {
+  const [error, setError] = useState<string | null>(null);
   return (
+    <>
     <ul className="pf-rows">
       {countries.map((c) => (
         <li key={c.cc} className="pf-row st-country" data-on={c.on}>
@@ -24,14 +27,13 @@ export function CountryList({ countries, onToggle }: { countries: CountryRow[]; 
             <span className="pf-row-sub">{plural(Number(c.count) || 0, 'job')} in Waypoint</span>
           </div>
           <div className="pf-row-actions">
-            <Button aria-pressed={c.on} className="st-toggle" onClick={() => onToggle(c.cc, !c.on)}>
-              {c.on ? 'Searching' : 'Paused'}
-              <span className="sr-only"> in {c.name}</span>
-            </Button>
+            <Switch checked={c.on} label={`Search in ${c.name}`} onChange={async (on) => setError(await changeCountry(c, on, onToggle))} />
           </div>
         </li>
       ))}
     </ul>
+    {error && <p className="st-error" role="alert">{error}</p>}
+    </>
   );
 }
 
@@ -41,7 +43,7 @@ export function BoardList({ boards }: { boards: FailedBoard[] }) {
   return (
     <ul className="pf-rows">
       {boards.map((b) => (
-        <Row key={b.board} title={b.board} sub={`${b.error ?? 'No error text.'} Last try ${when(b.fetchedAt)}.`}>
+        <Row key={b.board} title={b.board} sub={`${b.error ?? 'No error text.'} Last checked ${when(b.fetchedAt)}.`}>
           <Badge tone="coral">Failed</Badge>
         </Row>
       ))}

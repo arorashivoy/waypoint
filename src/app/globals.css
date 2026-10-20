@@ -343,11 +343,6 @@ button { cursor: pointer; }
 .quote { margin: 0; font-size: 14px; line-height: 1.5; padding: 10px; border-radius: var(--r-ctl); background: var(--quote); }
 .sent-body { margin: 0; font-size: 14px; line-height: 1.5; padding: 10px; border-radius: var(--r-ctl); border: 1px solid var(--positive-line); background: var(--positive-wash); }
 
-/* ---------- settings ---------- */
-/* The phone rule in the media block below must come after this base rule. */
-
-.settings-body { flex-grow: 1; min-height: 0; overflow-y: auto; padding: 24px 36px 48px; }
-
 /* The screen: the profile layout (.pf) with a head for each section. */
 .st-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3) var(--s4); flex-wrap: wrap; }
 .st-head-text { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; flex: 1 1 260px; }
@@ -356,7 +351,11 @@ button { cursor: pointer; }
 .pf-row.st-country { display: grid; grid-template-columns: 1.75rem minmax(0, 1fr) auto; align-items: center; gap: var(--s3); }
 .pf-row.st-country[data-on='false'] .pf-row-title { color: var(--soft); }
 .st-rank { font-size: var(--t-13); color: var(--soft); font-variant-numeric: tabular-nums; text-align: right; }
-.st-toggle[aria-pressed='true'] { border-color: color-mix(in srgb, var(--lav) 55%, transparent); background: color-mix(in srgb, var(--lav) 12%, transparent); }
+.st-error { margin: 0; font-size: var(--t-13); color: var(--coral); }
+@media (max-width: 639px) {
+  /* A soft fade on the edge of the tab strip that has more tabs behind it. */
+  .st .ui-tablist { -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade-l, 0px), #000 calc(100% - var(--fade-r, 0px)), transparent); mask-image: linear-gradient(to right, transparent, #000 var(--fade-l, 0px), #000 calc(100% - var(--fade-r, 0px)), transparent); }
+}
 .btn.st-danger { border-color: color-mix(in srgb, var(--coral) 60%, transparent); color: var(--coral); }
 .st-link { font-size: var(--t-13); overflow-wrap: anywhere; min-width: 0; flex: 1 1 240px; }
 .pf .pf-note a { color: var(--lav); }
@@ -535,8 +534,6 @@ button { cursor: pointer; }
 
   .pn-grid { padding-top: var(--s2); }
 
-  .settings-body { overflow: visible; padding: 4px var(--gutter) 28px; }
-
   .sheet {
     position: fixed; inset: 0; z-index: 30;
     background: rgba(8, 6, 14, 0.6);
@@ -624,8 +621,17 @@ button { cursor: pointer; }
   border: 2px solid color-mix(in srgb, currentColor 30%, transparent); border-top-color: currentColor;
   animation: ui-spin 0.8s linear infinite;
 }
+/* Switch: a track and a thumb. On is mint, off is soft. */
+.ui-switch { display: inline-flex; align-items: center; gap: var(--s2); min-height: 40px; padding: 0 var(--s1); border: 0; background: transparent; color: var(--text); font: inherit; font-size: 0.9375rem; cursor: pointer; }
+.ui-switch-track { position: relative; flex-shrink: 0; width: 44px; height: 26px; border-radius: 13px; border: 2px solid var(--soft); background: transparent; transition: background 0.2s ease, border-color 0.2s ease; box-sizing: border-box; }
+.ui-switch-thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--soft); transition: transform 0.2s ease, background 0.2s ease; }
+.ui-switch[aria-checked='true'] .ui-switch-track { background: var(--mint); border-color: var(--mint); }
+.ui-switch[aria-checked='true'] .ui-switch-thumb { background: var(--ink-on); transform: translateX(18px); }
+.ui-switch-text { min-width: 1.75rem; text-align: left; }
+.ui-switch:disabled { opacity: 0.45; cursor: not-allowed; }
+
 @media (pointer: coarse) {
-  .btn, .ui-btn, .ui-tab, .ui-fold-head { min-height: 44px; }
+  .btn, .ui-btn, .ui-tab, .ui-fold-head, .ui-switch { min-height: 44px; }
   .field, select.field { min-height: 44px; }
 }
 
@@ -920,18 +926,6 @@ button { cursor: pointer; }
 .sh-banner { padding: var(--s3) 36px 0; flex-shrink: 0; }
 .sh-banner .ui-error { max-width: 720px; }
 
-/* Interim homes of Profile and Settings (the Profile and Settings tasks replace them) */
-.sh-split { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
-.sh-split .ui-tabs { flex: 1; min-height: 0; gap: 0; }
-.sh-split .ui-tablist { padding: var(--s3) 36px 0; flex-shrink: 0; }
-.sh-split .ui-tabpanel { display: flex; flex-direction: column; min-height: 0; }
-.ui-tabpanel[hidden] { display: none; }
-.sh-stack { flex: 1; min-height: 0; overflow-y: auto; }
-.sh-stack .screen-head { display: none; }
-.sh-title { padding: 24px 36px 8px; }
-.sh-title h1 { margin: 0; font-size: var(--t-31); font-weight: 700; letter-spacing: -0.02em; }
-.sh-section { margin: var(--s4) 0 0; padding: 0 36px; font-size: var(--t-20); font-weight: 600; letter-spacing: -0.01em; }
-
 /* Wide screens: sidebar, or the rail when the user closed the sidebar */
 @media (min-width: 1024px) {
   .sh-sidebar { display: flex; }
@@ -971,11 +965,6 @@ button { cursor: pointer; }
   .sh[data-job='open'][data-place='jobs'] .jl,
   .sh[data-job='open'][data-place='jobs'] .sh-view > :not(.jobs-split) { display: none !important; } /* some of them set display inline */
   .sh-banner { padding: var(--s3) var(--gutter) 0; }
-  .sh-split .ui-tablist { padding: var(--s2) var(--gutter) 0; }
-  .sh-title { padding: 16px var(--gutter) 4px; }
-  .sh-title h1 { font-size: 28px; }
-  .sh-section { padding: 0 var(--gutter); }
-  .sh-stack { overflow: visible; }
 }
 
 @media (pointer: coarse) {

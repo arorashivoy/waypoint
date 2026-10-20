@@ -11,6 +11,7 @@ export { ScoreRing } from './ScoreRing';
 export { FOCUSABLE, isFocusableState, pickOpener, Sheet, sheetKeyAction, trapIndex, visibleFocusables, type FocusState, type SheetKeyAction, type SheetProps } from './Sheet';
 export { Skeleton } from './Skeleton';
 export { nextTabIndex, Tabs, type TabItem, type TabsOrientation, type TabsProps } from './Tabs';
+export { Switch, type SwitchProps } from './Switch';
 export { TaskIndicator } from './TaskIndicator';
 export { scheduleHide, Toast, TOAST_MS, type ToastProps } from './Toast';
 export { WayIn, type WayInProps } from './WayIn';

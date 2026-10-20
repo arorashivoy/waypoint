@@ -1,7 +1,7 @@
 'use client';
 
 import { useSWRConfig } from 'swr';
-import { ApiError, api, post } from './api';
+import { ApiError, api } from './api';
 import { KEYS, useMe, useRefresh, type Me } from './data';
 import { useToast } from './hooks';
 import ProfileScreen from './ProfileScreen';
@@ -13,7 +13,8 @@ import Sidebar from './shell/Sidebar';
 import TabBar from './shell/TabBar';
 import TopBar from './shell/TopBar';
 import { claudeLine, taskLine } from './shell/task';
-import { sectionQuery } from './settings/model';
+import { saveCountry } from './settings/countries';
+import { openSection } from './settings/model';
 import { useCollapsed, useLocation } from './shell/useShell';
 import { ErrorNote } from './ui';
 
@@ -33,7 +34,7 @@ export default function Waypoint() {
       { revalidate: false },
     );
     try {
-      await post('/api/countries', { cc, on });
+      await saveCountry(cc, on);
     } finally {
       // The job list depends on the countries, so it loads again. On a failure this also puts back the real choice.
       await refresh();
@@ -41,10 +42,7 @@ export default function Waypoint() {
   };
 
   // The empty Jobs list opens the Job search section. Go to Settings first, then name the section in the URL before Settings reads it.
-  const openJobSearch = () => {
-    go('settings');
-    window.history.replaceState(null, '', `${window.location.pathname}${sectionQuery('job-search')}`);
-  };
+  const openJobSearch = () => openSection(go, 'job-search');
 
   const toastEl = toast && <div className="toast" role="status">{toast}</div>;
 

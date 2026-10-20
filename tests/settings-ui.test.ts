@@ -1,19 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
 import { ApiError, leaveSession, upload } from '@/components/api';
-
-describe('globals.css: .settings-body', () => {
-  it('puts the base rule before the phone rule, so the phone rule wins', () => {
-    const css = readFileSync('src/app/globals.css', 'utf8');
-    const base = css.search(/^\.settings-body\s*\{/m);
-    const phoneBlock = css.indexOf('@media (max-width: 1023px)');
-    const phoneRule = css.indexOf('.settings-body', phoneBlock);
-    expect(base).toBeGreaterThan(-1);
-    expect(phoneBlock).toBeGreaterThan(-1);
-    expect(phoneRule).toBeGreaterThan(phoneBlock);
-    expect(base).toBeLessThan(phoneBlock);
-  });
-});
 
 describe('leaveSession (sign out from Settings)', () => {
   it('goes to /login when the request works, and shows no message', async () => {

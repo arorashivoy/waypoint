@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { api, ApiError, leaveSession, upload } from '../api';
 import { Button, Field, Sheet } from '../ui';
+import { ADMIN_DELETE_NOTE, DELETE_TEXT } from './model';
 import { Row, SectionHead } from './parts';
 
 type Props = { isAdmin: boolean; setToast: (s: string) => void };
@@ -52,6 +53,7 @@ export default function DataSection({ isAdmin, setToast }: Props) {
       </ul>
       {yamlErrors.length > 0 && <ul className="err" role="alert" style={{ overflowWrap: 'anywhere' }}>{yamlErrors.map((x) => <li key={x}>{x}</li>)}</ul>}
 
+      {isAdmin && <p className="pf-note">{ADMIN_DELETE_NOTE}</p>}
       {!isAdmin && (
         <section className="pf-section" aria-labelledby="st-danger">
           <h3 id="st-danger" className="pf-group-title">Delete account</h3>
@@ -73,7 +75,7 @@ export default function DataSection({ isAdmin, setToast }: Props) {
           }}
         >
           <p className="pf-note pf-wide">
-            Waypoint deletes your profile, drafts, applications, contacts, keys and files now. You cannot undo this. Download claims.yml first if you want to keep your profile.
+            {DELETE_TEXT}
           </p>
           <div className="pf-wide">
             <Field label="Your password">

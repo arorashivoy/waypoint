@@ -42,6 +42,23 @@ export function capLine(c: CapInput): string | null {
 /** The status text names Settings. This screen is Settings, so the text points to the Claude section. */
 export const claudeDetail = (detail: string) => detail.replace(' in Settings', ' here');
 
+/** What the delete-account Sheet says. It names the exact consequence. */
+export const DELETE_TEXT =
+  'Waypoint deletes your profile, drafts, applications, contacts, keys and files now. You cannot undo this. Download claims.yml first if you want to keep your profile.';
+
+export const ADMIN_DELETE_NOTE = 'The admin account cannot be deleted here.';
+
+/** Settings with a section open: go to Settings, then name the section in the URL before Settings reads it. */
+export function openSection(
+  go: (view: 'settings') => void,
+  section: SettingsSection,
+  history: Pick<History, 'replaceState'> = window.history,
+  pathname: string = window.location.pathname,
+) {
+  go('settings');
+  history.replaceState(null, '', `${pathname}${sectionQuery(section)}`);
+}
+
 export const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'never');
 
 export function device(ua: string | null): string {
