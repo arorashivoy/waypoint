@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { DEPTHS, SURFACES, type Claim, type ClaimsDoc, type Depth, type Evidence, type Surface } from '@/lib/profile/doc';
 import type { Item, ItemKind } from '@/lib/profile/apply';
 import { ApiError, post, put } from '../api';
+import { STALE_PROFILE_MESSAGE } from '@/lib/profile/stale';
 import { useProfileVersion } from './version';
 import { errorsFor, FIELDS, fromForm, targetOptions, toForm } from './fields';
 
@@ -32,7 +33,7 @@ export default function ItemEditor({ kind, doc, itemKey: key, item, mode, onDone
   const [listed, setListed] = useState<Surface[]>(() => (claim?.mentions ?? []).filter((m) => m.listed).map((m) => m.surface));
   const [serverErrors, setServerErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const { version, onStale } = useProfileVersion();
+  const { version, reload } = useProfileVersion();
 
   const next = useMemo(() => fromForm(kind, form, item, { evidence, listed }), [kind, form, item, evidence, listed]);
   const errs = useMemo(() => errorsFor(doc, kind, next, mode === 'profile' ? key : null), [doc, kind, next, key, mode]);
@@ -51,7 +52,6 @@ export default function ItemEditor({ kind, doc, itemKey: key, item, mode, onDone
           : await put(`/api/profile/drafts/${encodeURIComponent(mode.draftId)}`, { data: next });
       onDone(reply);
     } catch (e) {
-      onStale(e);
       setServerErrors(e instanceof ApiError && Array.isArray(e.data.errors) ? e.data.errors : [(e as Error).message]);
     } finally {
       setBusy(false);
@@ -128,6 +128,9 @@ export default function ItemEditor({ kind, doc, itemKey: key, item, mode, onDone
 
       {mode !== 'profile' && errs.count > 0 && <span className="hint">These problems stop the accept. You can save the draft now and fix them later.</span>}
       <Errors list={[...errs.other, ...serverErrors]} />
+      {serverErrors.includes(STALE_PROFILE_MESSAGE) && (
+        <div><button type="button" className="btn" onClick={async () => { if (await reload()) setServerErrors([]); }}>Load the new version</button></div>
+      )}
       <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
         <button className="btn btn-dark" type="submit" disabled={busy || (mode === 'profile' && errs.count > 0)}>{busy ? 'Saving…' : 'Save'}</button>
         <button className="btn" type="button" onClick={onCancel}>Cancel</button>

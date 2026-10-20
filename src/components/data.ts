@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import useSWR, { useSWRConfig, type SWRConfiguration, type SWRResponse } from 'swr';
 import type { ClaimsDoc } from '@/lib/profile/doc';
 import type { buildJobs, buildMe, buildPending, buildProfileView } from '@/lib/state';
@@ -84,6 +84,13 @@ export function useMe() {
 export function useJobs() {
   const running = useMe().data?.analysing?.running;
   const res = useData<{ jobs: Omit<JobCard, 'posted' | 'days'>[] }>(KEYS.jobs, { refreshInterval: running ? 4000 : 0 });
+  // The 2 polls run on their own clocks. When the check ends, load the list one more time, so no card keeps an estimate.
+  const wasRunning = useRef(false);
+  const { mutate } = res;
+  useEffect(() => {
+    if (wasRunning.current && !running) mutate();
+    wasRunning.current = !!running;
+  }, [running, mutate]);
   const data = useMemo(
     () => res.data && { jobs: res.data.jobs.map((j) => ({ ...j, posted: ago(j.postedAt), days: daysSince(j.postedAt) })) as JobCard[] },
     [res.data],

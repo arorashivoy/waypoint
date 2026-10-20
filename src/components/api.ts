@@ -13,7 +13,8 @@ const SIGNED_OUT_PAGES = /^\/(login$|invite\/|reset\/)/;
 let redirecting = false;
 
 export async function api<T = Json>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { cache: 'no-store', ...init });
+  // A GET revalidates with the ETag (304 when nothing changed). Other methods never use the cache.
+  const res = await fetch(url, { cache: !init?.method || init.method === 'GET' ? 'no-cache' : 'no-store', ...init });
   const text = await res.text();
   let data: Json = {};
   try {

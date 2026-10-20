@@ -30,9 +30,14 @@ export default function ProfileScreen({ state: me, refresh, setToast }: { state:
   const changed = useCallback(async () => {
     await refresh();
   }, [refresh]);
-  const onSaved = useCallback(() => {
+  // The reply of a save has the new version. Take it at once, so the next save does not send the old one.
+  const onSaved = useCallback((reply?: { doc?: ProfileData['doc']; version?: number }) => {
+    if (reply?.doc && typeof reply.version === 'number') {
+      const { doc, version } = reply;
+      mutate((d?: ProfileData) => d && { ...d, doc, version }, { revalidate: false });
+    }
     changed().catch((e) => setToast((e as Error).message));
-  }, [changed, setToast]);
+  }, [changed, setToast, mutate]);
 
   const onCount = useCallback(
     (n: number) => { mutate((d?: ProfileData) => (d && d.pendingDrafts !== n ? { ...d, pendingDrafts: n } : d), { revalidate: false }); },
@@ -42,6 +47,7 @@ export default function ProfileScreen({ state: me, refresh, setToast }: { state:
   const version = useMemo(
     () => ({
       version: data?.version ?? 0,
+      reload: async () => (await mutate()) as ProfileData | undefined,
       onStale: (e: unknown) => {
         if (e instanceof ApiError && e.status === 409 && e.message === STALE_PROFILE_MESSAGE) mutate();
       },
@@ -79,7 +85,7 @@ export default function ProfileScreen({ state: me, refresh, setToast }: { state:
               <div className="empty">Loading the profile…</div>
             )
           ) : tab === 'experience' ? (
-            <ExperienceTab key={data.version} doc={data.doc} levels={me?.levels} onSaved={onSaved} setToast={setToast} />
+            <ExperienceTab doc={data.doc} levels={me?.levels} onSaved={onSaved} setToast={setToast} />
           ) : tab === 'projects' ? (
             <ProjectsTab doc={data.doc} onSaved={onSaved} setToast={setToast} />
           ) : tab === 'claims' ? (

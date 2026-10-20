@@ -194,6 +194,8 @@ describe('user B cannot reach the rows of user A', () => {
     ['/api/me', meRoute.GET],
     ['/api/jobs/list', jobsList.GET],
     ['/api/pending', pendingRoute.GET],
+    // The contacts are in the profile view.
+    ['/api/profile', profileRoute.GET],
   ])('GET %s shows B only its own data', async (path, route) => {
     await seedA();
     const b = await makeUser();

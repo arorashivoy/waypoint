@@ -10,10 +10,11 @@ type U = Awaited<ReturnType<typeof makeUser>>;
 const get = (route: typeof meRoute, path: string, cookie?: string, inm?: string) =>
   route(request(path, { cookie, headers: inm ? { 'if-none-match': inm } : undefined }), ctx());
 
-/** A user with one country on. The code is unique to the test, so no job of another test file enters the list. */
+/** A user with one country on. The code is unique to each call, so no job of another test or file enters the list. */
 async function userInCountry(code?: string) {
   const u = await makeUser();
-  const cc = code ?? `X${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`;
+  // Not X + 1 letter: other test files pick from those 26 codes, and a job of theirs in the same code would change the ETag.
+  const cc = code ?? `XT${randomBytes(4).toString('hex')}`;
   await db.countryPref.updateMany({ where: { userId: u.user.id }, data: { on: false } });
   await db.countryPref.create({ data: { userId: u.user.id, cc, rank: 0, on: true } });
   return { ...u, cc };
