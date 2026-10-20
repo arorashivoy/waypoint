@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { api, post } from './api';
 
 type Info = { kind: 'invite' | 'reset'; email: string | null; name: string | null };
-const input = { width: '100%', background: '#2A3242', borderColor: '#3A4252', color: '#F4F1EA' };
+const input = { width: '100%' };
 
 /** The page for an invite link or a reset link. On success the server signs the user in. */
 export default function TokenForm({ token }: { token: string }) {
@@ -51,11 +51,11 @@ export default function TokenForm({ token }: { token: string }) {
         {info?.kind === 'invite' && (
           <>
             <label className="stack" style={{ gap: 8 }}>
-              <span style={{ fontSize: 15, color: '#C9C2B3' }}>Name</span>
+              <span style={{ fontSize: 15, color: 'var(--soft)' }}>Name</span>
               <input className="field" autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} style={input} />
             </label>
             <label className="stack" style={{ gap: 8 }}>
-              <span style={{ fontSize: 15, color: '#C9C2B3' }}>Email</span>
+              <span style={{ fontSize: 15, color: 'var(--soft)' }}>Email</span>
               {info.email ? (
                 <input className="field" value={info.email} readOnly style={input} />
               ) : (
@@ -67,17 +67,17 @@ export default function TokenForm({ token }: { token: string }) {
         {info && (
           <>
             <label className="stack" style={{ gap: 8 }}>
-              <span style={{ fontSize: 15, color: '#C9C2B3' }}>Password (12 characters or more)</span>
+              <span style={{ fontSize: 15, color: 'var(--soft)' }}>Password (12 characters or more)</span>
               <input className="field" type="password" autoComplete="new-password" minLength={12} required value={password} onChange={(e) => setPassword(e.target.value)} style={input} />
             </label>
             <label className="stack" style={{ gap: 8 }}>
-              <span style={{ fontSize: 15, color: '#C9C2B3' }}>Type the password again</span>
+              <span style={{ fontSize: 15, color: 'var(--soft)' }}>Type the password again</span>
               <input className="field" type="password" autoComplete="new-password" minLength={12} required value={again} onChange={(e) => setAgain(e.target.value)} style={input} />
             </label>
             <button className="login-cta" type="submit" disabled={busy}>{busy ? 'Saving…' : info.kind === 'reset' ? 'Set the password' : 'Make the account'}</button>
           </>
         )}
-        {error && <p role="alert" style={{ color: '#E7835A', fontSize: 15, margin: 0 }}>{error}</p>}
+        {error && <p role="alert" style={{ color: 'var(--coral)', fontSize: 15, margin: 0 }}>{error}</p>}
       </form>
     </div>
   );

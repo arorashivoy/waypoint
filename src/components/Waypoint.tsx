@@ -125,9 +125,9 @@ export default function Waypoint() {
             style={{
               margin: '12px 16px 0',
               padding: '10px 14px',
-              border: '1px solid #b45309',
-              background: '#fef3c7',
-              color: '#78350f',
+              border: '1px solid var(--butter)',
+              background: 'var(--warn-wash)',
+              color: 'var(--butter)',
               borderRadius: 8,
               display: 'flex',
               alignItems: 'center',

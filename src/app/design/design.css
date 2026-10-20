@@ -1,0 +1,78 @@
+/* Style page only. Task 2 moves the route, pill, ring and state looks into the UI primitives. */
+.ds { max-width: 1120px; margin: 0 auto; padding: var(--s6) var(--s4) var(--s7); display: flex; flex-direction: column; gap: var(--s7); }
+.ds h1 { font-size: var(--t-31); line-height: 1.1; margin: 0; letter-spacing: -0.02em; }
+.ds h2 { font-size: var(--t-25); margin: 0 0 var(--s4); letter-spacing: -0.01em; }
+.ds h3 { font-size: var(--t-20); margin: 0; }
+.ds p { margin: 0; }
+.ds-lede { color: var(--soft); max-width: 56ch; margin-top: var(--s2) !important; }
+.ds-grid { display: grid; gap: var(--s3); grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
+.ds-stack { display: flex; flex-direction: column; gap: var(--s3); }
+.ds-wrap { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; }
+.ds-panel { border-radius: var(--r-panel); padding: var(--s5); }
+
+.ds-sw { border-radius: var(--r-row); padding: var(--s3); display: flex; flex-direction: column; gap: var(--s2); }
+.ds-sw i { display: block; height: 44px; border-radius: var(--r-ctl); border: 1px solid var(--edge); }
+.ds-sw b { font-weight: 600; }
+.ds-sw small { color: var(--soft); font-size: var(--t-13); overflow-wrap: anywhere; }
+
+.ds-type { display: grid; gap: var(--s4); }
+.ds-type > div { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: var(--s3); align-items: baseline; }
+.ds-type small { color: var(--soft); font-size: var(--t-13); }
+.ds-head { font-family: var(--f-head); font-weight: 700; line-height: 1.1; letter-spacing: -0.01em; }
+.ds-body { font-family: var(--f-body); }
+
+.ds-field { display: flex; flex-direction: column; gap: 6px; max-width: 420px; }
+.ds-field label { font-weight: 500; }
+.ds-field .msg { color: var(--coral); font-size: var(--t-13); }
+
+/* The brand mark: the only glow besides the met stop, the primary button and the background. */
+.ds-mark { width: 14px; height: 14px; border-radius: 50%; background: conic-gradient(var(--mint), var(--lav), var(--mint)); box-shadow: 0 0 16px var(--glow-lav); display: inline-block; }
+
+/* The route */
+.ds-route { margin: 0; padding: 0; list-style: none; max-width: 520px; }
+.ds-route li { position: relative; padding: 0 0 var(--s4) 36px; }
+.ds-route li::before { content: ''; position: absolute; left: 7px; top: 8px; bottom: -8px; width: 2px; background: linear-gradient(var(--lav), rgba(196, 182, 244, 0.25)); }
+.ds-route li:last-child { padding-bottom: 0; }
+.ds-route li:last-child::before { display: none; }
+.ds-route li::after { content: ''; position: absolute; left: 0; top: 3px; width: 16px; height: 16px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--lav); background: var(--surface); }
+.ds-route li.m::after { background: var(--mint); border-color: var(--mint); box-shadow: 0 0 12px rgba(166, 228, 196, 0.45); }
+.ds-route li.p::after { background: linear-gradient(90deg, var(--butter) 50%, var(--surface) 50%); border-color: var(--butter); }
+.ds-route .rq { font-weight: 500; }
+.ds-route .st { font-size: var(--t-13); margin-left: var(--s2); font-weight: 600; }
+.ds-route .st.m { color: var(--mint); }
+.ds-route .st.p { color: var(--butter); }
+.ds-route .st.x { color: var(--lav); }
+.ds-route .ev { color: var(--soft); font-size: var(--t-13); }
+.ds-blocker { display: flex; gap: 6px; align-items: center; color: var(--coral); font-size: var(--t-13); margin-top: var(--s3); }
+.ds-blocker::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--coral); }
+
+/* Score pill and ring */
+.ds-pill { font-family: var(--f-head); font-weight: 600; font-size: var(--t-20); font-variant-numeric: tabular-nums; min-width: 56px; text-align: center; padding: 6px 10px; border-radius: 12px; display: inline-block; }
+.ds-pill.hi { color: var(--mint); background: rgba(166, 228, 196, 0.10); }
+.ds-pill.mid { color: var(--lav); background: rgba(196, 182, 244, 0.10); }
+.ds-pill.lo { color: var(--soft); background: rgba(236, 232, 246, 0.05); }
+.ds-ring { width: 116px; height: 116px; border-radius: 50%; display: grid; place-items: center; position: relative; background: conic-gradient(var(--mint) 0 86%, rgba(236, 232, 246, 0.08) 86% 100%); }
+.ds-ring::before { content: ''; position: absolute; inset: 9px; border-radius: 50%; background: var(--surface); }
+.ds-ring div { position: relative; text-align: center; }
+.ds-ring b { display: block; font-family: var(--f-head); font-weight: 600; font-size: var(--t-31); line-height: 1; }
+.ds-ring small { color: var(--soft); font-size: var(--t-13); }
+
+/* States */
+.ds-states { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.ds-state { border-radius: var(--r-panel); padding: var(--s4); display: flex; flex-direction: column; gap: var(--s3); min-height: 300px; }
+.ds-state h3 { color: var(--soft); }
+.ds-skel { border-radius: var(--r-row); padding: var(--s4); display: grid; grid-template-columns: 1fr 56px; gap: var(--s2); background: var(--glass); }
+.ds-skel span { border-radius: 6px; height: 12px; background: linear-gradient(90deg, rgba(236, 232, 246, 0.06), rgba(196, 182, 244, 0.14), rgba(236, 232, 246, 0.06)); background-size: 200% 100%; animation: ds-sheen 2.4s linear infinite; }
+.ds-skel .t { height: 16px; width: 75%; }
+.ds-skel .n { grid-row: 1 / span 2; grid-column: 2; height: 34px; border-radius: 12px; }
+.ds-skel .r { width: 45%; }
+@keyframes ds-sheen { to { background-position: -200% 0; } }
+.ds-empty { margin: auto 0; display: flex; flex-direction: column; gap: var(--s3); align-items: flex-start; }
+.ds-empty .dash { display: flex; align-items: center; width: 100%; }
+.ds-empty .dash em { flex: 1; height: 2px; background: repeating-linear-gradient(90deg, var(--lav) 0 8px, transparent 8px 16px); opacity: 0.7; }
+.ds-empty .dash i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--lav); box-shadow: 0 0 14px var(--glow-lav); }
+.ds-empty p { font-size: var(--t-20); line-height: 1.4; }
+.ds-empty small { color: var(--soft); font-size: 0.9375rem; }
+.ds-err { border-radius: var(--r-row); padding: var(--s3) var(--s4); background: rgba(242, 160, 160, 0.08); border: 1px solid rgba(242, 160, 160, 0.25); display: flex; flex-direction: column; gap: var(--s2); align-items: flex-start; }
+.ds-err strong { font-weight: 600; color: var(--coral); }
+.ds-err span { font-size: 0.9375rem; }

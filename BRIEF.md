@@ -21,6 +21,8 @@ They use a design-canvas format, not plain HTML. Treat them as a visual and beha
 
 Design tokens:
 
+The part 6 direction (`docs/superpowers/plans/2026-10-20-prod-part6-ui.md`, "Visual direction") replaces the fonts and colours below. The tokens now live in `src/app/globals.css`: Syne and Onest on a dark night ground with mint and lavender. The 44 px touch target stays.
+
 - Fonts: Bricolage Grotesque (display), IBM Plex Sans (body), IBM Plex Mono (labels), all from Google Fonts.
 - Colours:
   - Ground `#F4F1EA`

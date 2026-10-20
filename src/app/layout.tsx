@@ -1,5 +1,9 @@
 import type { Metadata, Viewport } from 'next';
+import { Onest, Syne } from 'next/font/google';
 import './globals.css';
+
+const syne = Syne({ subsets: ['latin'], weight: ['600', '700'], variable: '--font-syne', display: 'swap' });
+const onest = Onest({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-onest', display: 'swap' });
 
 export const metadata: Metadata = {
   title: 'Waypoint',
@@ -10,20 +14,12 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#F4F1EA',
+  themeColor: '#121019',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="en" className={`${syne.variable} ${onest.variable}`}>
       <body>{children}</body>
     </html>
   );

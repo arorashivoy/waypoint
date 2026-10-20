@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { post } from './api';
 
-const input = { width: '100%', background: '#2A3242', borderColor: '#3A4252', color: '#F4F1EA' };
+const input = { width: '100%' };
 
 export default function LoginForm({ next }: { next: string }) {
   const [email, setEmail] = useState('');
@@ -32,16 +32,16 @@ export default function LoginForm({ next }: { next: string }) {
         <p className="login-lede">Waypoint is for invited users. Ask the admin for an invite link if you do not have an account.</p>
       </div>
       <form className="login-right" onSubmit={submit}>
-        <div className="mono" style={{ fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#C9C2B3' }}>Sign in</div>
+        <div style={{ fontSize: 13, color: 'var(--soft)' }}>Sign in</div>
         <label className="stack" style={{ gap: 8 }}>
-          <span style={{ fontSize: 15, color: '#C9C2B3' }}>Email</span>
+          <span style={{ fontSize: 15, color: 'var(--soft)' }}>Email</span>
           <input className="field" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} style={input} />
         </label>
         <label className="stack" style={{ gap: 8 }}>
-          <span style={{ fontSize: 15, color: '#C9C2B3' }}>Password</span>
+          <span style={{ fontSize: 15, color: 'var(--soft)' }}>Password</span>
           <input className="field" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} style={input} />
         </label>
-        {error && <p role="alert" style={{ color: '#E7835A', fontSize: 15, margin: 0 }}>{error}</p>}
+        {error && <p role="alert" style={{ color: 'var(--coral)', fontSize: 15, margin: 0 }}>{error}</p>}
         <button className="login-cta" type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
         <p className="login-note">Forgot your password? Ask the admin for a reset link.</p>
       </form>

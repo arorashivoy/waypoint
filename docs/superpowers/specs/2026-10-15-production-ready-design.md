@@ -511,7 +511,7 @@ README with instructions, and a posting that tries to unlock auto-send. The test
 
 ## 7. UI/UX
 
-The fonts, colours and touch-target size from `BRIEF.md` stay.
+The part 6 direction (`docs/superpowers/plans/2026-10-20-prod-part6-ui.md`) replaces the fonts and colours of `BRIEF.md`. The 44 px touch target stays.
 
 ### 7.1 Navigation
 

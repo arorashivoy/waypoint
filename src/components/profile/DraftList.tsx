@@ -106,7 +106,7 @@ export default function DraftList({ doc, changed, setToast, onCount }: { doc: Cl
                     {d.matches && <span className="hint">matches “{d.matches}”</span>}
                   </div>
                   {d.warnings.length > 0 && (
-                    <div className="stack" style={{ gap: 6, padding: 10, borderRadius: 8, background: '#FEF3C7', color: '#78350F' }} role="alert">
+                    <div className="stack" style={{ gap: 6, padding: 10, borderRadius: 8, background: 'var(--warn-wash)', color: 'var(--butter)' }} role="alert">
                       {d.warnings.map((w) => <span key={w} style={{ fontSize: 14 }}>{w}</span>)}
                       {!d.warningsApproved && (
                         <div><button className="btn" disabled={busy} onClick={() => act(batchId, () => post(`/api/profile/drafts/${d.id}/approve`), 'Warning approved.')}>I checked it</button></div>
