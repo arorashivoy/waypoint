@@ -11,30 +11,29 @@ import Rail from './shell/Rail';
 import Sidebar from './shell/Sidebar';
 import TabBar from './shell/TabBar';
 import TopBar from './shell/TopBar';
-import { taskLine } from './shell/task';
+import { claudeLine, taskLine } from './shell/task';
 import { useCollapsed, useLocation } from './shell/useShell';
 import { ErrorNote } from './ui';
-
-function claudeLine(mode: string): string {
-  if (mode === 'none') return 'Claude not connected';
-  return `Claude: ${mode === 'cli' ? 'your subscription' : mode === 'own' ? 'your API key' : 'shared key'}`;
-}
 
 export default function Waypoint() {
   const [state, setState] = useState<any>(null);
   const { loc, go, openJob, closeJob } = useLocation();
   const [collapsed, setCollapsed] = useCollapsed();
   const [toast, setToast] = useToast();
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const s = await api('/api/state');
     setState(s);
+    setLoadError(null);
     return s;
   }, []);
 
   useEffect(() => {
     refresh().catch((e) => {
-      if (!(e instanceof ApiError && e.status === 401)) setToast(String(e.message));
+      if (e instanceof ApiError && e.status === 401) return;
+      setToast(String(e.message));
+      setLoadError(String(e.message));
     });
   }, [refresh, setToast]);
 
@@ -58,7 +57,16 @@ export default function Waypoint() {
     [state, refresh, loc.job, openJob],
   );
 
-  if (state === null) return <Loading />;
+  const toastEl = toast && <div className="toast" role="status">{toast}</div>;
+
+  if (state === null) {
+    return (
+      <>
+        <Loading error={loadError} onRetry={() => { refresh().catch((e) => setLoadError(String(e.message))); }} />
+        {toastEl}
+      </>
+    );
+  }
 
   const nav = { place: loc.view, go, needsCount: state.needs?.length ?? 0, task: taskLine(state.analysing) };
   const jobOpen = loc.view === 'jobs' && loc.job !== null;
@@ -107,7 +115,7 @@ export default function Waypoint() {
 
       <TabBar {...nav} />
 
-      {toast && <div className="toast" role="status">{toast}</div>}
+      {toastEl}
     </div>
   );
 }

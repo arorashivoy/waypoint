@@ -94,7 +94,7 @@ body::before {
 h1, h2, h3 { font-family: var(--f-head); }
 
 a { color: var(--lav); }
-a:hover { color: var(--text); }
+@media (hover: hover) { a:hover { color: var(--text); } }
 button, input, textarea, select { font-family: inherit; color: inherit; font-size: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 3px solid var(--lav); outline-offset: 2px; }
@@ -180,7 +180,7 @@ button { cursor: pointer; }
 .btn.link { border-color: transparent; background: transparent; color: var(--lav); padding: 0 6px; }
 @media (hover: hover) { .btn.link:hover { color: var(--text); } }
 .btn-dark { border: 0; background: var(--text); color: var(--ink-on); }
-.btn-dark:hover { background: var(--text); color: var(--ink-on); }
+@media (hover: hover) { .btn-dark:hover { background: var(--text); color: var(--ink-on); } }
 .btn-accent { height: 48px; font-size: 16px; width: 100%; }
 
 .chip {
@@ -633,14 +633,14 @@ button { cursor: pointer; }
   width: 36px; height: 36px; border: 0; border-radius: var(--r-ctl); background: transparent; color: var(--soft);
   display: inline-flex; align-items: center; justify-content: center; padding: 0;
 }
-.sh-collapse:hover { background: var(--glass-hi); color: var(--text); }
+@media (hover: hover) { .sh-collapse:hover { background: var(--glass-hi); color: var(--text); } }
 .sh-collapse .sh-icon { width: 20px; height: 20px; }
 .sh-nav { display: flex; flex-direction: column; gap: var(--s1); flex: 1; }
 .sh-nav-item {
   display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 0 14px;
   border: 0; border-radius: var(--r-ctl); background: transparent; color: var(--soft); font-weight: 500; text-align: left;
 }
-.sh-nav-item:hover { background: var(--glass); color: var(--text); }
+@media (hover: hover) { .sh-nav-item:hover { background: var(--glass); color: var(--text); } }
 .sh-nav-item[aria-current='page'] { background: var(--glass-hi); color: var(--text); }
 .sh-nav-item[aria-current='page']::after {
   content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 10px var(--mint); flex-shrink: 0;
@@ -664,7 +664,7 @@ button { cursor: pointer; }
   position: relative; width: 100%; min-height: 60px; border: 0; border-radius: var(--r-ctl); background: transparent; color: var(--soft);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: var(--t-13); font-weight: 500; padding: var(--s2) 0;
 }
-.sh-rail-item:hover { background: var(--glass); color: var(--text); }
+@media (hover: hover) { .sh-rail-item:hover { background: var(--glass); color: var(--text); } }
 .sh-rail-item[aria-current='page'] { background: var(--glass-hi); color: var(--mint); }
 .sh-rail-badge { position: absolute; top: 0; right: 0; }
 .sh-rail-badge .ui-badge, .sh-tab-badge .ui-badge { min-width: 20px; height: 20px; padding: 0 6px; }
@@ -684,14 +684,14 @@ button { cursor: pointer; }
   display: inline-flex; align-items: center; gap: var(--s1); min-height: 44px; margin-left: -10px; padding: 0 10px;
   border: 0; background: transparent; color: var(--lav); font-weight: 600;
 }
-.sh-back:hover { color: var(--text); }
+@media (hover: hover) { .sh-back:hover { color: var(--text); } }
 .sh-pill { padding: 6px 12px; border-radius: 999px; background: color-mix(in srgb, var(--mint) 10%, transparent); }
 
 /* Tab bar (phone): a glass bar that floats above the safe area */
 .sh-tabbar {
   position: fixed; z-index: 20; left: calc(14px + env(safe-area-inset-left)); right: calc(14px + env(safe-area-inset-right));
   bottom: calc(14px + env(safe-area-inset-bottom)); border-radius: 22px; padding: var(--s2) var(--s1);
-  grid-template-columns: repeat(4, minmax(0, 1fr)); background: color-mix(in srgb, var(--night) 66%, transparent); box-shadow: 0 12px 32px color-mix(in srgb, var(--night) 60%, transparent);
+  grid-template-columns: repeat(4, minmax(0, 1fr)); background: color-mix(in srgb, var(--night) 86%, transparent); box-shadow: 0 12px 32px color-mix(in srgb, var(--night) 60%, transparent);
 }
 .sh-tab {
   position: relative; min-height: 48px; border: 0; border-radius: var(--r-ctl); background: transparent; color: var(--soft);

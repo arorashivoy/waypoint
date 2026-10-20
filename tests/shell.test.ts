@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { NAV, readLocation, writeLocation } from '@/components/shell/nav';
-import { taskLine } from '@/components/shell/task';
+import { NAV, navAction, readLocation, writeLocation } from '@/components/shell/nav';
+import { claudeLine, taskLine } from '@/components/shell/task';
 
 describe('NAV', () => {
   it('has exactly Jobs, Pending, Profile and Settings, in this order', () => {
@@ -88,5 +88,49 @@ describe('phone detection', () => {
       readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));
     const found = walk('src').filter((f) => /\.(ts|tsx|css)$/.test(f) && readFileSync(f, 'utf8').includes('useIsPhone'));
     expect(found).toEqual([]);
+  });
+});
+
+describe('navAction', () => {
+  it('does nothing for the place that is open, so Back does not repeat it', () => {
+    expect(navAction({ view: 'jobs', job: null }, 'jobs')).toBe('none');
+    expect(navAction({ view: 'pending', job: null }, 'pending')).toBe('none');
+  });
+
+  it('closes the open job when Jobs is tapped', () => {
+    expect(navAction({ view: 'jobs', job: 'abc' }, 'jobs')).toBe('close-job');
+  });
+
+  it('pushes a new place, also from an open job', () => {
+    expect(navAction({ view: 'jobs', job: null }, 'pending')).toBe('push');
+    expect(navAction({ view: 'jobs', job: 'abc' }, 'profile')).toBe('push');
+  });
+});
+
+describe('claudeLine', () => {
+  it('names each mode in plain words', () => {
+    expect(claudeLine('none')).toBe('Claude: not connected');
+    expect(claudeLine('own')).toBe('Claude: your API key');
+    expect(claudeLine('shared')).toBe('Claude: the shared key');
+    expect(claudeLine('cli')).toBe('Claude: the admin subscription');
+  });
+});
+
+describe('globals.css hover rules', () => {
+  it('has no :hover selector outside @media (hover: hover)', () => {
+    let css = readFileSync('src/app/globals.css', 'utf8');
+    // Remove each @media (hover: hover) block, with its nested braces.
+    for (;;) {
+      const start = css.indexOf('@media (hover: hover)');
+      if (start === -1) break;
+      let depth = 0;
+      let end = css.indexOf('{', start);
+      for (; end < css.length; end++) {
+        if (css[end] === '{') depth++;
+        if (css[end] === '}' && --depth === 0) break;
+      }
+      css = css.slice(0, start) + css.slice(end + 1);
+    }
+    expect(css.match(/[^{}]*:hover[^{}]*\{/g) ?? []).toEqual([]);
   });
 });

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { readLocation, writeLocation, type Location, type Place } from './nav';
+import { navAction, readLocation, writeLocation, type Location, type Place } from './nav';
 
 const OPENED = { wpJob: true };
 const KEY = 'wp-sidebar-collapsed';
@@ -50,19 +50,6 @@ export function useLocation() {
     prevJob.current = loc.job;
   }, [loc.job]);
 
-  const go = useCallback((view: Place) => {
-    const next: Location = { view, job: null };
-    window.history.pushState(null, '', `${window.location.pathname}${writeLocation(next)}`);
-    setLoc(next);
-  }, []);
-
-  const openJob = useCallback((id: string) => {
-    scrollY.current = window.scrollY;
-    const next: Location = { view: 'jobs', job: id };
-    window.history.pushState(OPENED, '', `${window.location.pathname}${writeLocation(next)}`);
-    setLoc(next);
-  }, []);
-
   /** Close the open job. Go back when the app pushed the entry. The state of an entry lives through a reload. */
   const closeJob = useCallback(() => {
     if (window.history.state?.wpJob) {
@@ -71,6 +58,25 @@ export function useLocation() {
     }
     const next: Location = { view: 'jobs', job: null };
     window.history.replaceState(null, '', `${window.location.pathname}${writeLocation(next)}`);
+    setLoc(next);
+  }, []);
+
+  const go = useCallback((view: Place) => {
+    const action = navAction(loc, view);
+    if (action === 'none') return;
+    if (action === 'close-job') {
+      closeJob();
+      return;
+    }
+    const next: Location = { view, job: null };
+    window.history.pushState(null, '', `${window.location.pathname}${writeLocation(next)}`);
+    setLoc(next);
+  }, [loc, closeJob]);
+
+  const openJob = useCallback((id: string) => {
+    scrollY.current = window.scrollY;
+    const next: Location = { view: 'jobs', job: id };
+    window.history.pushState(OPENED, '', `${window.location.pathname}${writeLocation(next)}`);
     setLoc(next);
   }, []);
 
