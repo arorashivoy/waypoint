@@ -44,7 +44,12 @@ describe('the state routes', () => {
     expect(res.status).toBe(200);
     const etag = res.headers.get('etag')!;
     expect(etag).toBeTruthy();
-    expect((await get(route, path, u.cookie, etag)).status).toBe(304);
+    // /api/me holds the job counts of every real country, and other files add jobs there at the same time.
+    // So the rule is: the same body gives 304; a 200 is correct only when the body changed.
+    const body = await res.text();
+    const again = await get(route, path, u.cookie, etag);
+    if (again.status === 200) expect(await again.text()).not.toBe(body);
+    else expect(again.status).toBe(304);
   });
 
   it('/api/me holds the user, the countries with their counts, and the needs count', async () => {
