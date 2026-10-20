@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { copyAndOpen, draftCopyOpen, patch, post } from '../api';
 import { runTask } from '../tasks';
-import { focusedSection, keepFocus } from './focus';
+import { keepFocus, sectionOfItem } from './focus';
 import type { AwaitingItem, NeedsItem } from './sections';
 
 export interface PendingActions {
@@ -34,7 +34,7 @@ export function usePendingActions(refresh: () => Promise<unknown>, setToast: (s:
     setBusy(id);
     setErrors(({ [id]: _gone, ...rest }) => rest);
     // The item can leave its section when the action works. Then the focus goes to the section heading.
-    const section = focusedSection(document);
+    const section = sectionOfItem(document, id);
     try {
       await work();
       requestAnimationFrame(() => keepFocus(document, section));

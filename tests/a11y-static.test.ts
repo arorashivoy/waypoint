@@ -164,7 +164,7 @@ describe('static accessibility checks', () => {
   });
 
   it('never uses dangerouslySetInnerHTML', () => {
-    const hits = files.filter((f) => /\.(tsx?|jsx?)$/.test(f) && readFileSync(f, 'utf8').includes('dangerouslySetInnerHTML'));
+    const hits = files.filter((f) => /\.(tsx?|jsx?)$/.test(f) && /dangerouslySetInnerHTML|\.innerHTML\s*=|\.outerHTML\s*=|insertAdjacentHTML/.test(readFileSync(f, 'utf8')));
     expect(hits).toEqual([]);
   });
 
@@ -182,7 +182,13 @@ describe('static accessibility checks', () => {
         const el = n.parent as ts.JsxElement;
         let named = false;
         const look = (c: ts.Node) => {
-          if ((ts.isJsxText(c) && c.text.trim() !== '') || ts.isJsxExpression(c)) named = true;
+          if (ts.isJsxText(c) && c.text.trim() !== '') named = true;
+          // An expression names the button when it is text: a string, a template or a plain name. A JSX icon in braces does not.
+          if (ts.isJsxExpression(c) && c.expression && !ts.isJsxElement(c.expression) && !ts.isJsxSelfClosingElement(c.expression) && !ts.isJsxFragment(c.expression)) {
+            const inner = c.expression;
+            const iconOnly = ts.isBinaryExpression(inner) && (ts.isJsxElement(inner.right) || ts.isJsxSelfClosingElement(inner.right));
+            if (!iconOnly) named = true;
+          }
           ts.forEachChild(c, look);
         };
         el.children.forEach(look);
@@ -197,7 +203,10 @@ describe('static accessibility checks', () => {
       scan(f, (n, { source }) => {
         const a = attr(n, 'tabIndex');
         const v = a?.initializer ? initText(a.initializer, source) : '';
-        return /^\d+$/.test(v) && Number(v) > 0 ? `tabIndex ${v}` : null;
+        if (/^-?\d+$/.test(v)) return Number(v) > 0 ? `tabIndex ${v}` : null;
+        // A value from a variable: only a ternary of 0 and -1 is safe. A plain name is the limit of this check; it is flagged.
+        if (v === '') return null;
+        return /^[^?]+\?\s*-?[01]\s*:\s*-?[01]$/.test(v) ? null : `tabIndex {${v}} is not a literal 0, -1 or a ternary of them`;
       }),
     );
     expect(hits).toEqual([]);
@@ -218,10 +227,38 @@ describe('iOS and touch rules in globals.css', () => {
     }
   });
 
-  it('makes buttons, chips, links, tabs and nav items 44 px high on a coarse pointer', () => {
-    const blocks = coarseBlocks(stripComments(globals));
-    for (const sel of ['.btn', '.chip', '.sh-nav-item', '.sh-tab', '.ui-tab']) {
-      expect({ sel, covered: blocks.includes(sel) }).toEqual({ sel, covered: true });
+  // What the coarse-pointer rules give each selector: the largest min-height and min-width, in px.
+  const coarse = new Map<string, { h: number; w: number }>();
+  for (const [sel, body] of rules(coarseBlocks(css))) {
+    const h = px(/(?:^|;)\s*min-height:\s*([^;]+)/.exec(body)?.[1] ?? '') ?? 0;
+    const w = px(/(?:^|;)\s*min-width:\s*([^;]+)/.exec(body)?.[1] ?? '') ?? 0;
+    for (const one of sel.split(',').map((x) => x.trim())) {
+      const old = coarse.get(one) ?? { h: 0, w: 0 };
+      coarse.set(one, { h: Math.max(old.h, h), w: Math.max(old.w, w) });
     }
+  }
+
+  it('gives each small control a min-height of 44 px on a coarse pointer', () => {
+    const tall = ['.btn', '.ui-btn', '.ui-tab', '.ui-fold-head', '.ui-switch', '.chip', '.fs-chip', '.sh-nav-item', '.sh-tab', '.sh-rail-item', '.sh-collapse', '.sh-expand', '.ui-sheet-head .btn', '.pf-row .btn', '.pf-actions .btn', '.pf-check', '.ob .btn.link'];
+    const low = tall.filter((sel) => (coarse.get(sel)?.h ?? 0) < 44);
+    expect(low).toEqual([]);
+  });
+
+  it('gives each icon button and chip a min-width of 44 px on a coarse pointer', () => {
+    const wide = ['.chip', '.fs-chip', '.sh-collapse', '.sh-expand'];
+    expect(wide.filter((sel) => (coarse.get(sel)?.w ?? 0) < 44)).toEqual([]);
+  });
+
+  it('lists every control rule with a height under 44 px in a coarse rule', () => {
+    const control = /\.(btn|chip|tab|switch|check|collapse|expand|fold-head|nav-item|rail-item)\b/;
+    const missing: string[] = [];
+    for (const [sel, body] of rules(stripBlocks(css, '@media (pointer: coarse)'))) {
+      const h = px(/(?:^|;)\s*height:\s*([^;]+)/.exec(body)?.[1] ?? '');
+      if (h === null || h >= 44) continue;
+      for (const one of sel.split(',').map((x) => x.trim())) {
+        if (control.test(one) && !/:hover|\[/.test(one) && (coarse.get(one)?.h ?? 0) < 44) missing.push(`${one} { height: ${h}px }`);
+      }
+    }
+    expect(missing).toEqual([]);
   });
 });

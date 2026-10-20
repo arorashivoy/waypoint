@@ -20,7 +20,7 @@ export default function AwaitingItem({ item, actions, initialForm = null }: { it
     setIncoming('');
   };
   return (
-    <li className="pn-item">
+    <li className="pn-item" data-item={item.id}>
       <Person init={item.init} who={item.who} org={item.org} />
       <span className="pn-role">{item.role}</span>
       <span className="pn-when">{item.when}{item.why ? `. ${item.why}` : ''}</span>

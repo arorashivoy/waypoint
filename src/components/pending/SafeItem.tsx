@@ -10,7 +10,7 @@ export default function SafeItem({ item, actions }: { item: Item; actions: Pendi
   const busy = actions.busy === item.id;
   const error = actions.errors[item.id];
   return (
-    <li className="pn-item">
+    <li className="pn-item" data-item={item.id}>
       <Person init={item.init} who={item.who} org={item.org} />
       <p className="quote">“{item.quote}”</p>
       <p className="sent-body">{item.sent}</p>

@@ -260,7 +260,6 @@ button { cursor: pointer; }
 .fs-options { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .fs-hint { margin: 0; font-size: var(--t-13); line-height: 1.4; color: var(--soft); }
 .aj-form { display: flex; flex-direction: column; gap: var(--s4); }
-@media (pointer: coarse) { .chip, .fs-chip { min-height: 44px; } }
 
 .empty { padding: 28px; border: 1px dashed var(--lav); border-radius: var(--r-row); font-size: 15px; color: var(--soft); line-height: 1.5; }
 
@@ -488,7 +487,6 @@ button { cursor: pointer; }
 .pf-choice li[data-on='true'] { color: var(--text); border-color: color-mix(in srgb, var(--lav) 55%, transparent); background: color-mix(in srgb, var(--lav) 12%, transparent); }
 .btn[aria-disabled='true'] { opacity: 0.45; cursor: not-allowed; }
 @media (pointer: coarse) {
-  .pf-row .btn, .pf-actions .btn { min-height: 44px; }
   /* A link inside a sentence keeps its line. Padding and an equal negative margin grow the target to 44 px. */
   .pf-undo .btn.link, .pf-note .btn.link { padding-block: 13px; margin-block: -13px; }
 }
@@ -638,8 +636,10 @@ button { cursor: pointer; }
 .ui-switch:disabled { opacity: 0.45; cursor: not-allowed; }
 
 @media (pointer: coarse) {
-  .btn, .ui-btn, .ui-tab, .ui-fold-head, .ui-switch, .chip, .sh-nav-item, .sh-tab, .sh-rail-item { min-height: 44px; }
-  .chip { min-width: 44px; }
+  .btn, .ui-btn, .ui-tab, .ui-fold-head, .ui-switch, .chip, .fs-chip, .sh-nav-item, .sh-tab, .sh-rail-item, .ui-sheet-head .btn, .sheet .chip, .pf-row .btn, .pf-actions .btn { min-height: 44px; }
+  .chip, .fs-chip, .sh-collapse, .sh-expand { min-width: 44px; min-height: 44px; }
+  .pf-check { min-height: 44px; align-items: center; }
+  .pf-check input { margin-top: 0; }
   .field, select.field { min-height: 44px; }
 }
 
@@ -973,10 +973,6 @@ button { cursor: pointer; }
   .sh[data-job='open'][data-place='jobs'] .jl,
   .sh[data-job='open'][data-place='jobs'] .sh-view > :not(.jobs-split) { display: none !important; } /* some of them set display inline */
   .sh-banner { padding: var(--s3) var(--gutter) 0; }
-}
-
-@media (pointer: coarse) {
-  .sh-collapse { min-width: 44px; min-height: 44px; }
 }
 
 /* ---------- job detail ---------- */

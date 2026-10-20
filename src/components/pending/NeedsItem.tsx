@@ -14,7 +14,7 @@ export default function NeedsItem({ item, actions }: { item: Item; actions: Pend
   const busy = actions.busy === item.id;
   const error = actions.errors[item.id];
   return (
-    <li className="pn-item pn-needs">
+    <li className="pn-item pn-needs" data-item={item.id}>
       <span className="pn-when">{item.kind} {item.when}</span>
       <Person init={item.init} who={item.who} org={item.org} />
       <span className="pn-role">{item.role}</span>
