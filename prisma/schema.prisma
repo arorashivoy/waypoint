@@ -510,17 +510,21 @@ model FeedFetch {
 }
 
 model UserSettings {
-  userId     String   @id
+  userId      String    @id
   // JSON text: string[] of field names from FIELD_CHOICES.
-  fields     String   @default("[]")
-  visaStatus String   @default("")
+  fields      String    @default("[]")
+  visaStatus  String    @default("")
   // "template" | "own-tex"
-  resumeMode String   @default("template")
+  resumeMode  String    @default("template")
   // The file name that the server made for the .tex of the user. Never a path from the client.
-  ownTex     String?
-  templateId String   @default("classic")
-  updatedAt  DateTime @updatedAt
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ownTex      String?
+  templateId  String    @default("classic")
+  // Null until the user finishes or skips the onboarding wizard. The migration sets it for each user that existed before the wizard.
+  onboardedAt DateTime?
+  // The last wizard step that the user opened: "account" | "search" | "claude" | "import" | "review" | "refresh". Null when the wizard is done.
+  wizardStep  String?
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // A small key-value table for state of the app. The value is JSON text.

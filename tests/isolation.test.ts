@@ -62,6 +62,7 @@ import * as meRoute from '@/app/api/me/route';
 import * as jobsList from '@/app/api/jobs/list/route';
 import * as pendingRoute from '@/app/api/pending/route';
 import * as settingsSearch from '@/app/api/settings/search/route';
+import * as onboardingRoute from '@/app/api/onboarding/route';
 import * as account from '@/app/api/account/route';
 import * as password from '@/app/api/account/password/route';
 import * as sessions from '@/app/api/account/sessions/route';
@@ -138,6 +139,8 @@ describe('every route refuses a request without a session', () => {
     ['GET /api/pending', pendingRoute.GET as Handler],
     ['GET /api/settings/search', settingsSearch.GET as Handler],
     ['PATCH /api/settings/search', settingsSearch.PATCH as Handler],
+    ['GET /api/onboarding', onboardingRoute.GET as Handler],
+    ['PATCH /api/onboarding', onboardingRoute.PATCH as Handler],
     ['POST /api/account/password', password.POST as Handler],
     ['GET /api/account/sessions', sessions.GET as Handler],
     ['DELETE /api/account/sessions', sessions.DELETE as Handler],

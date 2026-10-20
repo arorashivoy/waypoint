@@ -9,6 +9,7 @@ import AddJobSheet from './AddJobSheet';
 import FilterSheet from './FilterSheet';
 import JobRow from './JobRow';
 import JobsEmpty from './JobsEmpty';
+import { refreshLine, type RefreshResult } from './refresh';
 import { useJobList } from './useJobList';
 
 interface Props {
@@ -24,8 +25,6 @@ interface Props {
 }
 
 const REPORT_MS = 10_000;
-
-type RefreshResult = { added: number; total: number; report: { source: string; error?: unknown }[]; analysing?: { total: number } | null; note?: string };
 
 /** The list column: title, search, one Filters button, one plain line, the rows and the empty states. */
 export default function JobList({ me, list, loading, error, onRetry, refresh, setToast, openJob, onSettings }: Props) {
@@ -47,14 +46,7 @@ export default function JobList({ me, list, loading, error, onRetry, refresh, se
     try {
       const res = await runTask<RefreshResult>(() => post<{ taskId: string }>('/api/jobs/refresh', { force }));
       await refresh();
-      const failed = (res.report || []).filter((r) => r.error);
-      const queued = res.analysing?.total || 0;
-      setReport(
-        res.note ??
-          `${res.added} new, ${res.total} live in your countries.` +
-            (queued ? ` Claude is reading the top ${queued}.` : '') +
-            (failed.length ? ` ${failed.length} source${failed.length > 1 ? 's' : ''} failed: ${failed.map((r) => r.source).join(', ')}.` : ''),
-      );
+      setReport(refreshLine(res));
       if (reportTimer.current) clearTimeout(reportTimer.current);
       reportTimer.current = setTimeout(() => setReport(null), REPORT_MS);
     } catch (e) {

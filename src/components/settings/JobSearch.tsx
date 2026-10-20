@@ -8,7 +8,7 @@ import { changeCountry } from './countries';
 import { plural, when } from './model';
 import { LoadError, Row, SectionHead } from './parts';
 
-export type CountryRow = { cc: string; name: string; rank: number; on: boolean; settle: string; bar: string; sites: string[]; count: string };
+export type CountryRow = { cc: string; name: string; rank: number | string; on: boolean; settle: string; bar: string; sites: string[]; count: string };
 
 const MAX_FIELDS = 6;
 
@@ -52,12 +52,13 @@ export function BoardList({ boards }: { boards: FailedBoard[] }) {
 }
 
 /** The fields and the visa status. The onboarding wizard uses this form too. */
-export function SearchForm({ value, onSaved, setToast }: { value: SearchSettings; onSaved: (s: SearchSettings) => void | Promise<unknown>; setToast: (s: string) => void }) {
+export function SearchForm({ value, onSaved, setToast, formId, hideSave }: { value: SearchSettings; onSaved: (s: SearchSettings) => void | Promise<unknown>; setToast: (s: string) => void; /** The id of the form, for a submit button outside of it. */ formId?: string; /** Leaves out the Save button. The wizard has its own button. */ hideSave?: boolean }) {
   const [fields, setFields] = useState(value.fields);
   const [visa, setVisa] = useState(value.visaStatus);
   const [busy, setBusy] = useState(false);
   return (
     <form
+      id={formId}
       className="pf-form"
       onSubmit={async (e) => {
         e.preventDefault();
@@ -90,9 +91,11 @@ export function SearchForm({ value, onSaved, setToast }: { value: SearchSettings
       <Field label="Visa status" hint="Waypoint uses this to rank jobs. For example: I need a work visa for Germany.">
         {(c) => <input {...c} type="text" maxLength={200} value={visa} onChange={(e) => setVisa(e.target.value)} />}
       </Field>
-      <div className="pf-actions pf-wide">
-        <Button type="submit" variant="go" busy={busy}>Save</Button>
-      </div>
+      {!hideSave && (
+        <div className="pf-actions pf-wide">
+          <Button type="submit" variant="go" busy={busy}>Save</Button>
+        </div>
+      )}
     </form>
   );
 }

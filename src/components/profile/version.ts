@@ -1,6 +1,9 @@
 'use client';
 
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useMemo } from 'react';
+import type { KeyedMutator } from 'swr';
+import { STALE_PROFILE_MESSAGE } from '@/lib/profile/stale';
+import { ApiError } from '../api';
 import type { ProfileData } from '../data';
 
 /**
@@ -18,3 +21,17 @@ export const ProfileVersionContext = createContext<{
 }>({ version: 0, reload: async () => undefined, onStale: () => {} });
 
 export const useProfileVersion = () => useContext(ProfileVersionContext);
+
+/** The value for the context, from the profile data and its `mutate`. The Profile screen and the onboarding wizard use it. */
+export function useProfileVersionValue(data: ProfileData | undefined, mutate: KeyedMutator<ProfileData>) {
+  return useMemo(
+    () => ({
+      version: data?.version ?? 0,
+      reload: async () => (await mutate()) as ProfileData | undefined,
+      onStale: (e: unknown) => {
+        if (e instanceof ApiError && e.status === 409 && e.message === STALE_PROFILE_MESSAGE) mutate();
+      },
+    }),
+    [data?.version, mutate],
+  );
+}

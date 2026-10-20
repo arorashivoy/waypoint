@@ -128,6 +128,16 @@ const SETTINGS = {
   users: '/api/admin/users',
 } as const;
 
+/** The fields and the visa status. Settings and the onboarding wizard share this key, so they share the cache. */
+export function useSearchSettings() {
+  return useData<SearchSettings>(SETTINGS.search);
+}
+
+/** What pays for Claude. Settings and the onboarding wizard share this key. */
+export function useClaudeStatus() {
+  return useData<ClaudeStatus>(SETTINGS.claude);
+}
+
 /**
  * The Settings sections, each with its own request. One failed request (the
  * job boards, for example) shows an error in its own section only. The other

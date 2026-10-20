@@ -1,6 +1,7 @@
 'use client';
 
 import { useSWRConfig } from 'swr';
+import Onboarding from './onboarding/Onboarding';
 import { ApiError, api } from './api';
 import { KEYS, useMe, useRefresh, type Me } from './data';
 import { useToast } from './hooks';
@@ -49,6 +50,16 @@ export default function Waypoint() {
   if (!state) {
     return (
       <Loading error={loadError} onRetry={() => { reloadMe(); }} />
+    );
+  }
+
+  // A new user sees the wizard until the user finishes or skips it. A link with ?view= goes to the app at once.
+  if (!state.onboarding.onboardedAt && !new URLSearchParams(window.location.search).has('view')) {
+    return (
+      <>
+        <Onboarding me={state} setToast={setToast} toggleCountry={toggleCountry} refresh={refresh} onLeave={() => go('jobs')} />
+        {toastEl}
+      </>
     );
   }
 

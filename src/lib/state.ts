@@ -1,3 +1,4 @@
+import { getOnboarding } from './onboarding';
 import { visibleTo } from './job-scope';
 import { db } from './db';
 import { COUNTRIES, GLOBAL_SITES } from './countries';
@@ -24,7 +25,7 @@ const CONTACT_LIMIT = 500;
 
 /** The user, Claude, the countries and the progress of the analysis. The shell needs only this. */
 export async function buildMe(userId: string) {
-  const [prefs, user, claude, profile, counts, needsCount, analysing] = await Promise.all([
+  const [prefs, user, claude, profile, counts, needsCount, analysing, onboarding] = await Promise.all([
     db.countryPref.findMany({ where: { userId }, orderBy: { rank: 'asc' } }),
     db.user.findUniqueOrThrow({ where: { id: userId } }),
     claudeStatus(userId),
@@ -32,6 +33,7 @@ export async function buildMe(userId: string) {
     db.job.groupBy({ by: ['cc'], where: visibleTo(userId), _count: { _all: true } }),
     db.outreachEvent.count({ where: { application: { userId }, kind: 'replied', handled: false, certain: false } }),
     analysisProgress(userId),
+    getOnboarding(userId),
   ]);
   const countByCc = new Map(counts.map((g) => [g.cc, g._count._all]));
   return {
@@ -54,6 +56,7 @@ export async function buildMe(userId: string) {
     careerLinks: (await watchlist()).flatMap((e) => (e.ats === 'link' ? [{ company: e.company, url: e.url }] : [])),
     needsCount,
     levels: profile.levels,
+    onboarding,
   };
 }
 

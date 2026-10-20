@@ -1,12 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { STALE_PROFILE_MESSAGE } from '@/lib/profile/stale';
-import { ApiError } from './api';
 import { useProfile, type ProfileData } from './data';
 import { Badge, Button, ErrorNote, Skeleton, Tabs } from './ui';
 import { PROFILE_TABS, readTab, tabQuery, type ProfileTab } from './profile/model';
-import { ProfileVersionContext } from './profile/version';
+import { ProfileVersionContext, useProfileVersionValue } from './profile/version';
 import ExperienceTab from './profile/ExperienceTab';
 import ProjectsTab from './profile/ProjectsTab';
 import ClaimsTab from './profile/ClaimsTab';
@@ -77,16 +75,7 @@ export default function ProfileScreen({ state: me, refresh, setToast }: { state:
     [mutate],
   );
 
-  const version = useMemo(
-    () => ({
-      version: data?.version ?? 0,
-      reload: async () => (await mutate()) as ProfileData | undefined,
-      onStale: (e: unknown) => {
-        if (e instanceof ApiError && e.status === 409 && e.message === STALE_PROFILE_MESSAGE) mutate();
-      },
-    }),
-    [data?.version, mutate],
-  );
+  const version = useProfileVersionValue(data, mutate);
 
   const drafts = data?.pendingDrafts ?? 0;
   const panel = (id: ProfileTab) => {

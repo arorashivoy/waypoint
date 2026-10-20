@@ -1116,3 +1116,91 @@ button { cursor: pointer; }
 
 .jd-bar .ui-error { flex-basis: 100%; }
 .jd .jd-back h2:focus-visible { outline: 3px solid var(--lav); outline-offset: 4px; border-radius: var(--r-ctl); }
+
+/* Onboarding wizard: one calm card on the night ground. The left side is the route of the steps. */
+.ob { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: var(--s6) var(--s5); }
+.ob-card {
+  width: 100%; max-width: 1040px; display: grid; grid-template-columns: 17.5rem minmax(0, 1fr);
+  border-radius: var(--r-sheet); overflow: clip; min-height: min(44rem, calc(100dvh - 2 * var(--s6)));
+}
+.ob-side { display: flex; flex-direction: column; gap: var(--s6); padding: var(--s6) var(--s5); border-right: 1px solid var(--edge); background: var(--glass); }
+.ob-brand { display: flex; align-items: center; gap: 10px; }
+.ob-brand-name { font-family: var(--f-head); font-weight: 700; font-size: var(--t-20); letter-spacing: -0.01em; }
+.ob-leave { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s1); }
+.ob-leave .btn.link { padding-left: 0; }
+.ob-leave-note { font-size: var(--t-13); color: var(--soft); }
+
+.ob-route-nav { display: flex; flex-direction: column; gap: var(--s3); }
+.ob-route .ui-stop { padding-bottom: var(--s5); align-items: center; animation: none; }
+.ob-route .ui-stop:last-child { padding-bottom: 0; }
+.ob-route .ui-stop-label { color: var(--soft); }
+.ob-route .ob-now .ui-stop-label { color: var(--text); font-weight: 600; }
+.ob-route .ob-done .ui-stop-label { color: var(--text); }
+.ob-route .ob-done::after { box-shadow: none; }
+.ob-route .ob-done::before { background: color-mix(in srgb, var(--mint) 55%, transparent); }
+.ob-route .ob-now::after { box-shadow: 0 0 0 4px color-mix(in srgb, var(--mint) 20%, transparent), 0 0 16px color-mix(in srgb, var(--mint) 60%, transparent); }
+.ob-route .ob-now .ui-stop-word { color: var(--mint); }
+.ob-route .ob-done .ui-stop-word { color: var(--soft); font-weight: 500; }
+.ob-route .ob-later .ui-stop-word { color: var(--soft); font-weight: 500; }
+.ob-where { display: none; margin: 0; font-size: var(--t-13); color: var(--soft); }
+
+.ob-main { display: flex; flex-direction: column; min-width: 0; padding: var(--s7) var(--s7) 0; }
+.ob-head { display: flex; flex-direction: column; gap: var(--s2); margin-bottom: var(--s6); }
+.ob-title { margin: 0; font-size: var(--t-31); font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.ob-title:focus-visible { outline-offset: 6px; border-radius: var(--r-ctl); }
+.ob-lead { margin: 0; color: var(--soft); max-width: 56ch; }
+.ob-body { flex: 1 1 auto; min-width: 0; max-width: 640px; padding-bottom: var(--s6); }
+.ob-plain { margin: 0; max-width: 56ch; }
+.ob-ok { color: var(--mint); }
+.ob-rows { padding: 0 var(--s4); border: 1px solid var(--edge); border-radius: var(--r-row); background: var(--glass); }
+.ob-sources { padding: var(--s4) var(--s5); }
+.ob-result:empty { display: none; }
+.ob-run { display: flex; flex-direction: column; gap: var(--s3); }
+.ob-run .ui-task { font-size: var(--t-16); }
+
+/* The buttons stay in reach while a long step scrolls. */
+.ob-foot {
+  position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  margin: 0 calc(var(--s7) * -1); padding: var(--s4) var(--s7); border-top: 1px solid var(--edge); background: var(--surface);
+}
+.ob-foot-main { display: flex; align-items: center; gap: var(--s3); margin-left: auto; }
+.ob-body .pf-form .pf-actions.pf-wide { position: static; padding: 0; background: none; box-shadow: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .ob-body { animation: ui-rise 0.2s ease-out both; }
+}
+
+@media (max-width: 899px) {
+  .ob-main { padding: var(--s6) var(--s5) 0; }
+  .ob-foot { margin: 0 calc(var(--s5) * -1); padding: var(--s4) var(--s5); }
+}
+
+/* Phone: the card fills the screen and the route is a strip of small stops. */
+@media (max-width: 719px) {
+  .ob { padding: 0; align-items: stretch; }
+  .ob-card { display: flex; flex-direction: column; border-radius: 0; border: 0; min-height: 100dvh; overflow: visible; }
+  .ob-side {
+    flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s3) var(--s4);
+    padding: calc(var(--s4) + env(safe-area-inset-top)) var(--s4) var(--s4); border-right: 0; border-bottom: 1px solid var(--edge);
+  }
+  .ob-leave { margin: 0; flex-direction: row; align-items: center; }
+  .ob-leave-note { display: none; }
+  .ob-route-nav { order: 3; flex: 1 1 100%; gap: var(--s2); }
+  .ob-route { display: flex; align-items: center; }
+  .ob-route .ui-stop { flex: 1 1 0; min-width: 0; height: 14px; padding: 0; display: block; }
+  .ob-route .ui-stop:last-child { flex: 0 0 14px; }
+  .ob-route .ui-stop::after { top: 0; width: 14px; height: 14px; }
+  .ob-route .ui-stop::before { display: block; left: 18px; right: 4px; top: 6px; bottom: auto; width: auto; height: 2px; }
+  .ob-route .ui-stop:last-child::before { display: none; }
+  .ob-route .ui-stop-label, .ob-route .ui-stop-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .ob-where { display: block; }
+  .ob-main { padding: var(--s5) var(--s4) 0; flex: 1 1 auto; }
+  .ob-head { margin-bottom: var(--s5); }
+  .ob-title { font-size: var(--t-25); }
+  .ob-sources { padding: var(--s4); }
+  .ob-foot { margin: 0 calc(var(--s4) * -1); padding: var(--s3) var(--s4) calc(var(--s3) + env(safe-area-inset-bottom)); }
+  .ob-foot-main { gap: var(--s2); }
+}
+@media (pointer: coarse) { .ob .btn.link { min-height: 44px; } }
+/* The toast sits above the buttons of the card. */
+.ob ~ .toast { bottom: calc(88px + env(safe-area-inset-bottom)); }

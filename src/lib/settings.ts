@@ -34,7 +34,7 @@ export const SettingsSchema = z.object({
 export type SearchSettings = z.infer<typeof SettingsSchema>;
 
 /** The admin keeps the own LaTeX source of the .env until the admin chooses a template. */
-async function defaultResumeMode(userId: string): Promise<Settings['resumeMode']> {
+export async function defaultResumeMode(userId: string): Promise<Settings['resumeMode']> {
   return process.env.RESUME_TEX?.trim() && (await isAdmin(userId)) ? 'own-tex' : 'template';
 }
 

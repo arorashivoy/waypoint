@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { del, leaveSession, post } from './api';
-import { useSettings } from './data';
+import { useSWRConfig } from 'swr';
+import { del, leaveSession, patch, post } from './api';
+import { KEYS, useSettings } from './data';
 import { Tabs } from './ui';
 import AccountSection from './settings/AccountSection';
 import AdminSection from './settings/AdminSection';
@@ -33,6 +34,17 @@ export default function SettingsScreen({ state, setToast, toggleCountry }: Props
   const [section, setSection] = useState<SettingsSection>(() => (typeof window === 'undefined' ? 'account' : readSection(window.location.search, isAdmin)));
   const side = useSideList();
   const settings = useSettings(isAdmin);
+  const { mutate } = useSWRConfig();
+  // A user who skipped the wizard can open it again. The address loses ?view=, so the wizard shows.
+  const finishSetup = useCallback(async () => {
+    try {
+      await patch('/api/onboarding', { onboarded: false });
+      window.history.replaceState(null, '', window.location.pathname);
+      await mutate(KEYS.me);
+    } catch (e) {
+      setToast((e as Error).message);
+    }
+  }, [mutate, setToast]);
 
   // The section is in the URL (?view=settings&section=job-search), so a reload or a shared link keeps it.
   useEffect(() => {
@@ -85,7 +97,7 @@ export default function SettingsScreen({ state, setToast, toggleCountry }: Props
     if (id !== section) return null;
     switch (id) {
       case 'account':
-        return <AccountSection user={state?.user ?? {}} sessions={settings.sessions.data?.sessions} error={settings.sessions.error} retry={settings.sessions.mutate} run={run} leave={leave} />;
+        return <AccountSection user={state?.user ?? {}} sessions={settings.sessions.data?.sessions} error={settings.sessions.error} retry={settings.sessions.mutate} run={run} leave={leave} finishSetup={state?.onboarding?.step ? finishSetup : undefined} />;
       case 'claude':
         return <ClaudeSection claude={settings.claude.data ?? null} error={settings.claude.error} retry={settings.claude.mutate} run={run} isAdmin={isAdmin} />;
       case 'job-search':

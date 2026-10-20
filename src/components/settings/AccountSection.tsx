@@ -43,9 +43,11 @@ type Props = {
   retry: () => unknown;
   run: Run;
   leave: (url: string, method: 'post' | 'del') => Promise<void>;
+  /** Set when the user skipped part of the onboarding wizard. It opens the wizard again. */
+  finishSetup?: () => void;
 };
 
-export default function AccountSection({ user, sessions, error, retry, run, leave }: Props) {
+export default function AccountSection({ user, sessions, error, retry, run, leave, finishSetup }: Props) {
   const [open, setOpen] = useState(false);
   const opener = useRef<HTMLButtonElement>(null);
   return (
@@ -55,6 +57,16 @@ export default function AccountSection({ user, sessions, error, retry, run, leav
         state={<span style={{ overflowWrap: 'anywhere' }}>{[user.name, user.email].filter(Boolean).join(', ')}</span>}
         action={<Button ref={opener} variant="go" onClick={() => setOpen(true)}>Change password</Button>}
       />
+      {finishSetup && (
+        <section className="pf-section" aria-labelledby="st-setup">
+          <h3 id="st-setup" className="pf-group-title">Setup</h3>
+          <ul className="pf-rows">
+            <Row title="You skipped part of the setup" sub="Pick up where you stopped. Your answers so far stay.">
+              <Button variant="go" onClick={finishSetup}>Finish setting up</Button>
+            </Row>
+          </ul>
+        </section>
+      )}
       <section className="pf-section" aria-labelledby="st-devices">
         <div className="pf-head">
           <h3 id="st-devices" className="pf-group-title">Signed-in devices</h3>
