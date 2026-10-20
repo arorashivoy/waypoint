@@ -1,10 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { DEPTHS, SURFACES, type Claim, type ClaimsDoc, type Depth, type Evidence, type Surface } from '@/lib/profile/doc';
 import type { Item, ItemKind } from '@/lib/profile/apply';
 import { ApiError, post, put } from '../api';
 import { STALE_PROFILE_MESSAGE } from '@/lib/profile/stale';
+import { Button, Field } from '../ui';
+import Problems, { fieldProblem } from './Problems';
 import { useProfileVersion } from './version';
 import { errorsFor, FIELDS, fromForm, targetOptions, toForm } from './fields';
 
@@ -19,13 +21,6 @@ type Props = {
   onCancel: () => void;
 };
 
-const Errors = ({ list }: { list?: string[] }) =>
-  list?.length ? (
-    <ul className="err" role="alert">
-      {list.map((e) => <li key={e}>{e}</li>)}
-    </ul>
-  ) : null;
-
 export default function ItemEditor({ kind, doc, itemKey: key, item, mode, onDone, onCancel }: Props) {
   const [form, setForm] = useState(() => toForm(kind, item));
   const claim = kind === 'claim' ? (item as Claim | null) : null;
@@ -33,14 +28,28 @@ export default function ItemEditor({ kind, doc, itemKey: key, item, mode, onDone
   const [listed, setListed] = useState<Surface[]>(() => (claim?.mentions ?? []).filter((m) => m.listed).map((m) => m.surface));
   const [serverErrors, setServerErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  // A field shows its problem after the user changes it, or after a Save that the checks stopped. A blank form starts calm.
+  const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
+  const [tried, setTried] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const { version, reload } = useProfileVersion();
 
   const next = useMemo(() => fromForm(kind, form, item, { evidence, listed }), [kind, form, item, evidence, listed]);
   const errs = useMemo(() => errorsFor(doc, kind, next, mode === 'profile' ? key : null), [doc, kind, next, key, mode]);
   const targets = useMemo(() => targetOptions(doc), [doc]);
-  const set = (k: string, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: string, v: string | boolean) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    setTouched((t) => new Set(t).add(k));
+  };
+  const seen = (k: string) => (tried || touched.has(k) ? errs.byField[k] : undefined);
 
   const save = async () => {
+    if (mode === 'profile' && errs.count > 0) {
+      setTried(true);
+      // Move focus to the first field with a problem, once it shows.
+      requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+      return;
+    }
     setBusy(true);
     setServerErrors([]);
     try {
@@ -59,81 +68,100 @@ export default function ItemEditor({ kind, doc, itemKey: key, item, mode, onDone
   };
 
   return (
-    <form className="card stack" style={{ gap: 14, padding: 18 }} onSubmit={(e) => { e.preventDefault(); save(); }}>
+    <form ref={formRef} className="pf-form" onSubmit={(e) => { e.preventDefault(); save(); }}>
       {FIELDS[kind].map((f) => {
         const id = `f-${kind}-${f.key}`;
         const value = form[f.key];
+        const wide = f.kind === 'textarea' || f.kind === 'lines';
+        if (f.kind === 'bool') {
+          return (
+            <label key={f.key} className="pf-check" htmlFor={id}>
+              <input id={id} type="checkbox" checked={value === true} onChange={(e) => set(f.key, e.target.checked)} />
+              <span>{f.label}</span>
+            </label>
+          );
+        }
         return (
-          <div key={f.key} className="form-row">
-            {f.kind === 'bool' ? (
-              <label className="row" style={{ gap: 8 }}>
-                <input id={id} type="checkbox" checked={value === true} onChange={(e) => set(f.key, e.target.checked)} />
-                <span>{f.label}</span>
-              </label>
-            ) : (
-              <>
-                <label className="label" htmlFor={id}>{f.label}</label>
-                {f.kind === 'textarea' || f.kind === 'lines' ? (
-                  <textarea id={id} className="note-area" rows={f.kind === 'lines' ? 4 : 3} value={String(value ?? '')} onChange={(e) => set(f.key, e.target.value)} />
+          <div key={f.key} className={wide ? 'pf-wide' : undefined}>
+            <Field label={f.label} hint={f.hint} error={fieldProblem(seen(f.key))}>
+              {(c) =>
+                f.kind === 'textarea' || f.kind === 'lines' ? (
+                  <textarea {...c} rows={f.kind === 'lines' ? 4 : 3} value={String(value ?? '')} onChange={(e) => set(f.key, e.target.value)} />
                 ) : f.kind === 'select' ? (
-                  <select id={id} className="field" value={String(value ?? '')} onChange={(e) => set(f.key, e.target.value)}>
+                  <select {...c} value={String(value ?? '')} onChange={(e) => set(f.key, e.target.value)}>
                     {f.options!.map((o) => <option key={o} value={o}>{o}</option>)}
                   </select>
                 ) : (
-                  <input id={id} className="field" type={f.kind === 'number' ? 'number' : 'text'} step="any" value={String(value ?? '')} onChange={(e) => set(f.key, e.target.value)} />
-                )}
-              </>
-            )}
-            {f.hint && <span className="hint">{f.hint}</span>}
-            <Errors list={errs.byField[f.key]} />
+                  <input {...c} type={f.kind === 'number' ? 'number' : 'text'} step="any" value={String(value ?? '')} onChange={(e) => set(f.key, e.target.value)} />
+                )
+              }
+            </Field>
           </div>
         );
       })}
 
       {kind === 'claim' && (
         <>
-          <div className="form-row">
-            <span className="label">Evidence</span>
+          <div className="pf-wide pf-group">
+            <span className="pf-group-title">Evidence</span>
             {evidence.map((e, i) => (
-              <div key={i} className="evidence-row">
-                <select aria-label="Evidence target" className="field" value={e.target} onChange={(ev) => setEvidence((list) => list.map((x, j) => (j === i ? { ...x, target: ev.target.value } : x)))}>
-                  <option value="">Choose the work that shows it</option>
-                  {targets.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-                <select aria-label="Depth" className="field" value={e.depth} onChange={(ev) => setEvidence((list) => list.map((x, j) => (j === i ? { ...x, depth: ev.target.value as Depth } : x)))}>
-                  {DEPTHS.map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
-                <input aria-label="Proof sentence" className="field" maxLength={200} placeholder="Proof: one sentence, 200 characters or fewer" value={e.proof ?? ''} onChange={(ev) => setEvidence((list) => list.map((x, j) => (j === i ? { ...x, proof: ev.target.value || undefined } : x)))} />
-                <span className="hint mono">{(e.proof ?? '').length}/200</span>
-                <button type="button" className="btn" onClick={() => setEvidence((list) => list.filter((_, j) => j !== i))}>Remove</button>
+              <div key={i} className="pf-evidence">
+                <div className="pf-wide">
+                  <Field label="Evidence target">
+                    {(c) => (
+                      <select {...c} value={e.target} onChange={(ev) => setEvidence((list) => list.map((x, j) => (j === i ? { ...x, target: ev.target.value } : x)))}>
+                        <option value="">Choose the work that shows it</option>
+                        {targets.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    )}
+                  </Field>
+                </div>
+                <Field label="Depth">
+                  {(c) => (
+                    <select {...c} value={e.depth} onChange={(ev) => setEvidence((list) => list.map((x, j) => (j === i ? { ...x, depth: ev.target.value as Depth } : x)))}>
+                      {DEPTHS.map((d) => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  )}
+                </Field>
+                <div className="pf-wide">
+                  <Field label="Proof sentence" hint={`${(e.proof ?? '').length} of 200 characters. One sentence.`}>
+                    {(c) => <input {...c} type="text" maxLength={200} value={e.proof ?? ''} onChange={(ev) => setEvidence((list) => list.map((x, j) => (j === i ? { ...x, proof: ev.target.value || undefined } : x)))} />}
+                  </Field>
+                </div>
+                <div className="pf-wide">
+                  <Button aria-label={`Remove evidence ${i + 1}`} onClick={() => setEvidence((list) => list.filter((_, j) => j !== i))}>Remove</Button>
+                </div>
               </div>
             ))}
-            <button type="button" className="btn" onClick={() => setEvidence((list) => [...list, { target: '', depth: 'used' }])}>Add evidence</button>
-            <Errors list={errs.byField.evidence} />
+            <div><Button onClick={() => setEvidence((list) => [...list, { target: '', depth: 'used' }])}>Add evidence</Button></div>
+            <Problems list={tried || evidence.length > 0 ? errs.byField.evidence : undefined} />
           </div>
-          <fieldset className="form-row" style={{ border: 0, padding: 0, margin: 0 }}>
-            <legend className="label">Where it shows</legend>
-            <div className="surface-grid">
+          <fieldset className="pf-wide pf-group">
+            <legend className="pf-group-title">Where it shows</legend>
+            <div className="pf-surfaces">
               {SURFACES.map((s) => (
-                <label key={s} className="row" style={{ gap: 6 }}>
+                <label key={s} className="pf-check">
                   <input type="checkbox" checked={listed.includes(s)} onChange={(e) => setListed((l) => (e.target.checked ? [...l, s] : l.filter((x) => x !== s)))} />
-                  <span style={{ fontSize: 14 }}>{s}</span>
+                  <span>{s}</span>
                 </label>
               ))}
             </div>
-            <Errors list={errs.byField.mentions} />
+            <Problems list={tried || listed.length > 0 ? errs.byField.mentions : undefined} />
           </fieldset>
         </>
       )}
 
-      {mode !== 'profile' && errs.count > 0 && <span className="hint">These problems stop the accept. You can save the draft now and fix them later.</span>}
-      <Errors list={[...errs.other, ...serverErrors]} />
-      {serverErrors.includes(STALE_PROFILE_MESSAGE) && (
-        <div><button type="button" className="btn" onClick={async () => { if (await reload()) setServerErrors([]); }}>Load the new version</button></div>
-      )}
-      <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-        <button className="btn btn-dark" type="submit" disabled={busy || (mode === 'profile' && errs.count > 0)}>{busy ? 'Saving…' : 'Save'}</button>
-        <button className="btn" type="button" onClick={onCancel}>Cancel</button>
+      <div className="pf-wide pf-stack-tight">
+        {mode !== 'profile' && errs.count > 0 && <p className="pf-note">These problems stop the accept. You can save the draft now and fix them later.</p>}
+        <Problems list={tried || touched.size > 0 ? errs.other : undefined} />
+        <Problems live list={serverErrors} />
+        {serverErrors.includes(STALE_PROFILE_MESSAGE) && (
+          <div><Button onClick={async () => { if (await reload()) setServerErrors([]); }}>Load the new version</Button></div>
+        )}
+      </div>
+      <div className="pf-wide pf-actions">
+        <Button variant="go" type="submit" busy={busy}>{busy ? 'Saving…' : 'Save'}</Button>
+        <Button onClick={onCancel}>Cancel</Button>
       </div>
     </form>
   );

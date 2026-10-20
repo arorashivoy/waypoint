@@ -1,14 +1,14 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Field, Fold } from '../ui';
+import FileButton from './FileButton';
+import { countOf, emptySearchText, FILE_ACCEPT } from './model';
 
 export default function LinkedInPanel({ state, refresh, setToast }: { state: any; refresh: () => Promise<any>; setToast: (s: string) => void }) {
-  const input = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
 
   const upload = async (file: File) => {
-    setBusy(true);
     try {
       const form = new FormData();
       form.append('file', file);
@@ -18,13 +18,11 @@ export default function LinkedInPanel({ state, refresh, setToast }: { state: any
       await refresh();
       setToast(
         data.scope === 'contacts'
-          ? `Refreshed ${data.counts.contacts} connections. Profile and job analyses left as they were.`
-          : `Made ${data.drafts} ${data.drafts === 1 ? 'draft' : 'drafts'} and refreshed ${data.counts.contacts ?? 0} connections. Review the drafts in this tab.`,
+          ? `Refreshed ${countOf(data.counts.contacts, 'connection')}. Profile and job analyses left as they were.`
+          : `Made ${countOf(data.drafts, 'draft')} and refreshed ${countOf(data.counts.contacts ?? 0, 'connection')}. Review the drafts at the top of this tab.`,
       );
     } catch (e) {
       setToast((e as Error).message);
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -36,9 +34,7 @@ export default function LinkedInPanel({ state, refresh, setToast }: { state: any
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return contacts;
-    return contacts.filter((c) =>
-      `${c.name} ${c.company} ${c.position}`.toLowerCase().includes(q),
-    );
+    return contacts.filter((c) => `${c.name} ${c.company} ${c.position}`.toLowerCase().includes(q));
   }, [contacts, query]);
 
   const importedAt = lastImport
@@ -56,131 +52,95 @@ export default function LinkedInPanel({ state, refresh, setToast }: { state: any
     : [];
 
   return (
-    <div className="stack" style={{ gap: 20 }}>
-            <div className="panel stack" style={{ gap: 18, padding: 28 }}>
-              <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
-                <h2 className="display grow" style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>How this data got here</h2>
-                <button className="btn" style={{ height: 44, fontSize: 14 }} onClick={() => input.current?.click()} disabled={busy}>
-                  {busy ? 'Reading…' : lastImport ? 'Re-import' : 'Import export'}
-                </button>
-                <input
-                  ref={input}
-                  type="file"
-                  accept=".zip,.csv"
-                  hidden
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }}
-                />
-              </div>
-
-              {!lastImport ? (
-                <div className="empty" style={{ fontSize: 14, padding: 18 }}>
-                  No LinkedIn export imported yet. Signing in with LinkedIn (OpenID Connect) returns your name, email and
-                  photo and nothing else — your experience, projects and connections exist only in the data archive. In
-                  LinkedIn go to <strong>Settings → Data privacy → Get a copy of your data</strong>, pick the full
-                  archive, and upload the .zip here.
-                </div>
-              ) : (
-                <>
-                  <div className="stack" style={{ gap: 4 }}>
-                    <span style={{ fontSize: 15, lineHeight: 1.5 }}>
-                      Imported from <strong>{lastImport.filename}</strong> on {importedAt}.
-                    </span>
-                    <span style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.5 }}>
-                      Name, email and photo come from LinkedIn sign-in. Everything below came out of that archive — the
-                      API returns none of it.
-                    </span>
-                  </div>
-                  <div className="two-col-tight">
-                    {counts.map(([label, n]) => (
-                      <div key={label} className="row" style={{ gap: 8, padding: '8px 0', borderBottom: '1px solid var(--line-2)' }}>
-                        <span className="grow" style={{ fontSize: 14 }}>{label}</span>
-                        <span className="mono" style={{ fontSize: 14 }}>{n}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="panel stack" style={{ gap: 16, padding: 28 }}>
-              <div className="stack" style={{ gap: 4 }}>
-                <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-                  <h2 className="display grow" style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Connections</h2>
-                  <span className="mono" style={{ fontSize: 18 }}>{contactCount}</span>
-                </div>
-                <span style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.5 }}>
-                  These 1st-degree connections are what referral routing runs on: a job at one of the companies below
-                  gets a named contact, and a company absent from this list gets an honest empty list instead.
+    <div className="pf-stack">
+      <section className="glass ui-panel" aria-label="LinkedIn">
+        <h2 className="ui-panel-title">LinkedIn</h2>
+        <div className="pf-source">
+          <div className="pf-source-text">
+            {lastImport ? (
+              <>
+                <strong>{lastImport.filename}</strong>
+                <span className="pf-note">Imported on {importedAt}. Sign-in gives only your name, email and photo. The rest came from the archive.</span>
+              </>
+            ) : (
+              <>
+                <strong>No LinkedIn export yet</strong>
+                <span className="pf-note">
+                  In LinkedIn, open <em>Settings, Data privacy, Get a copy of your data</em>. Pick the full archive and upload the .zip here.
+                  Your experience, projects and connections exist only in that archive.
                 </span>
+              </>
+            )}
+          </div>
+          <FileButton label={lastImport ? 'Import again' : 'Import an export'} accept={FILE_ACCEPT.linkedin} run={upload} />
+        </div>
+        {lastImport && (
+          <dl className="pf-counts">
+            {counts.map(([label, n]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>{n}</dd>
               </div>
+            ))}
+          </dl>
+        )}
+      </section>
 
-              {contactCount === 0 ? (
-                <div className="empty" style={{ fontSize: 14, padding: 18 }}>
-                  No connections imported. <code>Connections.csv</code> lives in the LinkedIn data archive; without it
-                  every job falls back to “no 1st-degree contact found”.
-                </div>
-              ) : (
-                <>
-                  <div className="stack" style={{ gap: 8 }}>
-                    <h3 className="label">Where they work, top {topCompanies.length}</h3>
+      <Fold title="Connections" status={contactCount === 0 ? 'None imported' : `${contactCount} first-degree`}>
+        <div className="pf-stack-tight">
+          <p className="pf-note">
+            Referral routing runs on these connections. A job at one of these companies gets a named contact. A company that is not here gets an honest empty list.
+          </p>
+          {contactCount === 0 ? (
+            <p className="pf-note">
+              No connections imported. <code>Connections.csv</code> is in the LinkedIn archive. Without it, every job says “no 1st-degree contact found”.
+            </p>
+          ) : (
+            <>
+              {topCompanies.length > 0 && (
+                <div className="pf-stack-tight">
+                  <span className="pf-group-title">Where they work, top {topCompanies.length}</span>
+                  <ul className="pf-rows">
                     {topCompanies.map((c) => (
-                      <div key={c.company} className="row" style={{ gap: 10, padding: '6px 0', borderBottom: '1px solid var(--line-2)' }}>
-                        <span className="grow" style={{ fontSize: 14, minWidth: 0, overflowWrap: 'anywhere' }}>{c.company}</span>
-                        <span className="mono" style={{ fontSize: 13, color: 'var(--muted-3)' }}>{c.count}</span>
-                      </div>
+                      <li key={c.company} className="pf-row pf-row-tight">
+                        <span className="pf-row-title">{c.company}</span>
+                        <span className="pf-count">{c.count}</span>
+                      </li>
                     ))}
-                  </div>
-
-                  <div className="stack" style={{ gap: 10 }}>
-                    <label className="sr-only" htmlFor="wp-contact-search">Search connections</label>
-                    <input
-                      id="wp-contact-search"
-                      className="field"
-                      type="search"
-                      placeholder="Search name, company or role"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
-                    <span className="mono" style={{ fontSize: 12, color: 'var(--muted-3)' }}>
-                      {shown.length} shown
-                      {capped && ` · newest ${contacts.length} of ${contactCount} sent to this screen; routing still searches all of them`}
-                    </span>
-
-                    <div className="stack" style={{ gap: 8, maxHeight: 520, overflowY: 'auto' }}>
-                      {shown.length === 0 && (
-                        <div className="empty" style={{ fontSize: 14, padding: 18 }}>No connection matches “{query}”.</div>
-                      )}
-                      {shown.map((c) => {
-                        const body = (
-                          <>
-                            <span className="avatar avatar-light avatar-sm">{c.init}</span>
-                            <span className="stack grow" style={{ minWidth: 0, gap: 1 }}>
-                              <span style={{ fontSize: 15, fontWeight: 600, overflowWrap: 'anywhere', color: 'var(--ink)' }}>{c.name}</span>
-                              <span style={{ fontSize: 13, color: 'var(--muted)', overflowWrap: 'anywhere' }}>
-                                {[c.position, c.company].filter(Boolean).join(' · ') || 'No role in the export'}
-                              </span>
-                              <span className="mono" style={{ fontSize: 11, color: 'var(--muted-3)' }}>
-                                {c.connected ? `Connected ${c.connected}` : 'Connection date not in the export'}
-                              </span>
-                            </span>
-                            {c.profileUrl && <span style={{ fontSize: 13, color: 'var(--link)', flexShrink: 0 }}>↗</span>}
-                          </>
-                        );
-                        // The whole card is the link, so the touch target is the
-                        // full row rather than a button squeezed beside wrapping text.
-                        return c.profileUrl ? (
-                          <a key={c.id} className="contact" href={c.profileUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-                            {body}
-                          </a>
-                        ) : (
-                          <div key={c.id} className="contact">{body}</div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </>
+                  </ul>
+                </div>
               )}
-            </div>
+              <Field label="Search connections">
+                {(c) => <input {...c} type="search" placeholder="Name, company or role" value={query} onChange={(e) => setQuery(e.target.value)} />}
+              </Field>
+              <p className="pf-note" aria-live="polite">
+                {shown.length} shown{capped && `. The newest ${contacts.length} of ${contactCount} are on this screen. Routing still searches all of them.`}
+              </p>
+              <div className="pf-contacts">
+                {shown.length === 0 && <p className="pf-note">{emptySearchText(query, 'connection')}</p>}
+                {shown.map((c) => {
+                  const body = (
+                    <>
+                      <span className="avatar avatar-light avatar-sm">{c.init}</span>
+                      <span className="pf-row-text">
+                        <span className="pf-row-title">{c.name}</span>
+                        <span className="pf-row-sub">{[c.position, c.company].filter(Boolean).join(', ') || 'No role in the export'}</span>
+                        <span className="pf-row-sub">{c.connected ? `Connected ${c.connected}` : 'Connection date not in the export'}</span>
+                      </span>
+                      {c.profileUrl && <span className="pf-out" aria-hidden="true">↗</span>}
+                    </>
+                  );
+                  return c.profileUrl ? (
+                    <a key={c.id} className="contact pf-contact" href={c.profileUrl} target="_blank" rel="noreferrer">{body}<span className="sr-only">Opens the LinkedIn profile in a new tab.</span></a>
+                  ) : (
+                    <div key={c.id} className="contact pf-contact">{body}</div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </Fold>
     </div>
   );
 }

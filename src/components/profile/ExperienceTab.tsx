@@ -4,12 +4,15 @@ import { useEffect, useRef, useState } from 'react';
 import { STALE_PROFILE_MESSAGE } from '@/lib/profile/stale';
 import type { ClaimsDoc } from '@/lib/profile/doc';
 import { ApiError, put } from '../api';
+import { Button, Field, Fold } from '../ui';
+import Problems from './Problems';
+import type { ProfileTab } from './model';
 import ItemList from './ItemList';
 import { useProfileVersion } from './version';
 
-type Props = { doc: ClaimsDoc; levels?: string[]; onSaved: (reply: any) => void; setToast: (s: string) => void };
+type Props = { doc: ClaimsDoc; levels?: string[]; onSaved: (reply: any) => void; setToast: (s: string) => void; onGoto?: (tab: ProfileTab) => void };
 
-export default function ExperienceTab({ doc, levels, onSaved, setToast }: Props) {
+export default function ExperienceTab({ doc, levels, onSaved, setToast, onGoto }: Props) {
   const [name, setName] = useState(doc.profile.name);
   const [headline, setHeadline] = useState(doc.profile.headline);
   const [errors, setErrors] = useState<string[]>([]);
@@ -45,24 +48,49 @@ export default function ExperienceTab({ doc, levels, onSaved, setToast }: Props)
     }
   };
   return (
-    <>
-      <section className="card stack" style={{ gap: 12, padding: 20, marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 20 }}>Name and headline</h2>
-        <label className="label" htmlFor="p-name">Name</label>
-        <input id="p-name" className="field" value={name} onChange={(e) => setName(e.target.value)} />
-        <label className="label" htmlFor="p-headline">Headline</label>
-        <input id="p-headline" className="field" value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="For example: Backend engineer, Java and Kafka" />
-        {errors.length > 0 && <ul className="err" role="alert">{errors.map((e) => <li key={e}>{e}</li>)}</ul>}
-        {errors.includes(STALE_PROFILE_MESSAGE) && <div><button className="btn" onClick={loadNew}>Load the new version</button></div>}
-        <div><button className="btn btn-dark" onClick={saveMeta} disabled={!name.trim()}>Save</button></div>
+    <div className="pf-stack">
+      <section className="glass ui-panel pf-meta" aria-label="Name and headline">
+        <h2 className="ui-panel-title">Name and headline</h2>
+        <div className="pf-fields">
+          <Field label="Name">{(c) => <input {...c} type="text" value={name} onChange={(e) => setName(e.target.value)} />}</Field>
+          <Field label="Headline" hint="For example: Backend engineer, Java and Kafka">
+            {(c) => <input {...c} type="text" value={headline} onChange={(e) => setHeadline(e.target.value)} />}
+          </Field>
+        </div>
+        <Problems live list={errors} />
+        <div className="pf-actions">
+          <Button variant="go" onClick={saveMeta} disabled={!name.trim()}>Save</Button>
+          {errors.includes(STALE_PROFILE_MESSAGE) && <Button onClick={loadNew}>Load the new version</Button>}
+        </div>
       </section>
-      <ItemList kind="position" title="Experience" empty="No positions yet. Add one, or import a résumé or a LinkedIn export in the Imports tab." items={doc.targets.positions} doc={doc} onSaved={onSaved} setToast={setToast} />
-      <ItemList kind="education" title="Education" empty="No education yet. The alumni referral route needs a school." items={doc.targets.educations} doc={doc} onSaved={onSaved} setToast={setToast} />
-      <section className="card stack" style={{ gap: 8, padding: 20, marginTop: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 20 }}>Inferred level</h2>
-        <span>{levels?.length ? levels.join(' and ') : 'No level yet.'}</span>
-        <span className="hint">Waypoint reads this level from the titles and dates of your positions. It sets the “From LinkedIn” level filter on the Jobs screen. It also sets the level part of each match score. You cannot edit it. Change your positions to change it.</span>
-      </section>
-    </>
+      <ItemList
+        kind="position"
+        title="Experience"
+        noun="position"
+        primary
+        empty={{ cause: 'No positions yet.', detail: 'Add one, or import a résumé or a LinkedIn export on the Imports tab.', alt: onGoto && { label: 'Go to Imports', onClick: () => onGoto('imports') } }}
+        items={doc.targets.positions}
+        doc={doc}
+        onSaved={onSaved}
+        setToast={setToast}
+      />
+      <ItemList
+        kind="education"
+        title="Education"
+        noun="school"
+        addLabel="Add education"
+        empty={{ cause: 'No education yet.', detail: 'The alumni referral route needs a school.' }}
+        items={doc.targets.educations}
+        doc={doc}
+        onSaved={onSaved}
+        setToast={setToast}
+      />
+      <Fold title="Inferred level" status={levels?.length ? levels.join(' and ') : 'No level yet'}>
+        <p className="pf-note">
+          Waypoint reads this level from the titles and dates of your positions. It sets the “From LinkedIn” level filter on the Jobs screen and the level part of each match score.
+          You cannot edit it. Change your positions to change it.
+        </p>
+      </Fold>
+    </div>
   );
 }

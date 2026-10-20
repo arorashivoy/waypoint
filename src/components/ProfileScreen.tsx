@@ -1,30 +1,53 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { STALE_PROFILE_MESSAGE } from '@/lib/profile/stale';
 import { ApiError } from './api';
 import { useProfile, type ProfileData } from './data';
-import { ErrorNote } from './ui';
+import { Badge, ErrorNote, Skeleton, Tabs } from './ui';
+import { PROFILE_TABS, readTab, tabQuery, type ProfileTab } from './profile/model';
 import { ProfileVersionContext } from './profile/version';
 import ExperienceTab from './profile/ExperienceTab';
 import ProjectsTab from './profile/ProjectsTab';
 import ClaimsTab from './profile/ClaimsTab';
 import ImportsTab from './profile/ImportsTab';
+import ResumeTab from './profile/ResumeTab';
 
-type Tab = 'experience' | 'projects' | 'claims' | 'imports';
-
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'experience', label: 'Experience' },
-  { key: 'projects', label: 'Projects' },
-  { key: 'claims', label: 'Claims' },
-  { key: 'imports', label: 'Imports' },
-];
+/** True from 640 px: the sections are a list on the left. Under 640 px they are tabs across the top. */
+function useSideList() {
+  const [side, setSide] = useState(false);
+  useEffect(() => {
+    const q = window.matchMedia('(min-width: 640px)');
+    const update = () => setSide(q.matches);
+    update();
+    q.addEventListener('change', update);
+    return () => q.removeEventListener('change', update);
+  }, []);
+  return side;
+}
 
 export default function ProfileScreen({ state: me, refresh, setToast }: { state: any; refresh: () => Promise<any>; setToast: (s: string) => void }) {
-  const [tab, setTab] = useState<Tab>('experience');
+  const [tab, setTab] = useState<ProfileTab>('experience');
+  const side = useSideList();
   const { data, error, mutate } = useProfile();
   // The tabs read the summary, the contacts and the last import from the same state as before.
   const state = useMemo(() => (data ? { ...me, ...data.view } : me), [me, data]);
+
+  // The tab is in the URL (?view=profile&tab=claims), so a reload or a shared link keeps it.
+  useEffect(() => {
+    setTab(readTab(window.location.search));
+    const onPop = () => setTab(readTab(window.location.search));
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  // On a phone the tab strip scrolls sideways: bring the chosen tab into view.
+  useEffect(() => {
+    document.querySelector<HTMLElement>('.pf [role="tab"][aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, [tab, side, data]);
+  const choose = useCallback((next: ProfileTab) => {
+    setTab(next);
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${tabQuery(next)}`);
+  }, []);
 
   /** After a change: the new profile, and the other screens, because job scores read the profile. */
   const changed = useCallback(async () => {
@@ -55,46 +78,55 @@ export default function ProfileScreen({ state: me, refresh, setToast }: { state:
     [data?.version, mutate],
   );
 
-  const onKey = (e: React.KeyboardEvent, i: number) => {
-    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-    const next = TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length];
-    setTab(next.key);
-    document.getElementById(`tab-${next.key}`)?.focus();
+  const drafts = data?.pendingDrafts ?? 0;
+  const panel = (id: ProfileTab) => {
+    if (!data || id !== tab) return null;
+    switch (id) {
+      case 'experience': return <ExperienceTab doc={data.doc} levels={me?.levels} onSaved={onSaved} setToast={setToast} onGoto={choose} />;
+      case 'projects': return <ProjectsTab doc={data.doc} onSaved={onSaved} setToast={setToast} onGoto={choose} />;
+      case 'claims': return <ClaimsTab doc={data.doc} warnings={data.warnings} onSaved={onSaved} setToast={setToast} />;
+      case 'imports': return <ImportsTab doc={data.doc} version={data.version} state={state} changed={changed} setToast={setToast} onCount={onCount} />;
+      case 'resume': return <ResumeTab state={state} version={data.version} changed={changed} setToast={setToast} />;
+    }
   };
 
   return (
     <ProfileVersionContext.Provider value={version}>
       <header className="screen-head">
         <h1 className="display">Profile</h1>
-        <span className="sub">{data ? [data.doc.profile.name, data.doc.profile.headline].filter(Boolean).join(' · ') : 'Loading…'}</span>
+        <p className="sub">{data ? [data.doc.profile.name, data.doc.profile.headline].filter(Boolean).join(', ') || 'Add your name and headline on the Experience tab.' : 'Loading your profile'}</p>
       </header>
-      <div role="tablist" aria-label="Profile sections" className="tabs">
-        {TABS.map((t, i) => (
-          <button key={t.key} id={`tab-${t.key}`} role="tab" aria-selected={tab === t.key} aria-controls={`panel-${t.key}`} tabIndex={tab === t.key ? 0 : -1} className="tab-btn" onClick={() => setTab(t.key)} onKeyDown={(e) => onKey(e, i)}>
-            {t.label}
-            {t.key === 'imports' && (data?.pendingDrafts ?? 0) > 0 && <span className="badge mono">{data!.pendingDrafts}</span>}
-          </button>
-        ))}
-      </div>
-      <div className="profile-body" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        <div style={{ maxWidth: 860, minWidth: 0 }}>
-          {!data ? (
-            error ? (
-              <ErrorNote live what="Waypoint could not load your profile." fix={`${error.message} Check your connection, then try again.`} onRetry={() => { mutate(); }} />
-            ) : (
-              <div className="empty">Loading the profile…</div>
-            )
-          ) : tab === 'experience' ? (
-            <ExperienceTab doc={data.doc} levels={me?.levels} onSaved={onSaved} setToast={setToast} />
-          ) : tab === 'projects' ? (
-            <ProjectsTab doc={data.doc} onSaved={onSaved} setToast={setToast} />
-          ) : tab === 'claims' ? (
-            <ClaimsTab doc={data.doc} warnings={data.warnings} onSaved={onSaved} setToast={setToast} />
+      <div className="pf">
+        {!data ? (
+          error ? (
+            <ErrorNote live what="Waypoint could not load your profile." fix={`${error.message.replace(/\.?$/, '.')} Check your connection, then try again.`} onRetry={() => { mutate(); }} />
           ) : (
-            <ImportsTab doc={data.doc} version={data.version} state={state} changed={changed} setToast={setToast} onCount={onCount} />
-          )}
-        </div>
+            <Skeleton rows={4} />
+          )
+        ) : (
+          <Tabs
+            label="Profile sections"
+            orientation={side ? 'vertical' : 'horizontal'}
+            value={tab}
+            onChange={(id) => choose(id as ProfileTab)}
+            tabs={PROFILE_TABS.map((t) => ({
+              id: t.id,
+              label:
+                t.id === 'imports' && drafts > 0 ? (
+                  <>
+                    {t.label} <Badge tone="coral">{drafts}</Badge>
+                    <span className="sr-only">{countOfDrafts(drafts)}</span>
+                  </>
+                ) : (
+                  t.label
+                ),
+              panel: panel(t.id),
+            }))}
+          />
+        )}
       </div>
     </ProfileVersionContext.Provider>
   );
 }
+
+const countOfDrafts = (n: number) => ` (${n} ${n === 1 ? 'draft waits' : 'drafts wait'} for you)`;

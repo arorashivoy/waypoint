@@ -4,14 +4,32 @@ import { useState } from 'react';
 import type { ClaimsDoc } from '@/lib/profile/doc';
 import { itemKey, type Item, type ItemKind } from '@/lib/profile/apply';
 import { del } from '../api';
+import { Button, EmptyState, Sheet } from '../ui';
 import ItemEditor from './ItemEditor';
 import { summaryOf } from './fields';
+import { actionName } from './model';
 import { useProfileVersion } from './version';
 
-type Props = { kind: ItemKind; title: string; empty: string; items: Item[]; doc: ClaimsDoc; onSaved: (reply: any) => void; setToast: (s: string) => void };
+/** Why a list is empty, and what the user can do. `none` leaves out the action (an empty search has nothing to add). */
+export type EmptyCopy = { cause: string; detail?: string; alt?: { label: string; onClick: () => void }; none?: boolean };
 
-/** One section of the profile: the items of one kind, with Add, Edit and Remove. */
-export default function ItemList({ kind, title, empty, items, doc, onSaved, setToast }: Props) {
+type Props = {
+  kind: ItemKind;
+  title: string;
+  /** One item in the singular: "position". The Add button and the sheet use it. */
+  noun: string;
+  addLabel?: string;
+  /** The Add button is the main action of the tab. Only one list in a tab sets it. */
+  primary?: boolean;
+  empty: EmptyCopy;
+  items: Item[];
+  doc: ClaimsDoc;
+  onSaved: (reply: any) => void;
+  setToast: (s: string) => void;
+};
+
+/** One section of the profile: the items of one kind, with Add, Edit and Remove. The editor opens in a sheet. */
+export default function ItemList({ kind, title, noun, addLabel = `Add a ${noun}`, primary, empty, items, doc, onSaved, setToast }: Props) {
   const [editing, setEditing] = useState<string | null>(null); // an item key, or '+new'
   const [removing, setRemoving] = useState<string | null>(null);
   const { version, onStale } = useProfileVersion();
@@ -19,7 +37,7 @@ export default function ItemList({ kind, title, empty, items, doc, onSaved, setT
   const remove = async (key: string) => {
     try {
       onSaved(await del(`/api/profile/items/${kind}/${encodeURIComponent(key)}?version=${version}`));
-      setToast('Removed. The history in the Imports tab can put it back.');
+      setToast('Removed. The history in the Résumé tab can put it back.');
     } catch (e) {
       onStale(e);
       setToast((e as Error).message);
@@ -28,43 +46,64 @@ export default function ItemList({ kind, title, empty, items, doc, onSaved, setT
     }
   };
 
+  const editingItem = editing && editing !== '+new' ? items.find((i) => itemKey(kind, i) === editing) ?? null : null;
+  const close = () => setEditing(null);
+
   return (
-    <section className="card stack" style={{ gap: 12, padding: 20, marginBottom: 20 }}>
-      <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
-        <h2 className="grow" style={{ margin: 0, fontSize: 20 }}>{title}</h2>
-        <button className="btn" onClick={() => setEditing('+new')} disabled={editing !== null}>Add</button>
+    <section className="pf-section" aria-label={title}>
+      <div className="pf-head">
+        <h2>{title}</h2>
+        {items.length > 0 && <Button variant={primary ? 'go' : 'plain'} onClick={() => setEditing('+new')}>{addLabel}</Button>}
       </div>
-      {editing === '+new' && (
-        <ItemEditor kind={kind} doc={doc} itemKey={null} item={null} mode="profile" onCancel={() => setEditing(null)} onDone={(r) => { setEditing(null); onSaved(r); }} />
+
+      {items.length === 0 ? (
+        <div className="pf-empty">
+          <EmptyState cause={empty.cause} detail={empty.detail} action={empty.none ? undefined : { label: addLabel, onClick: () => setEditing('+new') }} />
+          {empty.alt && !empty.none && <Button variant="link" onClick={empty.alt.onClick}>{empty.alt.label}</Button>}
+        </div>
+      ) : (
+        <ul className="pf-rows">
+          {items.map((item) => {
+            const key = itemKey(kind, item);
+            const s = summaryOf(kind, item);
+            return (
+              <li key={key} className="pf-row">
+                <span className="pf-row-text">
+                  <span className="pf-row-title">{s.title}</span>
+                  {s.sub && <span className="pf-row-sub">{s.sub}</span>}
+                </span>
+                {removing === key ? (
+                  <span className="pf-row-actions" role="group" aria-label={actionName('Remove', s.title)}>
+                    <span className="pf-ask">Remove it?</span>
+                    <Button aria-label={`Yes, remove ${s.title}`} onClick={() => remove(key)}>Yes</Button>
+                    <Button aria-label={`Keep ${s.title}`} onClick={() => setRemoving(null)}>No</Button>
+                  </span>
+                ) : (
+                  <span className="pf-row-actions">
+                    <Button aria-label={actionName('Edit', s.title)} onClick={() => setEditing(key)}>Edit</Button>
+                    <Button aria-label={actionName('Remove', s.title)} onClick={() => setRemoving(key)}>Remove</Button>
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       )}
-      {items.length === 0 && editing !== '+new' && <div className="empty" style={{ fontSize: 14, padding: 18 }}>{empty}</div>}
-      {items.map((item) => {
-        const key = itemKey(kind, item);
-        if (editing === key) {
-          return <ItemEditor key={key} kind={kind} doc={doc} itemKey={key} item={item} mode="profile" onCancel={() => setEditing(null)} onDone={(r) => { setEditing(null); onSaved(r); }} />;
-        }
-        const s = summaryOf(kind, item);
-        return (
-          <div key={key} className="row item-row" style={{ gap: 12, flexWrap: 'wrap', borderTop: '1px solid var(--line)', paddingTop: 10 }}>
-            <span className="stack grow" style={{ minWidth: 0, gap: 2 }}>
-              <span style={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{s.title}</span>
-              {s.sub && <span style={{ fontSize: 14, color: 'var(--muted)', overflowWrap: 'anywhere' }}>{s.sub}</span>}
-            </span>
-            {removing === key ? (
-              <span className="row" style={{ gap: 8 }}>
-                <span>Remove?</span>
-                <button className="btn" onClick={() => remove(key)}>Yes</button>
-                <button className="btn" onClick={() => setRemoving(null)}>No</button>
-              </span>
-            ) : (
-              <span className="row" style={{ gap: 8 }}>
-                <button className="btn" onClick={() => setEditing(key)} disabled={editing !== null}>Edit</button>
-                <button className="btn" onClick={() => setRemoving(key)}>Remove</button>
-              </span>
-            )}
-          </div>
-        );
-      })}
+
+      <Sheet open={editing !== null && (editing === '+new' || editingItem !== null)} onClose={close} title={editing === '+new' ? addLabel : `Edit ${noun}`} className="pf-sheet">
+        {editing !== null && (
+          <ItemEditor
+            key={editing}
+            kind={kind}
+            doc={doc}
+            itemKey={editing === '+new' ? null : editing}
+            item={editing === '+new' ? null : editingItem}
+            mode="profile"
+            onCancel={close}
+            onDone={(r) => { close(); onSaved(r); }}
+          />
+        )}
+      </Sheet>
     </section>
   );
 }

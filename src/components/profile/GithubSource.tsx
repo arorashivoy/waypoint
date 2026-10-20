@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { post } from '../api';
 import { runTask } from '../tasks';
+import { Button, Field } from '../ui';
+import { countOf } from './model';
 
 type Repo = { name: string; description: string | null; fork: boolean; language: string | null; stars: number; private: boolean };
 const MAX = 10;
@@ -44,7 +46,7 @@ export default function GithubSource({ done, setToast }: { done: () => Promise<v
         }
       }
       const failed = results.filter((r) => r.status === 'rejected').length;
-      const counts = `Made ${drafts} ${drafts === 1 ? 'draft' : 'drafts'}.${dropped ? ` Dropped ${dropped} items that had no quote from the repository.` : ''}`;
+      const counts = `Made ${countOf(drafts, 'draft')}.${dropped ? ` Dropped ${countOf(dropped, 'item')} that had no quote from the repository.` : ''}`;
       setToast(failed ? `${counts} ${failed} of ${results.length} repositories failed: ${firstError}` : counts);
       setRepos(null);
       await done();
@@ -56,28 +58,30 @@ export default function GithubSource({ done, setToast }: { done: () => Promise<v
   };
 
   return (
-    <div className="stack" style={{ gap: 10 }}>
-      <form className="row" style={{ gap: 8, flexWrap: 'wrap' }} onSubmit={(e) => { e.preventDefault(); list(); }}>
-        <label className="sr-only" htmlFor="gh-user">GitHub user name</label>
-        <input id="gh-user" className="field grow" style={{ minWidth: 0 }} placeholder="GitHub user name" value={username} onChange={(e) => setUsername(e.target.value)} autoCapitalize="off" autoCorrect="off" />
-        <button className="btn" type="submit" disabled={busy || !username.trim()}>{busy && !repos ? 'Reading…' : 'List repositories'}</button>
+    <div className="pf-github">
+      <form className="pf-inline" onSubmit={(e) => { e.preventDefault(); list(); }}>
+        <Field label="GitHub user name">
+          {(c) => <input {...c} type="text" value={username} onChange={(e) => setUsername(e.target.value)} autoCapitalize="off" autoCorrect="off" />}
+        </Field>
+        <Button type="submit" busy={busy && !repos} disabled={busy || !username.trim()}>{busy && !repos ? 'Reading…' : 'List repositories'}</Button>
       </form>
       {repos && (
-        <fieldset className="stack" style={{ gap: 6, border: 0, padding: 0, margin: 0 }}>
-          <legend className="hint">Select up to {MAX}. Claude drafts one project for each, from its README.</legend>
+        <fieldset className="pf-group">
+          <legend className="pf-group-title">Select up to {MAX}. Claude drafts one project for each, from its README.</legend>
+          {repos.length === 0 && <p className="pf-note">This user has no public repositories.</p>}
           {repos.map((r) => {
             const on = picked.includes(r.name);
             return (
-              <label key={r.name} className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
+              <label key={r.name} className="pf-check pf-repo">
                 <input type="checkbox" checked={on} disabled={!on && picked.length >= MAX} onChange={(e) => setPicked((p) => (e.target.checked ? [...p, r.name] : p.filter((x) => x !== r.name)))} />
-                <span className="stack" style={{ minWidth: 0 }}>
-                  <span style={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{r.name}{r.fork ? ' (fork)' : ''}{r.private ? ' (private)' : ''}</span>
-                  <span className="hint" style={{ overflowWrap: 'anywhere' }}>{[r.language, r.description].filter(Boolean).join(' · ')}</span>
+                <span className="pf-row-text">
+                  <span className="pf-row-title">{r.name}{r.fork ? ' (fork)' : ''}{r.private ? ' (private)' : ''}</span>
+                  <span className="pf-row-sub">{[r.language, r.description].filter(Boolean).join(' · ')}</span>
                 </span>
               </label>
             );
           })}
-          <div><button className="btn btn-dark" type="button" disabled={busy || !picked.length} onClick={run}>{busy ? 'Drafting…' : `Import ${picked.length}`}</button></div>
+          <div><Button variant="go" busy={busy} disabled={!picked.length} onClick={run}>{busy ? 'Drafting…' : `Import ${picked.length}`}</Button></div>
         </fieldset>
       )}
     </div>

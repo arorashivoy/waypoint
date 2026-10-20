@@ -4,6 +4,7 @@ import { useSWRConfig } from 'swr';
 import { ApiError, api, post } from './api';
 import { KEYS, useMe, useRefresh, type Me } from './data';
 import { useToast } from './hooks';
+import ProfileScreen from './ProfileScreen';
 import { Interim } from './shell/Interim';
 import { JobsView, PendingView } from './shell/Views';
 import Loading from './shell/Loading';
@@ -85,7 +86,7 @@ export default function Waypoint() {
           <div className="sh-view">
             {loc.view === 'jobs' && <JobsView me={state} refresh={refresh} setToast={setToast} openJob={openJob} closeJob={closeJob} selected={loc.job} goToSettings={() => go('settings')} />}
             {loc.view === 'pending' && <PendingView refresh={refresh} setToast={setToast} onJobs={() => go('jobs')} />}
-            {loc.view === 'profile' && <Interim.Profile state={state} refresh={refresh} setToast={setToast} />}
+            {loc.view === 'profile' && <ProfileScreen state={state} refresh={refresh} setToast={setToast} />}
             {loc.view === 'settings' && <Interim.Settings state={state} setToast={setToast} toggleCountry={toggleCountry} />}
           </div>
         </main>
