@@ -250,20 +250,39 @@ function eachPixel(g: Glyph, k: number, W: number, H: number, fn: (o: number) =>
 
 /** How far (in glyph places) from a ligature part the glyphs are looked at that stay out of its shared band. */
 const BAND_REACH = 12;
-/** The shared band reaches this far (in font sizes) along the line from the part. A word space is wider, so the next word keeps its ink. */
-const BAND_MARGIN = 0.2;
+/** The shared band reaches this far (in font sizes) along the line from the part: the same zone as a glyph with almost no advance. */
+const BAND_MARGIN = 1;
+/** A glyph of another span stays out of the band when it touches the word (a gap of at most 0.05 font size) by a chain of at most this many links. */
+const BAND_LINKS = 3;
 
 /**
  * Marks as shared (-2) the pixels of the line band of ligature part `i`: from the descent to the ascent, and
- * 0.2 font size to each side of the part. The box of its lead and the boxes of the glyphs of its own span stay free,
- * because the honest ligature draws there. A part that paints a bar can so take the ink only from the glyphs that
- * touch it, not from white text further along the line. Returns the number of pixels visited.
+ * 1 font size to each side of the part. The honest ligature draws in some boxes, so these stay free: the box of its
+ * lead, the boxes of the glyphs of its own span, and the boxes of glyphs of the same size on the same baseline
+ * that touch them by a chain of at most 3 links (a kerning pair breaks a span inside a word). So a part that paints
+ * a bar cannot give its ink to white text within 1 font size, except for at most 3 white glyphs that touch the word.
+ * The first letter of a word after a word-final ligature, in another span within 1 font size, loses its ink (hidden, with the warning).
+ * Returns the number of pixels visited.
  */
 function shareBand(glyphs: readonly Glyph[], i: number, k: number, W: number, H: number, owner: Int32Array): number {
   const g = glyphs[i];
+  const lo = Math.max(0, i - BAND_REACH);
+  const hi = Math.min(glyphs.length - 1, i + BAND_REACH);
+  const along = (h: Glyph) => (h.x - g.x) * g.dx + (h.y - g.y) * g.dy;
+  const aligned = (h: Glyph) =>
+    Math.abs((h.x - g.x) * -g.dy + (h.y - g.y) * g.dx) < 0.1 * g.size && Math.abs(h.size - g.size) < 0.005 * g.size && h.dx * g.dx + h.dy * g.dy > 0.95;
+  const touches = (a: Glyph, b: Glyph) => along(a) <= along(b) + b.len + 0.05 * g.size && along(b) <= along(a) + a.len + 0.05 * g.size;
   const mates = new Set<number>([g.lead as number]);
-  for (let j = Math.max(0, i - BAND_REACH); j <= Math.min(glyphs.length - 1, i + BAND_REACH); j++) {
-    if (j !== i && glyphs[j].span === g.span && glyphs[j].lead === undefined && !isSpace(glyphs[j].c)) mates.add(j);
+  for (let j = lo; j <= hi; j++) if (j !== i && glyphs[j].span === g.span && glyphs[j].lead === undefined && !isSpace(glyphs[j].c)) mates.add(j);
+  for (let round = 0; round < BAND_LINKS; round++) {
+    const add: number[] = [];
+    for (let j = lo; j <= hi; j++) {
+      const h = glyphs[j];
+      if (j === i || mates.has(j) || h.lead !== undefined || isSpace(h.c) || !aligned(h)) continue;
+      if (touches(h, g) || [...mates].some((m) => touches(h, glyphs[m]))) add.push(j);
+    }
+    if (!add.length) break;
+    for (const j of add) mates.add(j);
   }
   const free = new Set<number>();
   let visits = 0;
@@ -511,7 +530,8 @@ function letters(s: string): string {
   return s.normalize('NFKC').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s/gu, '');
 }
 const ALNUM_CHAR = /^[\p{L}\p{N}]$/u;
-const LIGATURE_LETTER = /^[fil]$/;
+/** The letters that a ligature token may stand for: ff, fi, fl, ffi or ffl. */
+const LIGATURE_WORD = /^f(?:f|i|l|fi|fl)$/;
 /** Ghostscript 10.0 gives the first glyph of an f ligature in a font with no Unicode map the text U+6600 (the bytes of "f"). */
 const LIGATURE_LEAD = '\u6600';
 /** Ghostscript 10.0 gives the second glyph of ff, fi, fl, ffi and ffl (no advance) one of these texts. */
@@ -564,7 +584,7 @@ export function matchLetters(want: readonly string[], tokens: readonly Token[]):
     }
     if (tk.kind === 'unknown') return i < want.length && go(i + 1, j + 1);
     for (const k of [tk.n, tk.n + 1].filter((x) => x <= 3)) {
-      if (k >= 2 && i + k <= want.length && want.slice(i, i + k).every((c) => LIGATURE_LETTER.test(c)) && go(i + k, j + 1)) return true;
+      if (k >= 2 && i + k <= want.length && LIGATURE_WORD.test(want.slice(i, i + k).join('')) && go(i + k, j + 1)) return true;
     }
     return false;
   };
