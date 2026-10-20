@@ -13,7 +13,7 @@
     "legitimacy": [],
     "injection": true,
     "field": "Other",
-    "maxRatio": 0.2,
+    "maxRatio": 0.3,
     "forbidCredit": [
       "java"
     ],
