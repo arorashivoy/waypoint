@@ -19,7 +19,7 @@ vi.mock('@/lib/auth/rate-limit', async (orig) => {
 import { db } from '@/lib/db';
 import { POST as login } from '@/app/api/auth/login/route';
 import { POST as signout } from '@/app/api/auth/signout/route';
-import { GET as state } from '@/app/api/state/route';
+import { GET as state } from '@/app/api/me/route';
 import { SESSION_COOKIE } from '@/lib/auth/cookie-name';
 import { FIFTEEN_MINUTES, hitLimit } from '@/lib/auth/rate-limit';
 import { cookieFrom, ctx, makeUser, request, TEST_PASSWORD } from './helpers/http';
@@ -40,7 +40,7 @@ describe('POST /api/auth/login', () => {
     expect(set).toContain('Path=/');
     expect(set).not.toContain(user.id);
     const token = cookieFrom(res)!;
-    const s = await state(request('/api/state', { cookie: `${SESSION_COOKIE}=${token}` }), ctx());
+    const s = await state(request('/api/me', { cookie: `${SESSION_COOKIE}=${token}` }), ctx());
     expect(s.status).toBe(200);
   });
 
@@ -71,7 +71,7 @@ describe('POST /api/auth/login', () => {
     const { user, cookie } = await makeUser();
     await db.user.update({ where: { id: user.id }, data: { disabledAt: new Date() } });
     expect((await tryLogin(user.email, TEST_PASSWORD)).status).toBe(401);
-    const s = await state(request('/api/state', { cookie }), ctx());
+    const s = await state(request('/api/me', { cookie }), ctx());
     expect(s.status).toBe(401);
     expect(await s.json()).toEqual({ error: 'Sign in to continue.' });
   });
@@ -131,6 +131,6 @@ describe('POST /api/auth/signout', () => {
     const res = await signout(request('/api/auth/signout', { method: 'POST', cookie }), ctx());
     expect(res.status).toBe(200);
     expect(res.headers.get('set-cookie')).toMatch(/Max-Age=0/);
-    expect((await state(request('/api/state', { cookie }), ctx())).status).toBe(401);
+    expect((await state(request('/api/me', { cookie }), ctx())).status).toBe(401);
   });
 });

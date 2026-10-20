@@ -4,7 +4,7 @@ import { POST as changePassword } from '@/app/api/account/password/route';
 import { DELETE as endAll, GET as listSessions } from '@/app/api/account/sessions/route';
 import { DELETE as endOne } from '@/app/api/account/sessions/[id]/route';
 import { DELETE as removeKey, GET as claude, PUT as saveKey } from '@/app/api/account/claude/route';
-import { GET as state } from '@/app/api/state/route';
+import { GET as state } from '@/app/api/me/route';
 import { createSession } from '@/lib/auth/session';
 import { SESSION_COOKIE } from '@/lib/auth/cookie-name';
 import { readSecret } from '@/lib/secrets';
@@ -12,7 +12,7 @@ import { ctx, makeUser, request, TEST_PASSWORD } from './helpers/http';
 
 const NEW_PW = 'granite meadow sparrow 808';
 const KEY = 'sk-ant-api03-' + 'a'.repeat(40) + 'WXYZ';
-const alive = async (cookie: string) => (await state(request('/api/state', { cookie }), ctx())).status === 200;
+const alive = async (cookie: string) => (await state(request('/api/me', { cookie }), ctx())).status === 200;
 
 describe('POST /api/account/password', () => {
   it('changes the password and ends the other sessions only', async () => {
@@ -73,7 +73,7 @@ describe('own Claude key', () => {
     expect(body.mode).toBe('own');
     expect(JSON.stringify(body)).not.toContain(KEY);
     expect(JSON.stringify(await (await claude(request('/api/account/claude', { cookie }), ctx())).json())).not.toContain(KEY);
-    expect(JSON.stringify(await (await state(request('/api/state', { cookie }), ctx())).json())).not.toContain(KEY);
+    expect(JSON.stringify(await (await state(request('/api/me', { cookie }), ctx())).json())).not.toContain(KEY);
     expect(await readSecret(user.id, 'anthropic')).toBe(KEY);
   });
 

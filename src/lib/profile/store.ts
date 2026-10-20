@@ -3,6 +3,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { db } from '../db';
 import { HttpError } from '../auth/http';
 import { checkOwnTex } from '../resume/own-tex';
+import { STALE_PROFILE_MESSAGE } from './stale';
 import { checkDoc, emptyDoc, type ClaimKind, type ClaimsDoc, type Depth, type ProjectSource, type Rel, type Surface } from './doc';
 
 /**
@@ -23,6 +24,13 @@ const REVISIONS_KEPT = 50;
 export class ProfileError extends HttpError {
   constructor(public errors: string[]) {
     super(422, 'The profile has errors. Fix them and save again.', { errors });
+  }
+}
+
+/** The caller wrote from an older version of the profile than the one in the database. */
+export class StaleProfileError extends HttpError {
+  constructor() {
+    super(409, STALE_PROFILE_MESSAGE);
   }
 }
 
@@ -211,11 +219,35 @@ async function writeRows(tx: Tx, userId: string, doc: ClaimsDoc): Promise<number
 }
 
 /**
+ * Checks that the profile is still at the version that the caller loaded. The
+ * check is a write that matches only that version, so it takes the database
+ * lock: of 2 writes that start together, the second sees the new version and
+ * fails. Version 0 means "no profile yet"; there the unique key of ProfileMeta
+ * stops the second write.
+ */
+async function assertVersion(tx: Tx, userId: string, expected: number): Promise<void> {
+  if (expected === 0) {
+    if (await tx.profileMeta.findUnique({ where: { userId }, select: { userId: true } })) throw new StaleProfileError();
+    return;
+  }
+  const held = await tx.profileMeta.updateMany({ where: { userId, version: expected }, data: { version: expected } });
+  if (held.count !== 1) throw new StaleProfileError();
+}
+
+/**
  * The one write path for a profile. It refuses a document with errors
  * (ProfileError, 422) and changes nothing then. `extra` runs in the same
  * transaction, after the rows are written; if it throws, nothing is saved.
+ * `expectedVersion` is the version that the caller loaded. If the profile has
+ * another version now, the write fails with StaleProfileError (409).
  */
-export async function saveProfile(userId: string, next: ClaimsDoc, note: string, extra?: (tx: Tx) => Promise<void>): Promise<{ warnings: string[]; version: number }> {
+export async function saveProfile(
+  userId: string,
+  next: ClaimsDoc,
+  note: string,
+  extra?: (tx: Tx) => Promise<void>,
+  expectedVersion?: number,
+): Promise<{ warnings: string[]; version: number }> {
   const check = checkDoc(next);
   if (!check.doc) throw new ProfileError(check.errors);
   const doc = check.doc;
@@ -228,6 +260,7 @@ export async function saveProfile(userId: string, next: ClaimsDoc, note: string,
   try {
     const version = await db.$transaction(
       async (tx) => {
+        if (expectedVersion !== undefined) await assertVersion(tx, userId, expectedVersion);
         const before = await readProfileDoc(tx, userId);
         const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } });
         await tx.profileRevision.create({ data: { userId, snapshot: JSON.stringify(before ?? emptyDoc(user.name)), note: note.slice(0, 300) } });
@@ -242,6 +275,10 @@ export async function saveProfile(userId: string, next: ClaimsDoc, note: string,
     // The base résumé of the template follows the profile. The import is late: resume.ts reads this module.
     await (await import('../resume/base')).queueBaseResume(userId);
     return { warnings: check.warnings, version };
+  } catch (e) {
+    // Two first writes at once: the second fails on the unique key of ProfileMeta.
+    if (expectedVersion === 0 && (e as { code?: string }).code === 'P2002') throw new StaleProfileError();
+    throw e;
   } finally {
     forgetProfile(userId);
   }
@@ -252,9 +289,9 @@ export async function listRevisions(userId: string): Promise<{ id: string; note:
 }
 
 /** Puts the state of a revision back. The restore writes a revision too, so it can be undone. */
-export async function restoreRevision(userId: string, id: string): Promise<{ warnings: string[]; version: number }> {
+export async function restoreRevision(userId: string, id: string, expectedVersion?: number): Promise<{ warnings: string[]; version: number }> {
   const rev = await db.profileRevision.findFirst({ where: { id, userId } });
   if (!rev) throw new HttpError(404, 'Not found.');
   const day = rev.createdAt.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
-  return saveProfile(userId, JSON.parse(rev.snapshot) as ClaimsDoc, `Restored the profile from ${day} UTC`);
+  return saveProfile(userId, JSON.parse(rev.snapshot) as ClaimsDoc, `Restored the profile from ${day} UTC`, undefined, expectedVersion);
 }

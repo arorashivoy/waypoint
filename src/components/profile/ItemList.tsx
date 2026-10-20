@@ -6,6 +6,7 @@ import { itemKey, type Item, type ItemKind } from '@/lib/profile/apply';
 import { del } from '../api';
 import ItemEditor from './ItemEditor';
 import { summaryOf } from './fields';
+import { useProfileVersion } from './version';
 
 type Props = { kind: ItemKind; title: string; empty: string; items: Item[]; doc: ClaimsDoc; onSaved: (reply: any) => void; setToast: (s: string) => void };
 
@@ -13,12 +14,14 @@ type Props = { kind: ItemKind; title: string; empty: string; items: Item[]; doc:
 export default function ItemList({ kind, title, empty, items, doc, onSaved, setToast }: Props) {
   const [editing, setEditing] = useState<string | null>(null); // an item key, or '+new'
   const [removing, setRemoving] = useState<string | null>(null);
+  const { version, onStale } = useProfileVersion();
 
   const remove = async (key: string) => {
     try {
-      onSaved(await del(`/api/profile/items/${kind}/${encodeURIComponent(key)}`));
+      onSaved(await del(`/api/profile/items/${kind}/${encodeURIComponent(key)}?version=${version}`));
       setToast('Removed. The history in the Imports tab can put it back.');
     } catch (e) {
+      onStale(e);
       setToast((e as Error).message);
     } finally {
       setRemoving(null);

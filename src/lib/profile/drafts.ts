@@ -173,9 +173,13 @@ export function readIds(body: Record<string, unknown>): string[] {
   return [...new Set(ids as string[])];
 }
 
-export async function acceptDrafts(userId: string, ids: string[]): Promise<{ warnings: string[] }> {
+export async function acceptDrafts(userId: string, ids: string[], expectedVersion?: number): Promise<{ warnings: string[] }> {
   const rows = await db.profileDraft.findMany({ where: { userId, id: { in: ids }, status: 'pending' } });
-  if (rows.length !== ids.length) throw new HttpError(404, 'Not found.');
+  if (rows.length !== ids.length) {
+    // A second accept of the same draft writes nothing.
+    if (await db.profileDraft.count({ where: { userId, id: { in: ids }, status: 'accepted' } })) throw new HttpError(409, 'Those drafts are already accepted. Load the drafts again.');
+    throw new HttpError(404, 'Not found.');
+  }
   if (rows.some((r) => r.type === 'profile') && rows.length > 1) throw new HttpError(400, 'Accept the YAML import on its own.');
   if (rows.some((r) => parseJson<string[]>(r.warnings, []).length && !r.warningsApproved)) {
     throw new HttpError(409, 'Review the warnings on a draft before you accept it.');
@@ -191,7 +195,7 @@ export async function acceptDrafts(userId: string, ids: string[]): Promise<{ war
   const r = await saveProfile(userId, next, note, async (tx) => {
     const moved = await tx.profileDraft.updateMany({ where: { userId, id: { in: ids }, status: 'pending' }, data: { status: 'accepted' } });
     if (moved.count !== ids.length) throw new HttpError(409, 'Some drafts changed in another window. Load the drafts again.');
-  });
+  }, expectedVersion);
   return { warnings: r.warnings };
 }
 

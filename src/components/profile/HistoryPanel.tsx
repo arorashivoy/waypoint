@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api, post } from '../api';
+import { useProfileVersion } from './version';
 
 type Revision = { id: string; note: string; createdAt: string };
 
 export default function HistoryPanel({ version, changed, setToast }: { version: number; changed: () => Promise<void>; setToast: (s: string) => void }) {
+  const { onStale } = useProfileVersion();
   const [revs, setRevs] = useState<Revision[] | null>(null);
   const [asking, setAsking] = useState<string | null>(null);
   const load = useCallback(async () => setRevs((await api<{ revisions: Revision[] }>('/api/profile/revisions')).revisions), []);
@@ -16,10 +18,11 @@ export default function HistoryPanel({ version, changed, setToast }: { version: 
   const restore = async (id: string) => {
     setAsking(null);
     try {
-      await post(`/api/profile/revisions/${id}/restore`);
+      await post(`/api/profile/revisions/${id}/restore`, { version });
       setToast('Restored. The change is in the history too, so you can undo it.');
       await changed();
     } catch (e) {
+      onStale(e);
       setToast((e as Error).message);
     }
   };

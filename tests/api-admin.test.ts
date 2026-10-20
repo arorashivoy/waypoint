@@ -4,7 +4,7 @@ import { POST as invite } from '@/app/api/admin/invites/route';
 import { GET as users } from '@/app/api/admin/users/route';
 import { PATCH as patchUser } from '@/app/api/admin/users/[id]/route';
 import { POST as reset } from '@/app/api/admin/users/[id]/reset/route';
-import { GET as state } from '@/app/api/state/route';
+import { GET as state } from '@/app/api/me/route';
 import { recordUsage } from '@/lib/claude/usage';
 import { ctx, makeUser, request } from './helpers/http';
 
@@ -41,7 +41,7 @@ describe('admin routes', () => {
     const off = await patchUser(request(`/api/admin/users/${user.id}`, { method: 'PATCH', cookie, body: { disabled: true } }), ctx({ id: user.id }));
     expect(off.status).toBe(200);
     expect(await db.session.count({ where: { userId: user.id } })).toBe(0);
-    expect((await state(request('/api/state', { cookie: memberCookie }), ctx())).status).toBe(401);
+    expect((await state(request('/api/me', { cookie: memberCookie }), ctx())).status).toBe(401);
     await patchUser(request(`/api/admin/users/${user.id}`, { method: 'PATCH', cookie, body: { disabled: false } }), ctx({ id: user.id }));
     expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).disabledAt).toBeNull();
   });

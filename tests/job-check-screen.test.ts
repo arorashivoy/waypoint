@@ -8,7 +8,7 @@ vi.mock('@/lib/claude/credential', async (orig) => ({
 }));
 
 import { db } from '@/lib/db';
-import { buildState } from '@/lib/state';
+import { buildJobs } from '@/lib/state';
 import { checkYaml } from '@/lib/profile/doc';
 import { saveProfile } from '@/lib/profile/store';
 import { legitimacyLine } from '@/lib/jobcheck-text';
@@ -63,11 +63,11 @@ describe('the job check on the screens', () => {
 
   it('puts only hasBlocker, not the check, in the state', async () => {
     const { a, b, job } = await setup();
-    const card = (await buildState(a.user.id)).jobs.find((j: any) => j.id === job.id) as any;
+    const card = (await buildJobs(a.user.id)).jobs.find((j: any) => j.id === job.id) as any;
     expect(card?.hasBlocker).toBe(true);
     expect(card).not.toHaveProperty('blockers');
     expect(card).not.toHaveProperty('parts');
-    const other = (await buildState(b.user.id)).jobs.find((j: any) => j.id === job.id) as any;
+    const other = (await buildJobs(b.user.id)).jobs.find((j: any) => j.id === job.id) as any;
     expect(other?.hasBlocker ?? false).toBe(false);
   });
 

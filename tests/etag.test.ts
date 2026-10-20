@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { jsonWithEtag } from '@/lib/etag';
 import { db } from '@/lib/db';
-import { GET as state } from '@/app/api/state/route';
+import { GET as state } from '@/app/api/me/route';
 import { GET as profile } from '@/app/api/profile/route';
 import { ctx, makeUser, request } from './helpers/http';
 
@@ -38,7 +38,7 @@ describe('jsonWithEtag', () => {
 describe('ETag on the routes', () => {
   afterEach(() => vi.useRealTimers());
 
-  it('/api/state sends an ETag and answers 304 for it', async () => {
+  it('/api/me sends an ETag and answers 304 for it', async () => {
     const { user, cookie } = await makeUser();
     // Only one country is on for this user, and its code is unique to this test,
     // so no job from another test file enters the state.
@@ -48,11 +48,11 @@ describe('ETag on the routes', () => {
     // Freeze the clock, so the relative times in the state do not change between requests.
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-18T12:00:00Z'));
-    const res = await state(request('/api/state', { cookie }), ctx());
+    const res = await state(request('/api/me', { cookie }), ctx());
     expect(res.status).toBe(200);
     const etag = res.headers.get('etag')!;
     expect(etag).toBeTruthy();
-    const again = await state(request('/api/state', { cookie, headers: { 'if-none-match': etag } }), ctx());
+    const again = await state(request('/api/me', { cookie, headers: { 'if-none-match': etag } }), ctx());
     expect(again.status).toBe(304);
   });
 

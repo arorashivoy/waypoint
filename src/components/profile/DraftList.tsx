@@ -6,6 +6,7 @@ import { ITEM_KINDS, type Item, type ItemKind } from '@/lib/profile/apply';
 import { ApiError, api, post } from '../api';
 import ItemEditor from './ItemEditor';
 import { summaryOf } from './fields';
+import { useProfileVersion } from './version';
 
 type Draft = {
   id: string; batchId: string; source: string; type: string; data: any; warnings: string[];
@@ -35,6 +36,7 @@ export default function DraftList({ doc, changed, setToast, onCount }: { doc: Cl
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { version, onStale } = useProfileVersion();
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
   const load = useCallback(async () => {
@@ -62,6 +64,7 @@ export default function DraftList({ doc, changed, setToast, onCount }: { doc: Cl
       await load();
       await changed();
     } catch (e) {
+      onStale(e);
       setErrors((x) => ({ ...x, [batchId]: e instanceof ApiError && Array.isArray(e.data.errors) ? e.data.errors : [(e as Error).message] }));
     } finally {
       setBusy(false);
@@ -82,7 +85,7 @@ export default function DraftList({ doc, changed, setToast, onCount }: { doc: Cl
                 {SOURCE[list[0].source] ?? list[0].source} · {new Date(list[0].createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {list.length} draft{list.length === 1 ? '' : 's'}
               </h3>
               {list[0].type !== 'profile' && (
-                <button className="btn btn-dark" disabled={busy || !ready.length} onClick={() => act(batchId, () => post('/api/profile/drafts/accept', { ids: ready }), `Accepted ${ready.length} ${ready.length === 1 ? 'draft' : 'drafts'}.`)}>
+                <button className="btn btn-dark" disabled={busy || !ready.length} onClick={() => act(batchId, () => post('/api/profile/drafts/accept', { ids: ready, version }), `Accepted ${ready.length} ${ready.length === 1 ? 'draft' : 'drafts'}.`)}>
                   Accept {ready.length === list.length ? 'all' : `${ready.length} without warnings`}
                 </button>
               )}
@@ -127,7 +130,7 @@ export default function DraftList({ doc, changed, setToast, onCount }: { doc: Cl
                     <Facts value={d.data} />
                   )}
                   <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                    <button className="btn btn-dark" disabled={busy || blocked(d)} onClick={() => act(batchId, () => post('/api/profile/drafts/accept', { ids: [d.id] }), 'Accepted.')}>{d.type === 'profile' ? 'Replace my profile' : 'Accept'}</button>
+                    <button className="btn btn-dark" disabled={busy || blocked(d)} onClick={() => act(batchId, () => post('/api/profile/drafts/accept', { ids: [d.id], version }), 'Accepted.')}>{d.type === 'profile' ? 'Replace my profile' : 'Accept'}</button>
                     {isItem(d.type) && <button className="btn" onClick={() => setEditing(d.id)}>Edit</button>}
                     <button className="btn" disabled={busy} onClick={() => act(batchId, () => post('/api/profile/drafts/reject', { ids: [d.id] }), 'Rejected.')}>Reject</button>
                   </div>

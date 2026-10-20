@@ -556,7 +556,7 @@ describe('profile YAML import', () => {
 // ============================================================ profile field save
 
 describe('profile field save', () => {
-  const save = async (cookie: string, item: unknown) => show(await itemRoute.POST(request('/api/profile/items/project', { method: 'POST', cookie, body: { item } }), ctx({ kind: 'project' })));
+  const save = async (cookie: string, item: unknown) => show(await itemRoute.POST(request('/api/profile/items/project', { method: 'POST', cookie, body: { item, version: 1 } }), ctx({ kind: 'project' })));
 
   it.each(attackNames)('%s in a field: saved as text, escaped in the template, never run', async (name) => {
     const { user, cookie } = await userWithProfile();

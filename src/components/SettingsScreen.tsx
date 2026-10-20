@@ -1,13 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, ApiError, copyText, del, leaveSession, patch, post, put, upload } from './api';
+import { useSettings } from './data';
+import { ErrorNote } from './ui';
 
-type Status = { mode: 'own' | 'shared' | 'cli' | 'none'; detail: string; keyHint: string | null; sharedAvailable: boolean; capUsd: number; sharedSpentUsd: number; capReached: boolean; resetsAt: string };
 type SearchSettings = { fields: string[]; visaStatus: string; fieldChoices: string[] };
-type FailedBoard = { board: string; status: string; fetchedAt: string; error: string | null };
-type SessionRow = { id: string; current: boolean; userAgent: string | null; createdAt: string; lastSeenAt: string };
-type UserRow = { id: string; email: string; name: string; role: string; disabled: boolean; createdAt: string; lastSeenAt: string | null; sharedSpentUsd: number };
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'never');
 const device = (ua: string | null) => {
@@ -20,6 +18,12 @@ const device = (ua: string | null) => {
   if (/Linux/.test(ua)) return 'Linux';
   return ua.slice(0, 40);
 };
+
+/** The error of one section, with its own Retry. A section that failed does not stop the others. */
+function LoadError({ what, error, retry }: { what: string; error?: Error; retry: () => unknown }) {
+  if (!error) return null;
+  return <ErrorNote what={`Waypoint could not load ${what}.`} fix={`${error.message} Check your connection, then try again.`} onRetry={() => { retry(); }} />;
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -34,11 +38,13 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
   const isAdmin = state?.user?.role === 'admin';
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
-  const [sessions, setSessions] = useState<SessionRow[]>([]);
-  const [feeds, setFeeds] = useState<FailedBoard[]>([]);
-  const [claude, setClaude] = useState<Status | null>(null);
+  const settings = useSettings(isAdmin);
+  const sessions = settings.sessions.data?.sessions ?? [];
+  const feeds = settings.feeds.data ?? [];
+  const claude = settings.claude.data ?? null;
+  const githubLoaded = settings.github.data?.hint;
+  const users = settings.users.data?.users ?? [];
   const [key, setKey] = useState('');
-  const [users, setUsers] = useState<UserRow[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [githubHint, setGithubHint] = useState<string | null>(null);
   const [githubToken, setGithubToken] = useState('');
@@ -48,19 +54,15 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
   const [search, setSearch] = useState<SearchSettings | null>(null);
   const [link, setLink] = useState<{ url: string; expiresAt: string; label: string } | null>(null);
 
-  const load = useCallback(async () => {
-    const [s, c, g, fd, ss] = await Promise.all([api<{ sessions: SessionRow[] }>('/api/account/sessions'), api<Status>('/api/account/claude'), api<{ hint: string | null }>('/api/account/github'), api<FailedBoard[]>('/api/feeds'), api<SearchSettings>('/api/settings/search')]);
-    setSessions(s.sessions);
-    setFeeds(fd);
-    setSearch(ss);
-    setClaude(c);
-    setGithubHint(g.hint);
-    if (isAdmin) setUsers((await api<{ users: UserRow[] }>('/api/admin/users')).users);
-  }, [isAdmin]);
-
+  // The forms edit a copy of the loaded value. The copy follows each new load.
   useEffect(() => {
-    load().catch((e) => setToast((e as Error).message));
-  }, [load, setToast]);
+    if (settings.search.data) setSearch(settings.search.data);
+  }, [settings.search.data]);
+  useEffect(() => {
+    if (githubLoaded !== undefined) setGithubHint(githubLoaded);
+  }, [githubLoaded]);
+
+  const load = settings.reload;
 
   /** True when the request worked. On an error it shows the message and returns false. */
   const run = async (fn: () => Promise<unknown>, done?: string) => {
@@ -92,6 +94,7 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
           <button className="btn btn-dark" type="submit">Change password</button>
         </form>
         <div className="label">Signed-in devices</div>
+        <LoadError what="your signed-in devices" error={settings.sessions.error} retry={settings.sessions.mutate} />
         {sessions.map((s) => (
           <div key={s.id} className="row" style={{ gap: 12, justifyContent: 'space-between', flexWrap: 'wrap' }}>
             <span>{device(s.userAgent)}{s.current ? ' (this device)' : ''} · last used {when(s.lastSeenAt)}</span>
@@ -107,6 +110,7 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
       </Section>
 
       <Section title="Claude">
+        <LoadError what="the Claude settings" error={settings.claude.error} retry={settings.claude.mutate} />
         {claude && (
           <>
             {/* The status text says "in Settings" for the other screens. This screen is Settings. */}
@@ -135,6 +139,7 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
 
       <Section title="Integrations">
         <div className="label">GitHub</div>
+        <LoadError what="your GitHub token" error={settings.github.error} retry={settings.github.mutate} />
         {githubHint ? (
           <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
             <span>Your GitHub token ends in {githubHint}. The GitHub import can read your private repositories.</span>
@@ -152,6 +157,7 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
       </Section>
 
       <Section title="Job search">
+        <LoadError what="your job search settings" error={settings.search.error} retry={settings.search.mutate} />
         {search && (
           <form className="stack" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); run(() => patch('/api/settings/search', { fields: search.fields, visaStatus: search.visaStatus }), 'Saved your job search settings.'); }}>
             <fieldset className="stack" style={{ gap: 8, border: 0, padding: 0, margin: 0, minWidth: 0 }}>
@@ -176,7 +182,10 @@ export default function SettingsScreen({ state, setToast }: { state: any; setToa
       </Section>
 
       <Section title="Job boards">
-        {feeds.length === 0 ? (
+        <LoadError what="the job boards" error={settings.feeds.error} retry={settings.feeds.mutate} />
+        {!settings.feeds.data ? (
+          settings.feeds.error ? null : <span className="hint">Loading the job boards…</span>
+        ) : feeds.length === 0 ? (
           <span>All job boards work.</span>
         ) : (
           <div className="stack" style={{ gap: 8 }}>

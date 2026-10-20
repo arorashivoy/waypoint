@@ -5,7 +5,7 @@ import { createInvite, createReset } from '@/lib/auth/invites';
 import { hashToken } from '@/lib/auth/tokens';
 import { GET as inspect, POST as redeem } from '@/app/api/invites/[token]/route';
 import { POST as login } from '@/app/api/auth/login/route';
-import { GET as state } from '@/app/api/state/route';
+import { GET as state } from '@/app/api/me/route';
 import { SESSION_COOKIE } from '@/lib/auth/cookie-name';
 import { cookieFrom, ctx, makeUser, request, TEST_PASSWORD } from './helpers/http';
 
@@ -34,7 +34,7 @@ describe('invites', () => {
     const res = await post(token, { name: 'New Person', email, password: NEW_PW });
     expect(res.status).toBe(200);
     const cookie = `${SESSION_COOKIE}=${cookieFrom(res)}`;
-    const s = await (await state(request('/api/state', { cookie }), ctx())).json();
+    const s = await (await state(request('/api/me', { cookie }), ctx())).json();
     expect(s.user.email).toBe(email);
     const u = await db.user.findUniqueOrThrow({ where: { email } });
     expect(u.role).toBe('member');
@@ -100,7 +100,7 @@ describe('reset links', () => {
     expect(await (await get(token)).json()).toEqual({ kind: 'reset', email: user.email, name: user.name });
     const res = await post(token, { password: NEW_PW });
     expect(res.status).toBe(200);
-    expect((await state(request('/api/state', { cookie: oldCookie }), ctx())).status).toBe(401);
+    expect((await state(request('/api/me', { cookie: oldCookie }), ctx())).status).toBe(401);
     const ok = await login(request('/api/auth/login', { method: 'POST', body: { email: user.email, password: NEW_PW }, headers: { 'x-forwarded-for': ip() } }), ctx());
     expect(ok.status).toBe(200);
     const old = await login(request('/api/auth/login', { method: 'POST', body: { email: user.email, password: TEST_PASSWORD }, headers: { 'x-forwarded-for': ip() } }), ctx());

@@ -58,7 +58,9 @@ import * as draftOne from '@/app/api/profile/drafts/[id]/route';
 import * as draftApprove from '@/app/api/profile/drafts/[id]/approve/route';
 import * as resumeFile from '@/app/api/resume/[id]/route';
 import * as ownTexRoute from '@/app/api/resume/own-tex/route';
-import * as stateRoute from '@/app/api/state/route';
+import * as meRoute from '@/app/api/me/route';
+import * as jobsList from '@/app/api/jobs/list/route';
+import * as pendingRoute from '@/app/api/pending/route';
 import * as settingsSearch from '@/app/api/settings/search/route';
 import * as account from '@/app/api/account/route';
 import * as password from '@/app/api/account/password/route';
@@ -131,7 +133,9 @@ describe('every route refuses a request without a session', () => {
     ['GET /api/resume/own-tex', ownTexRoute.GET as Handler],
     ['PUT /api/resume/own-tex', ownTexRoute.PUT as Handler],
     ['DELETE /api/resume/own-tex', ownTexRoute.DELETE as Handler],
-    ['GET /api/state', stateRoute.GET as Handler],
+    ['GET /api/me', meRoute.GET as Handler],
+    ['GET /api/jobs/list', jobsList.GET as Handler],
+    ['GET /api/pending', pendingRoute.GET as Handler],
     ['GET /api/settings/search', settingsSearch.GET as Handler],
     ['PATCH /api/settings/search', settingsSearch.PATCH as Handler],
     ['POST /api/account/password', password.POST as Handler],
@@ -186,10 +190,14 @@ describe('every route refuses a request without a session', () => {
 });
 
 describe('user B cannot reach the rows of user A', () => {
-  it('GET /api/state shows B only its own data', async () => {
+  it.each([
+    ['/api/me', meRoute.GET],
+    ['/api/jobs/list', jobsList.GET],
+    ['/api/pending', pendingRoute.GET],
+  ])('GET %s shows B only its own data', async (path, route) => {
     await seedA();
     const b = await makeUser();
-    const body = JSON.stringify(await (await stateRoute.GET(request('/api/state', { cookie: b.cookie }), ctx())).json());
+    const body = JSON.stringify(await (await route(request(path, { cookie: b.cookie }), ctx())).json());
     expect(body).not.toContain('note of A');
     expect(body).not.toContain('Contact Of A');
     expect(body).not.toContain('Private');

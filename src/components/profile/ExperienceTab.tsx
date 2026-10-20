@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { ClaimsDoc } from '@/lib/profile/doc';
 import { ApiError, put } from '../api';
 import ItemList from './ItemList';
+import { useProfileVersion } from './version';
 
 type Props = { doc: ClaimsDoc; levels?: string[]; onSaved: (reply: any) => void; setToast: (s: string) => void };
 
@@ -11,12 +12,14 @@ export default function ExperienceTab({ doc, levels, onSaved, setToast }: Props)
   const [name, setName] = useState(doc.profile.name);
   const [headline, setHeadline] = useState(doc.profile.headline);
   const [errors, setErrors] = useState<string[]>([]);
+  const { version, onStale } = useProfileVersion();
   const saveMeta = async () => {
     setErrors([]);
     try {
-      onSaved(await put('/api/profile/meta', { name, headline }));
+      onSaved(await put('/api/profile/meta', { name, headline, version }));
       setToast('Saved.');
     } catch (e) {
+      onStale(e);
       setErrors(e instanceof ApiError && Array.isArray(e.data.errors) ? e.data.errors : [(e as Error).message]);
     }
   };

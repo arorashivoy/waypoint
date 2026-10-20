@@ -154,7 +154,7 @@ describe('draft routes keep users apart', () => {
     const [d] = await listDrafts(a.user.id);
     const list = await (await listRoute(request('/api/profile/drafts', { cookie: b.cookie }), ctx())).json();
     expect(list.drafts).toEqual([]);
-    expect((await acceptRoute(request('/api/profile/drafts/accept', { method: 'POST', cookie: b.cookie, body: { ids: [d.id] } }), ctx())).status).toBe(404);
+    expect((await acceptRoute(request('/api/profile/drafts/accept', { method: 'POST', cookie: b.cookie, body: { ids: [d.id], version: 0 } }), ctx())).status).toBe(404);
     expect((await editRoute(request(`/api/profile/drafts/${d.id}`, { method: 'PUT', cookie: b.cookie, body: { data: { id: 'x', title: 'x' } } }), ctx({ id: d.id }))).status).toBe(404);
     expect((await approveRoute(request(`/api/profile/drafts/${d.id}/approve`, { method: 'POST', cookie: b.cookie }), ctx({ id: d.id }))).status).toBe(404);
     const rej = await (await rejectRoute(request('/api/profile/drafts/reject', { method: 'POST', cookie: b.cookie, body: { ids: [d.id] } }), ctx())).json();
@@ -165,7 +165,7 @@ describe('draft routes keep users apart', () => {
   it('refuses a bad ids list', async () => {
     const a = await makeUser();
     for (const ids of [undefined, [], 'x', [1], Array.from({ length: 201 }, (_, i) => `id${i}`)]) {
-      expect((await acceptRoute(request('/api/profile/drafts/accept', { method: 'POST', cookie: a.cookie, body: { ids } }), ctx())).status).toBe(400);
+      expect((await acceptRoute(request('/api/profile/drafts/accept', { method: 'POST', cookie: a.cookie, body: { ids, version: 0 } }), ctx())).status).toBe(400);
     }
   });
 });

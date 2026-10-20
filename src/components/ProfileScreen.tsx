@@ -1,15 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import type { ClaimsDoc } from '@/lib/profile/doc';
-import { api } from './api';
+import { useCallback, useMemo, useState } from 'react';
+import { STALE_PROFILE_MESSAGE } from '@/lib/profile/stale';
+import { ApiError } from './api';
+import { useProfile, type ProfileData } from './data';
+import { ErrorNote } from './ui';
+import { ProfileVersionContext } from './profile/version';
 import ExperienceTab from './profile/ExperienceTab';
 import ProjectsTab from './profile/ProjectsTab';
 import ClaimsTab from './profile/ClaimsTab';
 import ImportsTab from './profile/ImportsTab';
 
 type Tab = 'experience' | 'projects' | 'claims' | 'imports';
-export type ProfileData = { doc: ClaimsDoc; warnings: string[]; version: number; pendingDrafts: number };
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'experience', label: 'Experience' },
@@ -18,25 +20,34 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'imports', label: 'Imports' },
 ];
 
-export default function ProfileScreen({ state, refresh, setToast }: { state: any; refresh: () => Promise<any>; setToast: (s: string) => void }) {
+export default function ProfileScreen({ state: me, refresh, setToast }: { state: any; refresh: () => Promise<any>; setToast: (s: string) => void }) {
   const [tab, setTab] = useState<Tab>('experience');
-  const [data, setData] = useState<ProfileData | null>(null);
+  const { data, error, mutate } = useProfile();
+  // The tabs read the summary, the contacts and the last import from the same state as before.
+  const state = useMemo(() => (data ? { ...me, ...data.view } : me), [me, data]);
 
-  const load = useCallback(async () => setData(await api<ProfileData>('/api/profile')), []);
-  useEffect(() => {
-    load().catch((e) => setToast((e as Error).message));
-  }, [load, setToast]);
-
-  /** After a change: the new profile, and the app state, because job scores read the profile. */
+  /** After a change: the new profile, and the other screens, because job scores read the profile. */
   const changed = useCallback(async () => {
-    await load();
     await refresh();
-  }, [load, refresh]);
+  }, [refresh]);
   const onSaved = useCallback(() => {
     changed().catch((e) => setToast((e as Error).message));
   }, [changed, setToast]);
 
-  const onCount = useCallback((n: number) => setData((d) => (d && d.pendingDrafts !== n ? { ...d, pendingDrafts: n } : d)), []);
+  const onCount = useCallback(
+    (n: number) => { mutate((d?: ProfileData) => (d && d.pendingDrafts !== n ? { ...d, pendingDrafts: n } : d), { revalidate: false }); },
+    [mutate],
+  );
+
+  const version = useMemo(
+    () => ({
+      version: data?.version ?? 0,
+      onStale: (e: unknown) => {
+        if (e instanceof ApiError && e.status === 409 && e.message === STALE_PROFILE_MESSAGE) mutate();
+      },
+    }),
+    [data?.version, mutate],
+  );
 
   const onKey = (e: React.KeyboardEvent, i: number) => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
@@ -46,7 +57,7 @@ export default function ProfileScreen({ state, refresh, setToast }: { state: any
   };
 
   return (
-    <>
+    <ProfileVersionContext.Provider value={version}>
       <header className="screen-head">
         <h1 className="display">Profile</h1>
         <span className="sub">{data ? [data.doc.profile.name, data.doc.profile.headline].filter(Boolean).join(' · ') : 'Loading…'}</span>
@@ -62,9 +73,13 @@ export default function ProfileScreen({ state, refresh, setToast }: { state: any
       <div className="profile-body" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         <div style={{ maxWidth: 860, minWidth: 0 }}>
           {!data ? (
-            <div className="empty">Loading the profile…</div>
+            error ? (
+              <ErrorNote live what="Waypoint could not load your profile." fix={`${error.message} Check your connection, then try again.`} onRetry={() => { mutate(); }} />
+            ) : (
+              <div className="empty">Loading the profile…</div>
+            )
           ) : tab === 'experience' ? (
-            <ExperienceTab key={data.version} doc={data.doc} levels={state?.levels} onSaved={onSaved} setToast={setToast} />
+            <ExperienceTab key={data.version} doc={data.doc} levels={me?.levels} onSaved={onSaved} setToast={setToast} />
           ) : tab === 'projects' ? (
             <ProjectsTab doc={data.doc} onSaved={onSaved} setToast={setToast} />
           ) : tab === 'claims' ? (
@@ -74,6 +89,6 @@ export default function ProfileScreen({ state, refresh, setToast }: { state: any
           )}
         </div>
       </div>
-    </>
+    </ProfileVersionContext.Provider>
   );
 }

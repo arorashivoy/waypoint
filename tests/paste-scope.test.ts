@@ -17,7 +17,7 @@ import '@/lib/tasks/handlers';
 import * as pasteRoute from '@/app/api/jobs/paste/route';
 import * as jobRoute from '@/app/api/jobs/[id]/route';
 import * as jobResume from '@/app/api/jobs/[id]/resume/route';
-import * as stateRoute from '@/app/api/state/route';
+import * as jobsList from '@/app/api/jobs/list/route';
 import * as outreachRoute from '@/app/api/outreach/route';
 import { DELETE as deleteAccount } from '@/app/api/account/route';
 import { ctx, makeUser, request, TEST_PASSWORD } from './helpers/http';
@@ -49,7 +49,7 @@ async function pasteAs(u: U) {
   return job;
 }
 
-const listed = async (u: U) => ((await (await stateRoute.GET(request('/api/state', { cookie: u.cookie }), ctx())).json()).jobs as { id: string }[]).map((j) => j.id);
+const listed = async (u: U) => ((await (await jobsList.GET(request('/api/jobs/list', { cookie: u.cookie }), ctx())).json()).jobs as { id: string }[]).map((j) => j.id);
 
 describe('a pasted job belongs to the user who pasted it', () => {
   it('shows it only to that user and queues no analysis for another user', async () => {

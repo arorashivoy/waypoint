@@ -110,7 +110,7 @@ registerHandler('refresh', z.object({ force: z.boolean() }), async ({ force }, t
   // The jobs are stored. Only now the boards get the new etag and date.
   await commit();
 
-  // The analysis tasks run in the worker after this task. The client polls /api/state for progress.
+  // The analysis tasks run in the worker after this task. The client polls /api/me for progress.
   const analysing = await queueAnalysis(userId);
 
   // "Live" counts the stored jobs in the countries of this user, as the job list does. A board that was

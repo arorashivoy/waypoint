@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect } from 'react';
+import { useSWRConfig } from 'swr';
 import { ApiError, api, post } from './api';
+import { KEYS, useMe, useRefresh, type Me } from './data';
 import { useToast } from './hooks';
-import JobsScreen from './JobsScreen';
-import PendingScreen from './PendingScreen';
 import { Interim } from './shell/Interim';
+import { JobsView, PendingView } from './shell/Views';
 import Loading from './shell/Loading';
 import Rail from './shell/Rail';
 import Sidebar from './shell/Sidebar';
@@ -16,59 +17,45 @@ import { useCollapsed, useLocation } from './shell/useShell';
 import { ErrorNote } from './ui';
 
 export default function Waypoint() {
-  const [state, setState] = useState<any>(null);
+  const { data: state, error, mutate: reloadMe } = useMe();
+  const refresh = useRefresh();
+  const { mutate } = useSWRConfig();
   const { loc, go, openJob, closeJob } = useLocation();
   const [collapsed, setCollapsed] = useCollapsed();
   const [toast, setToast] = useToast();
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadError = state === undefined && error && !(error instanceof ApiError && error.status === 401) ? String(error.message) : null;
 
-  const refresh = useCallback(async () => {
-    const s = await api('/api/state');
-    setState(s);
-    setLoadError(null);
-    return s;
-  }, []);
-
+  // The first load failed: tell the user in a toast too. A 401 sends the page to /login.
   useEffect(() => {
-    refresh().catch((e) => {
-      if (e instanceof ApiError && e.status === 401) return;
-      setToast(String(e.message));
-      setLoadError(String(e.message));
-    });
-  }, [refresh, setToast]);
-
-  // While Claude is working through the queue, poll so estimates turn into real
-  // scores without the user reloading.
-  const analysing = state?.analysing;
-  useEffect(() => {
-    if (!analysing?.running) return;
-    const t = setInterval(() => { refresh().catch(() => {}); }, 4000);
-    return () => clearInterval(t);
-  }, [analysing?.running, analysing?.done, refresh]);
+    if (loadError) setToast(loadError);
+  }, [loadError, setToast]);
 
   const toggleCountry = async (cc: string, on: boolean) => {
-    setState((s: any) => ({ ...s, countries: s.countries.map((c: any) => (c.cc === cc ? { ...c, on } : c)) }));
-    await post('/api/countries', { cc, on });
+    await mutate(
+      KEYS.me,
+      (me?: Me) => me && { ...me, countries: me.countries.map((c) => (c.cc === cc ? { ...c, on } : c)) },
+      { revalidate: false },
+    );
+    try {
+      await post('/api/countries', { cc, on });
+    } finally {
+      // The job list depends on the countries, so it loads again. On a failure this also puts back the real choice.
+      await refresh();
+    }
   };
-
-  const screens = useMemo(
-    () => ({ state, refresh, setToast, openJob, selected: loc.job, toggleCountry }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state, refresh, loc.job, openJob],
-  );
 
   const toastEl = toast && <div className="toast" role="status">{toast}</div>;
 
-  if (state === null) {
+  if (!state) {
     return (
       <>
-        <Loading error={loadError} onRetry={() => { refresh().catch((e) => setLoadError(String(e.message))); }} />
+        <Loading error={loadError} onRetry={() => { reloadMe(); }} />
         {toastEl}
       </>
     );
   }
 
-  const nav = { place: loc.view, go, needsCount: state.needs?.length ?? 0, task: taskLine(state.analysing) };
+  const nav = { place: loc.view, go, needsCount: state.needsCount, task: taskLine(state.analysing) };
   const jobOpen = loc.view === 'jobs' && loc.job !== null;
   const failure = state.claude?.authFailure
     ? { what: 'Claude authentication failed.', fix: state.claude.authFailure.message as string }
@@ -105,10 +92,10 @@ export default function Waypoint() {
             </div>
           )}
           <div className="sh-view">
-            {loc.view === 'jobs' && <JobsScreen {...screens} />}
-            {loc.view === 'pending' && <PendingScreen {...screens} />}
-            {loc.view === 'profile' && <Interim.Profile {...screens} />}
-            {loc.view === 'settings' && <Interim.Settings {...screens} />}
+            {loc.view === 'jobs' && <JobsView me={state} refresh={refresh} setToast={setToast} openJob={openJob} selected={loc.job} toggleCountry={toggleCountry} />}
+            {loc.view === 'pending' && <PendingView me={state} refresh={refresh} setToast={setToast} />}
+            {loc.view === 'profile' && <Interim.Profile state={state} refresh={refresh} setToast={setToast} />}
+            {loc.view === 'settings' && <Interim.Settings state={state} setToast={setToast} toggleCountry={toggleCountry} />}
           </div>
         </main>
       </div>
