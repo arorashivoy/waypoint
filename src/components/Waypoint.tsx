@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useSWRConfig } from 'swr';
 import { ApiError, api, post } from './api';
 import { KEYS, useMe, useRefresh, type Me } from './data';
@@ -25,11 +24,6 @@ export default function Waypoint() {
   const [toast, setToast] = useToast();
   const loadError = state === undefined && error && !(error instanceof ApiError && error.status === 401) ? String(error.message) : null;
 
-  // The first load failed: tell the user in a toast too. A 401 sends the page to /login.
-  useEffect(() => {
-    if (loadError) setToast(loadError);
-  }, [loadError, setToast]);
-
   const toggleCountry = async (cc: string, on: boolean) => {
     await mutate(
       KEYS.me,
@@ -48,10 +42,7 @@ export default function Waypoint() {
 
   if (!state) {
     return (
-      <>
-        <Loading error={loadError} onRetry={() => { reloadMe(); }} />
-        {toastEl}
-      </>
+      <Loading error={loadError} onRetry={() => { reloadMe(); }} />
     );
   }
 
@@ -92,7 +83,7 @@ export default function Waypoint() {
             </div>
           )}
           <div className="sh-view">
-            {loc.view === 'jobs' && <JobsView me={state} refresh={refresh} setToast={setToast} openJob={openJob} selected={loc.job} toggleCountry={toggleCountry} />}
+            {loc.view === 'jobs' && <JobsView me={state} refresh={refresh} setToast={setToast} openJob={openJob} closeJob={closeJob} selected={loc.job} goToSettings={() => go('settings')} />}
             {loc.view === 'pending' && <PendingView me={state} refresh={refresh} setToast={setToast} />}
             {loc.view === 'profile' && <Interim.Profile state={state} refresh={refresh} setToast={setToast} />}
             {loc.view === 'settings' && <Interim.Settings state={state} setToast={setToast} toggleCountry={toggleCountry} />}

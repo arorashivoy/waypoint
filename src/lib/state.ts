@@ -8,6 +8,7 @@ import { claimsFor, profileSummary } from './user';
 import { projectPicks } from './resume';
 import { isAlumniRequest } from './match';
 import { watchlist } from './sources';
+import { BLOCKER_LABEL } from './jobcheck-text';
 
 // An export can carry several thousand 1st-degree connections. The counts and
 // the company breakdown are computed in the database over all of them; only the
@@ -71,7 +72,7 @@ export async function buildJobs(userId: string) {
   const appByJob = new Map(apps.map((a) => [a.jobId, a]));
 
   const cards = jobs.map((j) => {
-    const { analysis, match, provisional, path } = view(j);
+    const { analysis, match, provisional, path, routes } = view(j);
     const app = appByJob.get(j.id);
     return {
       id: j.id,
@@ -98,6 +99,10 @@ export async function buildJobs(userId: string) {
       analysed: analysis.by === 'claude',
       // The list needs only this flag. The detail route sends the full check.
       hasBlocker: analysis.blockers.length > 0,
+      // The row shows one line for the first blocker, else one for the contacts who can refer the user.
+      blocker: analysis.blockers.length ? (BLOCKER_LABEL[analysis.blockers[0].type] ?? BLOCKER_LABEL.other) : null,
+      referrers: routes.length,
+      referrer: routes[0]?.name ?? null,
     };
   });
 

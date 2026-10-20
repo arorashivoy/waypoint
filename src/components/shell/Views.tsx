@@ -1,6 +1,5 @@
 'use client';
 
-import { useMemo } from 'react';
 import { ErrorNote, Skeleton } from '../ui';
 import JobsScreen from '../JobsScreen';
 import PendingScreen from '../PendingScreen';
@@ -19,12 +18,12 @@ export function Wait({ error, onRetry }: { error?: Error; onRetry: () => void })
   );
 }
 
-/** Jobs, with its own data. The screen gets the same props that it got from the old state route. */
-export function JobsView({ me, refresh, setToast, openJob, selected, toggleCountry }: Common & { openJob: (id: string) => void; selected: string | null; toggleCountry: (cc: string, on: boolean) => void }) {
+/** Jobs, with its own data. The list shows its own loading and error state, so the title stays on screen. */
+export function JobsView({ me, refresh, setToast, openJob, closeJob, selected, goToSettings }: Common & { openJob: (id: string) => void; closeJob: () => void; selected: string | null; goToSettings: () => void }) {
   const { data, error, mutate } = useJobs();
-  const state = useMemo(() => data && { ...me, ...data }, [me, data]);
-  if (!state) return <Wait error={error} onRetry={() => { mutate(); }} />;
-  return <JobsScreen state={state} refresh={refresh} setToast={setToast} openJob={openJob} selected={selected} toggleCountry={toggleCountry} />;
+  return (
+    <JobsScreen me={me} jobs={data?.jobs} error={error} onRetry={() => { mutate(); }} refresh={refresh} setToast={setToast} openJob={openJob} closeJob={closeJob} selected={selected} goToSettings={goToSettings} />
+  );
 }
 
 export function PendingView({ me, refresh, setToast }: Common) {

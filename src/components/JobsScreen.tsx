@@ -1,278 +1,57 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { runTask } from './tasks';
 import { api, copyAndOpen, copyText, del, draftCopyOpen, patch, post } from './api';
-import { FILTER_GROUPS, POSTED_WINDOWS } from '@/lib/countries';
 import { BLOCKER_LABEL, STATUS_LABEL, legitimacyLine } from '@/lib/jobcheck-text';
+import type { JobCard, Me } from './data';
+import JobList from './jobs/JobList';
+import { useJobList } from './jobs/useJobList';
 
 type Props = {
-  state: any;
+  me: Me;
+  /** Undefined while the jobs load. */
+  jobs: JobCard[] | undefined;
+  error?: Error;
+  onRetry: () => void;
   refresh: () => Promise<any>;
   setToast: (s: string) => void;
   openJob: (id: string) => void;
+  closeJob: () => void;
   selected: string | null;
-  toggleCountry: (cc: string, on: boolean) => void;
+  goToSettings: () => void;
 };
 
-// Defaults to the last 7 days: an advert older than that is usually filled, and
-// a referral request against a filled role wastes a connection. Level defaults to
-// the profile's own, so roles asking for more experience than it has stay out of
-// the way until asked for.
-const DEFAULT_FILTERS = { field: 'All', mode: 'Any', level: 'From LinkedIn', posted: 'This week' } as Record<string, string>;
+/** The list column beside the job. Under 1024 px the job is a side panel over the list (a full screen on a phone). */
+export default function JobsScreen({ me, jobs, error, onRetry, refresh, setToast, openJob, closeJob, selected, goToSettings }: Props) {
+  const list = useJobList({ me, jobs, selected, openJob, closeJob });
+  const panel = useRef<HTMLElement>(null);
+  const { activeId } = list;
 
-export default function JobsScreen({ state, refresh, setToast, openJob, selected, toggleCountry }: Props) {
-  const [q, setQ] = useState('');
-  const [f, setF] = useState(DEFAULT_FILTERS);
-  const [sponsorOnly, setSponsorOnly] = useState(false);
-  const [topOnly, setTopOnly] = useState(false);
-  const [sheet, setSheet] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [lastReport, setLastReport] = useState<string | null>(null);
-  const [pasteUrl, setPasteUrl] = useState('');
-  const [pasting, setPasting] = useState(false);
-  // A pasted job can be in a country that is off. The list does not hold it, but its detail must still open.
-
-  const onCcs = new Set(state.countries.filter((c: any) => c.on).map((c: any) => c.cc));
-
-  const jobs = useMemo(
-    () =>
-      state.jobs.filter((j: any) => {
-        if (!onCcs.has(j.cc)) return false;
-        if (f.field !== 'All' && j.field !== f.field) return false;
-        if (f.mode !== 'Any' && j.mode !== f.mode) return false;
-        if (f.level === 'From LinkedIn') {
-          if (!state.levels.includes(j.level)) return false;
-        } else if (f.level !== 'Any' && j.level !== f.level) return false;
-        if (j.days > (POSTED_WINDOWS[f.posted] ?? Infinity)) return false;
-        if (sponsorOnly && !j.sponsor) return false;
-        if (topOnly && !j.priority) return false;
-        if (q) {
-          const hay = `${j.role} ${j.company} ${j.city}`.toLowerCase();
-          if (!hay.includes(q.toLowerCase())) return false;
-        }
-        return true;
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.jobs, state.countries, state.levels, f, sponsorOnly, topOnly, q],
-  );
-
-  // The open job comes from the URL, so a filter that hides it does not swap it for another job.
-  const activeId = selected ?? jobs[0]?.id ?? null;
-
-  const activeFilters =
-    Object.entries(f).filter(([k, v]) => v !== DEFAULT_FILTERS[k]).length + (sponsorOnly ? 1 : 0) + (topOnly ? 1 : 0);
-
-  const countLabel = `${jobs.length} ${jobs.length === 1 ? 'role' : 'roles'}`;
-
-  const doRefresh = async (force = false) => {
-    setRefreshing(true);
-    try {
-      const res = await runTask<{ added: number; total: number; report: any[]; analysing?: { total: number } | null; note?: string }>(
-        () => post<{ taskId: string }>('/api/jobs/refresh', { force }),
-      );
-      await refresh();
-      const failed = (res.report || []).filter((r) => r.error);
-      const queued = res.analysing?.total || 0;
-      const text =
-        res.note ??
-        `${res.added} new, ${res.total} live in your countries.` +
-          (queued ? ` Claude is reading the top ${queued}.` : '') +
-          (failed.length ? ` ${failed.length} source${failed.length > 1 ? 's' : ''} failed: ${failed.map((r) => r.source).join(', ')}.` : '');
-      setToast(text);
-      setLastReport(text);
-    } catch (e) {
-      setToast((e as Error).message);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  // The task reads the job from the board. A warning or a note comes back with the result and shows with the job.
-  const doPaste = async () => {
-    if (!pasteUrl.trim() || pasting) return;
-    setPasting(true);
-    try {
-      const res = await runTask<{ jobId: string; warning: string | null; note?: string | null }>(() => post<{ taskId: string }>('/api/jobs/paste', { url: pasteUrl.trim() }));
-      setPasteUrl('');
-      await refresh();
-      openJob(res.jobId);
-      setToast([res.warning, res.note].filter(Boolean).join(' ') || 'Job added.');
-    } catch (e) {
-      setToast((e as Error).message);
-    } finally {
-      setPasting(false);
-    }
+  // On a tablet the job opens as a panel over the list: focus moves into it, and goes back to the row when it closes.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    const tablet = window.matchMedia('(min-width: 640px) and (max-width: 1023px)').matches;
+    if (tablet && selected && !wasOpen.current) panel.current?.focus();
+    wasOpen.current = !!selected;
+  }, [selected]);
+  const closePanel = () => {
+    const id = selected;
+    closeJob();
+    if (id) requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-job-id="${CSS.escape(id)}"]`)?.focus());
   };
 
   return (
-    <>
-      <header className="screen-head" style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
-        <div className="stack grow">
-          <h1 className="display">Jobs</h1>
-          <span className="sub desktop-only">
-            {countLabel} ·{' '}
-            {state.analysing?.running
-              ? `Claude is reading ${state.analysing.done + 1} of ${state.analysing.total} · ~ estimates update as it goes`
-              : state.claude.mode === 'none'
-                ? `${state.claude.detail} Scores are keyword estimates.`
-                : `ranked by fit · read by Claude (${state.claude.mode === 'cli' ? 'your subscription' : state.claude.mode === 'own' ? 'your API key' : 'the shared key'})`}
-          </span>
-        </div>
-        <label className="sr-only" htmlFor="wp-search">Search roles</label>
-        <input
-          id="wp-search"
-          type="search"
-          className="field desktop-only"
-          style={{ width: 320 }}
-          placeholder="Search role, company, city"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <button className="btn desktop-only" onClick={() => doRefresh()} disabled={refreshing}>
-          {refreshing ? 'Fetching…' : 'Refresh feeds'}
-        </button>
-        <button className="btn mobile-only" style={{ borderRadius: 22 }} onClick={() => setSheet(true)}>
-          Filters{activeFilters ? ` · ${activeFilters}` : ''}
-        </button>
-      </header>
+    <div className="jobs-split">
+      <JobList me={me} list={list} loading={!jobs && !error} error={jobs ? undefined : error} onRetry={onRetry} refresh={refresh} setToast={setToast} openJob={openJob} onSettings={goToSettings} />
 
-      <div className="filters">
-        {FILTER_GROUPS.map((g) => (
-          <div key={g.key} role="group" aria-label={g.label} className="filter-group">
-            <span className="label">{g.label}</span>
-            {g.options.map((o) => (
-              <button key={o} className="chip" data-on={f[g.key] === o} aria-pressed={f[g.key] === o} onClick={() => setF({ ...f, [g.key]: o })}>
-                {o}
-              </button>
-            ))}
-          </div>
-        ))}
-        <button className="chip" data-on={sponsorOnly} aria-pressed={sponsorOnly} onClick={() => setSponsorOnly(!sponsorOnly)}>
-          Sponsors visa
-        </button>
-        <button className="chip" data-on={topOnly} aria-pressed={topOnly} onClick={() => setTopOnly(!topOnly)}>
-          ★ Top companies
-        </button>
-      </div>
-
-      <form
-        style={{ display: 'flex', gap: 8, padding: '0 var(--gutter) 10px', alignItems: 'center' }}
-        onSubmit={(e) => {
-          e.preventDefault();
-          doPaste();
-        }}
-      >
-        <label className="sr-only" htmlFor="wp-paste">Paste a job link</label>
-        <input id="wp-paste" type="url" className="field" style={{ flex: 1, minWidth: 0 }} placeholder="Paste a job link (Greenhouse, Lever, Ashby, Workable)" maxLength={2000} value={pasteUrl} onChange={(e) => setPasteUrl(e.target.value)} />
-        <button className="btn" type="submit" disabled={pasting || !pasteUrl.trim()}>
-          {pasting ? 'Reading…' : 'Add job'}
-        </button>
-      </form>
-
-      {lastReport && (
-        <div className="stack" style={{ gap: 4, padding: '0 var(--gutter) 10px', alignItems: 'flex-start' }}>
-          <span style={{ fontSize: 13, color: 'var(--muted-2)' }}>{lastReport}</span>
-          <button style={{ fontSize: 13, background: 'none', border: 0, padding: 0, textDecoration: 'underline', cursor: 'pointer', color: 'inherit' }} onClick={() => doRefresh(true)} disabled={refreshing}>
-            Fetch all boards again
-          </button>
-        </div>
+      {activeId && (
+        <section ref={panel} className="jobs-detail" aria-label="Job" tabIndex={-1}>
+          <button type="button" className="btn link jobs-close" onClick={closePanel}>Close</button>
+          <JobDetail id={activeId} state={{ ...me, jobs: jobs ?? [] }} refresh={refresh} setToast={setToast} phone={false} />
+        </section>
       )}
-
-      <div className="mobile-only" style={{ padding: '0 var(--gutter) 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <label className="sr-only" htmlFor="wp-m-search">Search roles</label>
-        <input id="wp-m-search" type="search" className="field" style={{ width: '100%' }} placeholder="Search role, company, city" value={q} onChange={(e) => setQ(e.target.value)} />
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
-          {state.countries.map((c: any) => (
-            <button
-              key={c.cc}
-              className="chip"
-              style={{ flexShrink: 0, height: 36, borderRadius: 18 }}
-              data-on={c.on}
-              aria-pressed={c.on}
-              onClick={() => toggleCountry(c.cc, !c.on)}
-            >
-              {c.name}
-            </button>
-          ))}
-        </div>
-        <div className="row" style={{ gap: 10 }}>
-          <span className="grow" style={{ fontSize: 13, color: 'var(--muted-2)' }}>{countLabel}</span>
-          <button className="btn" style={{ height: 36, fontSize: 14 }} onClick={() => doRefresh()} disabled={refreshing}>
-            {refreshing ? 'Fetching…' : 'Refresh feeds'}
-          </button>
-        </div>
-      </div>
-
-      <div className="jobs-split">
-        <div className="jobs-list">
-          {jobs.length === 0 && (
-            <div className="empty">
-              {state.jobs.length === 0
-                ? 'No jobs fetched yet. Press “Refresh feeds” to pull from the company boards in config/watchlist.json, Arbeitnow and Adzuna.'
-                : 'No roles match these filters. Loosen a filter or turn a country back on.'}
-            </div>
-          )}
-          {jobs.map((j: any) => (
-            <button key={j.id} className="job-card" data-on={j.id === activeId} onClick={() => openJob(j.id)}>
-              <div className="row" style={{ gap: 8, width: '100%' }}>
-                <span className="mono grow" style={{ fontSize: 12, color: 'var(--muted)' }}>{j.place} · {j.mode}</span>
-                {j.hasBlocker && <span className="tag" title="The posting has a blocker" style={{ color: 'var(--danger)' }}>Blocker</span>}
-                <span className="mono" style={{ fontSize: 12, color: 'var(--positive)', fontWeight: 500 }}>{j.matchLabel}</span>
-              </div>
-              <span className="role">{j.role}</span>
-              <span style={{ fontSize: 14, color: 'var(--muted)' }}>{j.priority && <span title="Priority company" style={{ color: 'var(--ink)' }}>★ </span>}{j.company} · {j.field} · {j.level}</span>
-              <div className="row" style={{ gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                <span className="tag">{j.path}</span>
-                {j.isSent && !j.isApplied && <span className="tag tag-dark">In pending</span>}
-                {j.isApplied && <span className="tag tag-green">Applied</span>}
-                <span className="mono" style={{ fontSize: 12, color: 'var(--muted-3)', marginLeft: 'auto' }}>{j.posted}</span>
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {activeId && (
-          <section className="jobs-detail">
-            <JobDetail id={activeId} state={state} refresh={refresh} setToast={setToast} phone={false} />
-          </section>
-        )}
-      </div>
-
-      {sheet && (
-        <div className="sheet" onClick={() => setSheet(false)}>
-          <div className="sheet-body" role="dialog" aria-label="Job filters" onClick={(e) => e.stopPropagation()}>
-            <div className="row">
-              <h2 className="display grow" style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Filters</h2>
-              <button style={{ height: 44, padding: '0 8px', border: 0, background: 'transparent', fontSize: 15, textDecoration: 'underline' }} onClick={() => { setF(DEFAULT_FILTERS); setSponsorOnly(false); setTopOnly(false); }}>
-                Reset
-              </button>
-            </div>
-            {FILTER_GROUPS.map((g) => (
-              <div key={g.key} role="group" aria-label={g.label} className="stack" style={{ gap: 8 }}>
-                <span className="label" style={{ letterSpacing: '0.08em' }}>{g.label}</span>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {g.options.map((o) => (
-                    <button key={o} className="chip" data-on={f[g.key] === o} aria-pressed={f[g.key] === o} onClick={() => setF({ ...f, [g.key]: o })}>
-                      {o}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-            <button className="chip" style={{ alignSelf: 'flex-start' }} data-on={sponsorOnly} aria-pressed={sponsorOnly} onClick={() => setSponsorOnly(!sponsorOnly)}>
-              Sponsors visa only
-            </button>
-            <button className="chip" style={{ alignSelf: 'flex-start' }} data-on={topOnly} aria-pressed={topOnly} onClick={() => setTopOnly(!topOnly)}>
-              ★ Top companies only
-            </button>
-            <button className="btn btn-dark" style={{ height: 52, borderRadius: 10, fontSize: 16, fontWeight: 600 }} onClick={() => setSheet(false)}>
-              Show {countLabel}
-            </button>
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   );
 }
 
