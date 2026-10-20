@@ -6,8 +6,8 @@ export const BLOCKER_LABEL: Record<string, string> = {
   citizenship: 'Needs a citizenship or work permit you may not have',
   clearance: 'Needs a security clearance',
   language: 'Needs a language you may not speak',
-  location: 'Needs a place of work that does not fit',
-  seniority: 'Needs more years of work than you have',
+  location: 'Needs you to work in a set place',
+  seniority: 'Asks for more years of work than the posting expects from a new hire',
   other: 'Needs something that may exclude you',
 };
 
@@ -35,7 +35,7 @@ export function blockerLine(type: string, quote: string): string {
 export const LEGITIMACY_LABEL: Record<string, string> = {
   'no-company': 'does not name the company',
   'pay-to-apply': 'asks you to pay to apply',
-  reposted: 'looks like a post that someone put up again',
+  reposted: 'looks like an old post that the company listed again',
   'vague-role': 'does not say what the work is',
 };
 

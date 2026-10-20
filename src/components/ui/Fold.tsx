@@ -10,9 +10,11 @@ export interface FoldProps {
   defaultOpen?: boolean;
   /** Under 640 px the header calls this and does not unfold (the screen opens a full page). */
   onOpen?: () => void;
+  /** Called with the new state when the panel unfolds or folds. */
+  onToggle?: (open: boolean) => void;
 }
 
-export function Fold({ title, status, children, defaultOpen = false, onOpen }: FoldProps) {
+export function Fold({ title, status, children, defaultOpen = false, onOpen, onToggle }: FoldProps) {
   const [open, setOpen] = useState(defaultOpen);
   const bodyId = useId();
 
@@ -25,7 +27,8 @@ export function Fold({ title, status, children, defaultOpen = false, onOpen }: F
       onOpen();
       return;
     }
-    setOpen((o) => !o);
+    onToggle?.(!open);
+    setOpen(!open);
   }
 
   return (

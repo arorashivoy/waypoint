@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { visibleTo } from '@/lib/job-scope';
@@ -29,6 +30,15 @@ async function needsAnalysis(jobId: string, userId: string): Promise<boolean> {
   return !!(await credentialFor(userId));
 }
 
+/** When the PDF was written, or null when the file is gone. */
+function builtAt(path: string): string | null {
+  try {
+    return statSync(path).mtime.toISOString();
+  } catch {
+    return null;
+  }
+}
+
 async function detail(jobId: string, userId: string, analysing: string | null) {
   const fresh = await db.job.findUniqueOrThrow({ where: { id: jobId } });
   const view = await jobView(fresh, userId);
@@ -53,6 +63,7 @@ async function detail(jobId: string, userId: string, analysing: string | null) {
     place: `${fresh.cc} · ${fresh.city}`,
     url: fresh.url,
     sourceList: fresh.source,
+    postedAt: fresh.postedAt.toISOString(),
     ...view.analysis,
     // The evidence is a list of claim labels. The slugs stay on the server.
     requirements: view.analysis.requirements.map((r) => ({ ...r, evidence: r.evidence.map((s) => labels.get(s) ?? s) })),
@@ -77,7 +88,7 @@ async function detail(jobId: string, userId: string, analysing: string | null) {
     // What was last generated, without rebuilding it: opening a job must not
     // cost a LaTeX compile. Pressing "Generate" fills in the rest.
     cv: app.cvPath
-      ? { pdfUrl: `/api/resume/${app.id}`, driveUrl: app.cvUrl, lead: app.cvLead, chat: readChat(app) }
+      ? { pdfUrl: `/api/resume/${app.id}`, driveUrl: app.cvUrl, lead: app.cvLead, builtAt: builtAt(app.cvPath), chat: readChat(app) }
       : null,
   };
 }

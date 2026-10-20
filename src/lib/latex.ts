@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join } from 'node:path';
+import { latexLogExcerpt } from './latex-log';
 import { baseEnv, findOnPath, LATEX_ENGINES, LUA_SAFE, runProgram, type Program } from './exec';
 
 /**
@@ -23,15 +24,10 @@ export function compileBudget(timeoutMs: number): number {
   return Math.min(timeoutMs, MAX_COMPILE_MS);
 }
 
-/** Keep the first 20 lines that start with "!". Show the work folder as "." and
- *  any other absolute path as "<path>", so an error never names a host path. */
+/** The first 20 lines of the log that start with "!". A path in the work folder
+ *  shows relative to it, and any other absolute path shows as its base name. */
 function cleanLog(text: string, work: string): string {
-  return text
-    .split('\n')
-    .filter((l) => l.startsWith('!'))
-    .slice(0, 20)
-    .map((l) => l.split(work).join('.').replace(/(?<![\w.])\/[^\s'"`]+/g, '<path>'))
-    .join(' ');
+  return latexLogExcerpt(text.split('\n').filter((l) => l.startsWith('!')).join('\n'), work);
 }
 
 /** RESUME_ENGINE wins when its file name is an engine on the list. A path to
@@ -86,7 +82,7 @@ export async function compileLatex(opts: { source: string; assetsDir: string | n
       const r = await runProgram(program, engineArgs(program, name, work), { cwd: work, timeoutMs: Math.floor(left), env, memoryMb: 512, bin });
       if (r.code !== 0) {
         const log = cleanLog(r.stdout + r.stderr, work);
-        throw new Error(`${program} failed${log ? `: ${log}` : ''}`);
+        throw new Error(`${program} failed${log ? `:\n${log}` : ''}`);
       }
     }
     const built = join(work, `${name}.pdf`);

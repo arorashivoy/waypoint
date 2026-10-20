@@ -806,3 +806,146 @@ button { cursor: pointer; }
 @media (pointer: coarse) {
   .sh-collapse { min-width: 44px; min-height: 44px; }
 }
+
+/* ---------- job detail ---------- */
+/* Header, fit, your way in, your CV, the apply bar. One column of at most 760 px.
+   Desktop: a glass pane that scrolls on its own, with the apply bar at its foot. Phone: the page scrolls, the bar sticks. */
+
+.ui-error-detail {
+  margin: 0; max-width: 100%; overflow-x: auto; padding: var(--s3); border-radius: var(--r-ctl); background: color-mix(in srgb, var(--night) 60%, transparent);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: var(--t-13); line-height: 1.5; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
+.jd { display: flex; flex-direction: column; min-height: 0; min-width: 0; height: 100%; border-radius: var(--r-panel); overflow: hidden;
+  background: var(--glass); border: 1px solid var(--edge); -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2); }
+.jd-sheet .ui-sheet-body { padding: 0; gap: 0; flex: 1; min-height: 0; overflow: hidden; }
+.jd-sheet .jd { border: 0; border-radius: 0; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.jd-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.jd h2, .jd h3 { margin: 0; }
+.jd h3 { font-family: var(--f-body); font-size: var(--t-16); font-weight: 600; }
+
+.jd-header {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2) var(--s6); align-items: end;
+  padding: var(--s6) var(--s7) var(--s5); background: linear-gradient(180deg, color-mix(in srgb, var(--lav) 10%, transparent), transparent);
+}
+.jd-top { display: none; }
+.jd-title { grid-column: 1; min-width: 0; }
+.jd-title h2 { font-size: var(--t-31); line-height: 1.1; font-weight: 700; letter-spacing: -0.02em; max-width: 18ch; overflow-wrap: anywhere; }
+.jd-where { margin: var(--s2) 0 0; color: var(--soft); }
+.jd-ring { grid-column: 2; grid-row: 1; align-self: center; }
+
+.jd-main { display: flex; flex-direction: column; gap: var(--s4); padding: var(--s2) var(--s7) var(--s6); max-width: 760px; box-sizing: content-box; }
+.jd-fit { display: flex; flex-direction: column; gap: var(--s4); align-items: flex-start; min-width: 0; width: 100%; }
+.jd-fit > .ui-route-wrap, .jd-fit > .ui-fold { width: 100%; }
+.jd-summary { margin: 0; font-size: var(--t-20); line-height: 1.5; max-width: 46ch; overflow-wrap: anywhere; }
+.jd-reading { margin: 0; display: inline-flex; align-items: center; gap: var(--s2); color: var(--mint); font-size: var(--t-13); font-weight: 500; }
+.jd-blockers {
+  width: 100%; box-sizing: border-box; padding: var(--s3) var(--s4); border-radius: var(--r-row); display: flex; flex-direction: column; gap: var(--s2);
+  background: color-mix(in srgb, var(--coral) 8%, transparent); border: 1px solid color-mix(in srgb, var(--coral) 28%, transparent);
+}
+.jd-blockers strong { color: var(--coral); font-weight: 600; }
+.jd-blockers ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s2); }
+.jd-blockers li { display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.jd-blockers q { color: var(--soft); font-size: var(--t-13); line-height: 1.45; quotes: '\201C' '\201D'; }
+.jd-note { margin: 0; width: 100%; box-sizing: border-box; padding: var(--s3) var(--s4); border-radius: var(--r-row); line-height: 1.5; overflow-wrap: anywhere; }
+.jd-note-warn { background: color-mix(in srgb, var(--butter) 9%, transparent); border: 1px solid color-mix(in srgb, var(--butter) 30%, transparent); color: var(--butter); }
+.jd-more { align-self: flex-start; padding: 0 var(--s2); }
+.jd-parts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s2); }
+.jd-parts li { display: flex; justify-content: space-between; gap: var(--s4); overflow-wrap: anywhere; }
+.jd-parts b { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.jd-stack { display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
+.jd-tight { gap: var(--s1); }
+.jd-hint { margin: 0; color: var(--soft); font-size: var(--t-13); line-height: 1.5; overflow-wrap: anywhere; }
+.jd-line { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.jd-soft { color: var(--soft); }
+.jd-warn { color: var(--butter); }
+.jd-grow { flex: 1 1 200px; min-width: 0; }
+.jd-empty { margin: 0; padding: var(--s4); border: 1px dashed var(--edge); border-radius: var(--r-row); color: var(--soft); line-height: 1.5; }
+.jd-actions { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; }
+.jd-block { display: flex; flex-direction: column; gap: var(--s3); padding-top: var(--s4); border-top: 1px solid var(--edge); min-width: 0; }
+
+.jd-contact { display: flex; gap: var(--s3); align-items: center; }
+.jd-contact > div { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.jd-contact span { color: var(--soft); font-size: var(--t-13); }
+.jd-contact .jd-why { color: var(--lav); }
+.jd-avatar {
+  flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: var(--t-13); font-weight: 600;
+  background: color-mix(in srgb, var(--lav) 16%, transparent); color: var(--lav);
+}
+.jd-others { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s1); font-size: var(--t-13); color: var(--soft); }
+.jd-others strong { color: var(--text); font-weight: 500; }
+.jd-guide { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3) var(--s4); border-radius: var(--r-row); background: color-mix(in srgb, var(--lav) 8%, transparent); line-height: 1.5; }
+.jd-guide ol { margin: 0; padding-left: var(--s5); display: flex; flex-direction: column; gap: var(--s1); }
+
+.jd-pdf { display: flex; flex-direction: column; gap: var(--s3); }
+.jd-preview { min-height: 0; max-height: 520px; overflow-y: auto; border-radius: var(--r-row); }
+.jd-preview[data-state='ready'] { border: 1px solid var(--edge); }
+.jd-pages { display: flex; flex-direction: column; gap: var(--s2); }
+.jd-pages canvas { width: 100%; height: auto; display: block; background: var(--text); }
+.jd-drive { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; }
+.jd-drive .jd-hint { flex-basis: 100%; }
+.jd-turn { margin: 0; padding: var(--s3) var(--s4); border-radius: var(--r-row); max-width: 85%; line-height: 1.5; overflow-wrap: anywhere; }
+.jd-turn-you { align-self: flex-end; background: color-mix(in srgb, var(--lav) 14%, transparent); }
+.jd-turn-claude { align-self: flex-start; background: var(--glass); border: 1px solid var(--edge); }
+.jd-suggestion { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3) var(--s4); border: 1px solid var(--edge); border-radius: var(--r-row); }
+.jd-must { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s1); }
+.jd-must li { display: flex; gap: var(--s2); align-items: baseline; overflow-wrap: anywhere; }
+.jd-must li::before { content: ''; flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--mint); transform: translateY(-2px); }
+.jd-projects { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s3); }
+.jd-projects li { display: flex; flex-direction: column; overflow-wrap: anywhere; }
+.jd-projects span { color: var(--soft); font-size: var(--t-13); line-height: 1.45; }
+
+.jd-back { display: none; }
+.jd-bar {
+  flex-shrink: 0; display: flex; gap: var(--s3); justify-content: flex-end; padding: var(--s4) var(--s7);
+  border-top: 1px solid var(--edge); background: color-mix(in srgb, var(--night) 40%, transparent);
+}
+
+@media (min-width: 1024px) {
+  .jobs-detail { padding: var(--s4) var(--s4) var(--s4) 0; overflow: hidden; display: flex; min-height: 0; }
+  .jobs-detail > .jd { flex: 1; }
+}
+@media (max-width: 1023px) {
+  .jd-header { padding: var(--s5) var(--s5) var(--s4); }
+  .jd-main { padding: var(--s2) var(--s5) var(--s5); }
+  .jd-bar { padding: var(--s4) var(--s5); }
+}
+@media (max-width: 639px) {
+  /* The job is its own screen: no top bar, no tab bar. The header has "‹ Jobs", the bar has the action. */
+  .sh[data-job='open'][data-place='jobs'] .sh-topbar,
+  .sh[data-job='open'][data-place='jobs'] .sh-tabbar { display: none; }
+  .sh[data-job='open'][data-place='jobs'] .main { padding-bottom: 0; }
+  .jobs-detail { padding: 0; overflow: visible; display: block; }
+
+  .jd { height: auto; min-height: 100dvh; overflow: visible; border: 0; border-radius: 0; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .jd-scroll { overflow: visible; flex: 1 0 auto; }
+  .jd-header { grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2) var(--s4); padding: env(safe-area-inset-top) var(--gutter) var(--s4); align-items: center; }
+  .jd-top { display: flex; grid-column: 1 / -1; align-items: center; justify-content: space-between; min-height: 56px; }
+  .jd-title h2 { font-size: var(--t-20); line-height: 1.2; max-width: none; }
+  .jd-ring { grid-row: 2; }
+  .jd-ring .ui-ring { --size: 84px; }
+  .jd-ring .ui-ring::before { inset: 7px; }
+  .jd-ring .ui-ring b { font-size: var(--t-20); }
+  .jd-main { padding: 0 var(--gutter) var(--s5); }
+  .jd-summary { font-size: 1.0625rem; }
+  .jd-bar {
+    position: sticky; bottom: 0; z-index: 5; justify-content: stretch; padding: var(--s3) var(--gutter) calc(var(--s4) + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--night) 88%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  }
+  .jd-bar .jd-bar-open { display: none; }
+  .jd-bar .ui-btn { flex: 1; }
+
+  /* A part (way in, CV) fills the screen. Its fold head gives way to a "‹ Back" row. */
+  .jd[data-part] .jd-header, .jd[data-part] .jd-fit, .jd[data-part] .jd-bar { display: none; }
+  .jd[data-part='wayin'] .jd-cv, .jd[data-part='cv'] .jd-wayin { display: none; }
+  .jd[data-part] .jd-main { padding-top: 0; }
+  .jd[data-part] .jd-back { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 56px; padding-top: env(safe-area-inset-top); }
+  .jd[data-part] .jd-back h2 { font-size: var(--t-20); }
+  .jd[data-part] .ui-fold { background: transparent; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .jd[data-part] .ui-fold-head { display: none; }
+  .jd[data-part] .ui-fold > .ui-fold-body { display: block !important; padding: var(--s2) 0 var(--s6); }
+}
+@media (min-width: 640px) {
+  .jd-bar .jd-bar-open { display: inline-flex; }
+}

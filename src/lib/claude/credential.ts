@@ -29,6 +29,8 @@ export type ClaudeStatus = {
   resetsAt: string;
   authFailure: { message: string; at: number } | null;
   quotaFailure: { message: string; at: number } | null;
+  /** True when the CLI would serve this user, but it failed its self-test. */
+  cliOff?: boolean;
 };
 
 export async function credentialFor(userId: string): Promise<Credential | null> {
@@ -78,7 +80,7 @@ export async function claudeStatus(userId: string): Promise<ClaudeStatus> {
       : capReached
         ? `You used this month's limit of ${usd(capUsd)} on the shared key. It resets on ${day(reset)}. Add your own API key in Settings to continue now.`
         : 'Add an API key in Settings to use Claude.';
-    return { ...base, mode: 'none', detail, authFailure: null, quotaFailure: null };
+    return { ...base, mode: 'none', detail, authFailure: null, quotaFailure: null, cliOff };
   }
 
   const key = failureKey(cred, userId);
