@@ -42,7 +42,8 @@ export function PdfPreview({ url, rev }: { url: string; rev: number }) {
       try {
         const pdfjs = await import('pdfjs-dist');
         pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
-        const task = pdfjs.getDocument({ url });
+        // The PDF is the user's own CV. No eval for fonts all the same: defence in depth.
+        const task = pdfjs.getDocument({ url, isEvalSupported: false });
         const pdf = await task.promise;
         doc = pdf;
         if (!live) return;
