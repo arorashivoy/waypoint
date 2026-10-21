@@ -543,8 +543,8 @@ const ALNUM_CHAR = /^[\p{L}\p{N}]$/u;
 const LIGATURE_WORD = /^f(?:f|i|l|fi|fl)$/;
 /** Ghostscript 10.0 gives the first glyph of an f ligature in a font with no Unicode map the text U+6600 (the bytes of "f"). */
 const LIGATURE_LEAD = '\u6600';
-/** Ghostscript 10.0 gives the second glyph of ff, fi, fl, ffi and ffl (no advance) one of these texts. */
-const LIGATURE_FOLLOWERS = ['\u6600', '\u6900', '\ucf00', '\u6c00'];
+/** Ghostscript 10.0 gives the second glyph of ff, fi, fl, ffi and ffl (no advance) one of these texts: f, i, the rest of ffi (U+CF00), l, the rest of ffl (U+D200). */
+const LIGATURE_FOLLOWERS = ['\u6600', '\u6900', '\ucf00', '\u6c00', '\ud200'];
 /** Ghostscript 10.02 gives the first glyph the text "f", and the parts (no advance) the texts f, i, l, U+00CF (the rest of ffi) and U+00D2 (the rest of ffl). */
 const LIGATURE_LEAD_10_02 = 'f';
 const LIGATURE_FOLLOWERS_10_02 = ['f', 'i', 'l', '\u00cf', '\u00d2'];
