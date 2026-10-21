@@ -124,7 +124,7 @@ const resumeView = (resume: Published['resume'], driveReason: string | null) =>
     shareReason: driveReason,
   };
 
-const eventOrg = (job: Job) => `${job.company} · ${job.city}`;
+const eventOrg = (job: Job) => `${job.company}, ${job.city}`;
 
 /** The work of an `outreach` task. It runs in the worker. The result is the JSON that the client reads. */
 export async function runOutreach(userId: string, p: OutreachPayload): Promise<Record<string, unknown>> {
@@ -145,7 +145,7 @@ export async function runOutreach(userId: string, p: OutreachPayload): Promise<R
       name = p.name;
       contactUrl = profileLink({ name, profileUrl: p.profileUrl ?? null }, job.company);
       init = name.split(' ').map((x) => x[0]).join('').slice(0, 2).toUpperCase();
-      reason = `1st-degree · ${profile.school ? `${profile.school.short} alum` : 'alumnus'}, accepted your request`;
+      reason = `1st-degree, ${profile.school ? `${profile.school.short} alum` : 'alumnus'}, accepted your request`;
     } else {
       const route = (await jobView(job, userId)).routes[0];
       if (!route) throw new TaskFatal(`No 1st-degree connection at ${job.company} in your imported export.`);

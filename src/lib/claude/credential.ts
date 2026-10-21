@@ -85,7 +85,7 @@ export async function claudeStatus(userId: string): Promise<ClaudeStatus> {
 
   const key = failureKey(cred, userId);
   const failures = { authFailure: claudeAuthFailure(key), quotaFailure: claudeQuotaFailure(key) };
-  if (cred.kind === 'cli') return { ...base, ...failures, mode: 'cli', detail: 'Claude Code CLI · the admin subscription' };
+  if (cred.kind === 'cli') return { ...base, ...failures, mode: 'cli', detail: 'Claude Code CLI, on the admin subscription' };
   if (cred.source === 'own') return { ...base, ...failures, mode: 'own', detail: `Your API key (ends in ${keyHint ?? '????'})` };
-  return { ...base, ...failures, mode: 'shared', detail: `The shared API key · ${usd(sharedSpentUsd)} of ${usd(capUsd)} used this month` };
+  return { ...base, ...failures, mode: 'shared', detail: `The shared API key: ${usd(sharedSpentUsd)} of ${usd(capUsd)} used this month` };
 }

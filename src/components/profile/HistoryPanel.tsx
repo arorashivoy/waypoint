@@ -39,7 +39,6 @@ export default function HistoryPanel({ version, changed, setToast }: { version: 
   if (!revs.length) return <p className="pf-note">No changes yet. Each change to your profile will show here.</p>;
   return (
     <div className="pf-stack-tight">
-      <p className="pf-note">Each row is a change. Restore puts back the profile from before that change.</p>
       <ul className="pf-rows">
         {revs.map((r) => {
           const when = new Date(r.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });

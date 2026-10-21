@@ -59,7 +59,7 @@ export default function ExperienceTab({ doc, levels, onSaved, setToast, onGoto }
         </div>
         <Problems live list={errors} />
         <div className="pf-actions">
-          <Button variant="go" onClick={saveMeta} disabled={!name.trim()}>Save</Button>
+          <Button onClick={saveMeta} disabled={!name.trim()}>Save</Button>
           {errors.includes(STALE_PROFILE_MESSAGE) && <Button onClick={loadNew}>Load the new version</Button>}
         </div>
       </section>

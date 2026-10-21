@@ -24,6 +24,9 @@ export function pendingSections(data: { needs: unknown[]; awaiting: unknown[]; a
   ];
 }
 
+/** Older rows join their parts with a middle dot ("Kestrel Pay · Berlin"). The screen shows them with words and commas. */
+export const plainText = (text: string) => text.replace(/\s+·\s+/g, ', ');
+
 /** The count in the coral badge of the shell. */
 export const needsCount = (data: { needs: unknown[] }) => data.needs.length;
 

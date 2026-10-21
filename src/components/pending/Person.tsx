@@ -1,3 +1,5 @@
+import { plainText } from './sections';
+
 /** The avatar, the name and the company line of a contact. */
 export default function Person({ init, who, org }: { init: string; who: string; org: string }) {
   return (
@@ -5,7 +7,7 @@ export default function Person({ init, who, org }: { init: string; who: string; 
       <span className="avatar avatar-light avatar-sm" aria-hidden="true">{init}</span>
       <div className="pn-who">
         <strong>{who}</strong>
-        <span>{org}</span>
+        <span>{plainText(org)}</span>
       </div>
     </div>
   );

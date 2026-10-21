@@ -119,7 +119,7 @@ export default function ResumeTab({ state, version, changed, setToast }: Props) 
 
       <section id="pf-history" className="glass ui-panel" aria-labelledby="pf-hist-h">
         <h2 id="pf-hist-h" className="ui-panel-title">{HISTORY_TITLE}</h2>
-        <p className="pf-note">Every change to your profile, with Restore. Use it to undo an accepted draft or a save.</p>
+        <p className="pf-note">Every change to your profile. Restore puts back the profile from before a change, so you can undo an accepted draft or a save.</p>
         <HistoryPanel version={version} changed={changed} setToast={setToast} />
       </section>
     </div>

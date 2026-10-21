@@ -91,6 +91,8 @@ describe('PendingSections markup', () => {
     expect(html.match(/See the jobs/g)).toHaveLength(1);
     expect(html).toContain('Find a contact in a job');
     expect(html.match(/<button/g)).toHaveLength(2);
+    expect(html).not.toContain('pn-count');
+    expect(render(data())).toContain('class="pn-count"');
   });
 
   it('names every action with the person or the job', () => {
@@ -101,10 +103,16 @@ describe('PendingSections markup', () => {
       'Edit the reply to Anna Weber',
       'Anna Weber accepted',
       'Anna Weber replied',
-      'Alumni search at Kestrel Pay · Berlin',
+      'Alumni search at Kestrel Pay, Berlin',
       'Copy and open LinkedIn for Mia Berg',
       'The CV Brightwell read',
     ]) expect(html).toContain(`aria-label="${name}"`);
+  });
+
+  it('writes the company line with a comma, also for an old row with a middle dot', () => {
+    const html = render(data());
+    expect(html).toContain('Kestrel Pay, Berlin');
+    expect(html).not.toContain(' · ');
   });
 
   it('names the buttons of the open forms', () => {

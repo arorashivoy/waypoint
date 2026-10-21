@@ -152,7 +152,7 @@ export function errorsFor(doc: ClaimsDoc, kind: ItemKind, item: Item, key: strin
 export function targetOptions(doc: ClaimsDoc): { value: string; label: string }[] {
   return [
     ...doc.targets.positions.flatMap((p) => [
-      { value: `position:${p.id}`, label: `${p.title} · ${p.company}` },
+      { value: `position:${p.id}`, label: `${p.title} at ${p.company}` },
       ...(p.bullets ?? []).map((b) => ({ value: `position:${p.id}/${b.id}`, label: `  — ${(b.text ?? b.match).slice(0, 60)}` })),
     ]),
     ...doc.targets.educations.map((e) => ({ value: `education:${e.id}`, label: e.school })),
@@ -160,10 +160,14 @@ export function targetOptions(doc: ClaimsDoc): { value: string; label: string }[
   ];
 }
 
+const SOURCE_NAME: Record<string, string> = { github: 'GitHub', linkedin: 'LinkedIn', resume: 'a résumé' };
+
 export function summaryOf(kind: ItemKind, item: Item): { title: string; sub: string } {
   const x = item as Record<string, any>;
-  if (kind === 'position') return { title: `${x.title} · ${x.company}`, sub: `${x.start ?? '?'} – ${x.end ?? 'present'}${x.location ? ` · ${x.location}` : ''}` };
-  if (kind === 'education') return { title: x.school, sub: [x.degree, x.field, x.years].filter(Boolean).join(' · ') };
-  if (kind === 'project') return { title: x.title, sub: [x.org, x.source && x.source !== 'manual' ? `from ${x.source}` : null].filter(Boolean).join(' · ') };
-  return { title: x.label, sub: `${x.kind} · ${(x.evidence ?? []).length} evidence` };
+  // Words and commas, not middle dots: "Backend Engineer at Kestrel Pay", "2022-03 to present, Berlin".
+  if (kind === 'position') return { title: x.company ? `${x.title} at ${x.company}` : x.title, sub: `${x.start ?? '?'} to ${x.end ?? 'present'}${x.location ? `, ${x.location}` : ''}` };
+  if (kind === 'education') return { title: x.school, sub: [x.degree, x.field, x.years].filter(Boolean).join(', ') };
+  if (kind === 'project') return { title: x.title, sub: [x.org, x.source && x.source !== 'manual' ? `from ${SOURCE_NAME[x.source] ?? x.source}` : null].filter(Boolean).join(', ') };
+  const n = (x.evidence ?? []).length;
+  return { title: x.label, sub: `${String(x.kind ?? '').replace(/^./, (c) => c.toUpperCase())}, ${n} ${n === 1 ? 'proof' : 'proofs'}` };
 }

@@ -20,7 +20,7 @@ export function CountryList({ countries, onToggle }: { countries: CountryRow[]; 
     <ul className="pf-rows">
       {countries.map((c) => (
         <li key={c.cc} className="pf-row st-country" data-on={c.on}>
-          <span className="st-rank" aria-hidden="true">{c.rank}</span>
+          <span className="st-rank" aria-hidden="true">{Number(c.rank) || c.rank}</span>
           <div className="pf-row-text">
             <span className="pf-row-title">{c.name}</span>
             <span className="pf-row-sub">{c.settle}. {c.bar}.</span>

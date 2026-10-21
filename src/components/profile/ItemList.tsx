@@ -80,8 +80,8 @@ export default function ItemList({ kind, title, noun, addLabel = `Add a ${noun}`
                   </span>
                 ) : (
                   <span className="pf-row-actions">
-                    <Button aria-label={actionName('Edit', s.title)} onClick={() => setEditing(key)}>Edit</Button>
-                    <Button aria-label={actionName('Remove', s.title)} onClick={() => setRemoving(key)}>Remove</Button>
+                    <Button variant="link" aria-label={actionName('Edit', s.title)} onClick={() => setEditing(key)}>Edit</Button>
+                    <Button variant="link" aria-label={actionName('Remove', s.title)} onClick={() => setRemoving(key)}>Remove</Button>
                   </span>
                 )}
               </li>

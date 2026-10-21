@@ -18,7 +18,8 @@ function Section({ id, title, count, loading, onJobs, children }: { id: SectionK
     <Panel className="pn-sec" data-section={id} aria-labelledby={`pn-${id}`}>
       <div className="pn-head">
         <h2 id={`pn-${id}`} className="ui-panel-title" tabIndex={-1}>{title}</h2>
-        {!loading && (id === 'needs' && count > 0
+        {/* An empty section says so in words, so it shows no 0. */}
+        {!loading && count > 0 && (id === 'needs'
           ? <Badge tone="coral">{count}<span className="sr-only"> {count === 1 ? 'item needs' : 'items need'} you</span></Badge>
           : <span className="pn-count">{count}<span className="sr-only"> {count === 1 ? 'item' : 'items'}</span></span>)}
       </div>

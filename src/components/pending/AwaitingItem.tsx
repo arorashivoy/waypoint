@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button, ErrorNote } from '../ui';
 import Person from './Person';
 import type { PendingActions } from './usePendingActions';
-import type { AwaitingItem as Item } from './sections';
+import { plainText, type AwaitingItem as Item } from './sections';
 
 /** A request that went out. The user says what happened next: they replied, or an alumnus accepted. */
 export default function AwaitingItem({ item, actions, initialForm = null }: { item: Item; actions: PendingActions; initialForm?: 'accepted' | 'replied' | null }) {
@@ -23,12 +23,12 @@ export default function AwaitingItem({ item, actions, initialForm = null }: { it
     <li className="pn-item" data-item={item.id}>
       <Person init={item.init} who={item.who} org={item.org} />
       <span className="pn-role">{item.role}</span>
-      <span className="pn-when">{item.when}{item.why ? `. ${item.why}` : ''}</span>
+      <span className="pn-when">{item.when}{item.why ? `. ${plainText(item.why)}` : ''}</span>
       <div className="pn-actions">
         {item.alumni && <Button aria-label={`${item.who} accepted`} aria-expanded={form === 'accepted'} onClick={() => toggle('accepted')}>They accepted</Button>}
         <Button aria-label={`${item.who} replied`} aria-expanded={form === 'replied'} onClick={() => toggle('replied')}>They replied</Button>
         {item.alumni && item.contactUrl && (
-          <a className="btn ui-btn link" aria-label={`Alumni search at ${item.org}`} href={item.contactUrl} target="_blank" rel="noopener noreferrer">Alumni search</a>
+          <a className="btn ui-btn link" aria-label={`Alumni search at ${plainText(item.org)}`} href={item.contactUrl} target="_blank" rel="noopener noreferrer">Alumni search</a>
         )}
       </div>
       {form === 'accepted' && (

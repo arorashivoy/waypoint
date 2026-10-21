@@ -548,7 +548,7 @@ export function diffDocs(before: ClaimsDoc | null, after: ClaimsDoc): DiffLine[]
   const same = (a: unknown, b: unknown) => JSON.stringify(prune(a), sorted) === JSON.stringify(prune(b), sorted);
   if (!before || !same(before.profile, after.profile)) out.push({ kind: 'profile', key: 'profile', label: 'Name and headline', change: before ? 'changed' : 'added' });
   const lists: [DiffLine['kind'], { key: string; label: string; v: unknown }[], { key: string; label: string; v: unknown }[]][] = [
-    ['position', (before?.targets.positions ?? []).map((p) => ({ key: p.id, label: `${p.title} · ${p.company}`, v: p })), after.targets.positions.map((p) => ({ key: p.id, label: `${p.title} · ${p.company}`, v: p }))],
+    ['position', (before?.targets.positions ?? []).map((p) => ({ key: p.id, label: `${p.title} at ${p.company}`, v: p })), after.targets.positions.map((p) => ({ key: p.id, label: `${p.title} at ${p.company}`, v: p }))],
     ['education', (before?.targets.educations ?? []).map((e) => ({ key: e.id, label: e.school, v: e })), after.targets.educations.map((e) => ({ key: e.id, label: e.school, v: e }))],
     ['project', (before?.targets.projects ?? []).map((p) => ({ key: p.id, label: p.title, v: p })), after.targets.projects.map((p) => ({ key: p.id, label: p.title, v: p }))],
     ['claim', (before?.claims ?? []).map((c) => ({ key: c.slug, label: c.label, v: c })), after.claims.map((c) => ({ key: c.slug, label: c.label, v: c }))],

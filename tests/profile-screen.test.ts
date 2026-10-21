@@ -83,7 +83,7 @@ describe('plurals and names', () => {
 
   it('puts the item name in the name of an action', () => {
     expect(actionName('Remove', 'Route planner')).toBe('Remove Route planner');
-    expect(actionName('Accept', 'Backend Engineer · Kestrel Pay')).toContain('Kestrel Pay');
+    expect(actionName('Accept', 'Backend Engineer at Kestrel Pay')).toContain('Kestrel Pay');
   });
 
   it('says which claim does not match, not that there are no claims', () => {
@@ -130,9 +130,9 @@ describe('the names of the buttons', () => {
   it('gives each Edit and Remove button its own name', () => {
     const html = render('position', doc.targets.positions);
     const names = [...html.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
-    expect(names).toContain('Edit Backend Engineer · Kestrel Pay');
-    expect(names).toContain('Remove Backend Engineer · Kestrel Pay');
-    expect(names).toContain('Remove Developer · Norrvik');
+    expect(names).toContain('Edit Backend Engineer at Kestrel Pay');
+    expect(names).toContain('Remove Backend Engineer at Kestrel Pay');
+    expect(names).toContain('Remove Developer at Norrvik');
     expect(new Set(names).size).toBe(names.length);
   });
 });
@@ -236,7 +236,12 @@ describe('the form logic of the editor', () => {
   });
 
   it('names the items and lists the targets of evidence', () => {
-    expect(summaryOf('position', doc.targets.positions[0]).title).toBe('Backend Engineer · Kestrel Pay');
+    expect(summaryOf('position', doc.targets.positions[0]).title).toBe('Backend Engineer at Kestrel Pay');
+    // Words and commas, not middle dots.
+    for (const kind of ['position', 'education', 'project', 'claim'] as const) {
+      const list = kind === 'claim' ? doc.claims : kind === 'position' ? doc.targets.positions : kind === 'education' ? doc.targets.educations : doc.targets.projects;
+      for (const item of list) expect(JSON.stringify(summaryOf(kind, item as never))).not.toContain('·');
+    }
     expect(targetOptions(doc).map((t) => t.value)).toEqual(['position:kestrel', 'position:norrvik', 'education:tu', 'project:route-planner']);
   });
 });
