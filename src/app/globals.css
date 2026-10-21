@@ -238,6 +238,11 @@ button { cursor: pointer; }
 .fs-group { display: flex; flex-direction: column; gap: var(--s2); }
 .fs-label { font-weight: 500; }
 .fs-options { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.fs-foot {
+  position: sticky; bottom: 0; z-index: 1; display: flex; flex-direction: column;
+  margin: 0 calc(var(--s5) * -1) calc(var(--s5) * -1); padding: var(--s3) var(--s5) calc(var(--s3) + env(safe-area-inset-bottom));
+  background: var(--surface); border-top: 1px solid var(--edge);
+}
 .fs-hint { margin: 0; font-size: var(--t-13); line-height: 1.4; color: var(--soft); }
 .aj-form { display: flex; flex-direction: column; gap: var(--s4); }
 
@@ -299,6 +304,9 @@ button { cursor: pointer; }
 .pn-form .note-area { min-height: 100px; width: 100%; }
 .pn-applied strong { font-weight: 600; overflow-wrap: anywhere; }
 .quote, .sent-body { overflow-wrap: anywhere; white-space: pre-wrap; }
+
+/* With nothing in any section, one panel speaks for the screen. */
+.pn-grid.pn-grid-empty { grid-template-columns: minmax(0, 560px); grid-template-rows: none; overflow: visible; }
 
 /* A phone stacks the sections. A tablet shows 2 × 2 and the page scrolls. A desktop shows 4 columns and each column scrolls on its own. */
 @media (min-width: 640px) and (max-width: 1279px) {
@@ -537,16 +545,6 @@ button { cursor: pointer; }
   .login-right { padding: 28px 20px 40px; gap: 20px; }
 }
 
-.toast {
-  position: fixed; left: 50%; transform: translateX(-50%);
-  bottom: 24px; z-index: 50;
-  background: #1A1724; color: var(--text); border: 1px solid var(--edge);
-  padding: 12px 18px; border-radius: var(--r-ctl);
-  font-size: 15px; line-height: 1.4; max-width: min(520px, calc(100vw - 32px));
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-@media (max-width: 639px) { .toast { bottom: calc(112px + env(safe-area-inset-bottom)); } }
-
 /* Nothing moves under this setting. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
@@ -676,10 +674,12 @@ button { cursor: pointer; }
   display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 var(--s2);
   border-radius: var(--r-ctl); font-size: var(--t-13); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums;
 }
-.ui-badge-coral { background: var(--coral); color: var(--ink-on); }
-.ui-badge-mint { background: var(--mint); color: var(--ink-on); }
-.ui-badge-lav { background: var(--lav); color: var(--ink-on); }
+/* One style: a tinted pill. Only a count on a nav icon is solid, because it sits on the icon and must show at a glance. */
+.ui-badge-coral { background: color-mix(in srgb, var(--coral) 16%, transparent); color: var(--coral); }
+.ui-badge-mint { background: color-mix(in srgb, var(--mint) 16%, transparent); color: var(--mint); }
+.ui-badge-lav { background: color-mix(in srgb, var(--lav) 16%, transparent); color: var(--lav); }
 .ui-badge-neutral { background: var(--glass-hi); color: var(--text); }
+.sh-rail-badge .ui-badge-coral, .sh-tab-badge .ui-badge-coral { background: var(--coral); color: var(--ink-on); }
 
 /* Score pill */
 .ui-pill {
@@ -823,7 +823,7 @@ button { cursor: pointer; }
 .sh-nav-item[aria-current='page']::after {
   content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 10px var(--mint); flex-shrink: 0;
 }
-.sh-nav-item .ui-badge-coral { margin-left: auto; background: color-mix(in srgb, var(--coral) 16%, transparent); color: var(--coral); }
+.sh-nav-item .ui-badge-coral { margin-left: auto; }
 .sh-work { padding: 12px 14px; border-radius: var(--r-ctl); background: color-mix(in srgb, var(--mint) 8%, transparent); }
 .sh-user { display: flex; align-items: center; gap: 12px; padding: var(--s3) 12px 0; border-top: 1px solid var(--edge); margin-top: var(--s2); }
 .sh-user-text { min-width: 0; }
@@ -1178,4 +1178,4 @@ button { cursor: pointer; }
 }
 @media (pointer: coarse) { .ob .btn.link { min-height: 44px; } }
 /* The toast sits above the buttons of the card. */
-.ob ~ .toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
+.ob ~ .ui-toast-region { bottom: calc(88px + env(safe-area-inset-bottom)); }

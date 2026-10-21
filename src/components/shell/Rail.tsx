@@ -26,7 +26,7 @@ export default function Rail({ place, go, needsCount, task, initials, onExpand }
         ))}
       </nav>
       <div className="sh-rail-foot">
-        {task && <span className="sh-rail-task"><TaskIndicator text={task} /></span>}
+        {task && <span className="sh-rail-task"><TaskIndicator text={task} silent /></span>}
         <button type="button" className="sh-collapse sh-expand" onClick={onExpand} aria-label="Open the sidebar">
           <ChevronIcon dir="right" />
         </button>

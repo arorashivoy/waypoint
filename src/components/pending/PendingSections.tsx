@@ -43,14 +43,28 @@ export default function PendingSections({ data, actions, onJobs }: { data: Pendi
       </div>
     );
   }
+  // With all 4 sections empty, one empty state speaks for the screen.
+  if (pendingSections(data).every((s) => s.count === 0)) {
+    return (
+      <div className="pn-grid pn-grid-empty">
+        <Panel className="pn-sec pn-all-empty" aria-label="Pending">
+          <EmptyState
+            cause="Nothing is pending."
+            detail="A referral request that waits for a reply, a reply that needs you, and a job that you applied for show here."
+            action={{ label: 'See the jobs', onClick: onJobs }}
+          />
+        </Panel>
+      </div>
+    );
+  }
   const counts = Object.fromEntries(pendingSections(data).map((s) => [s.key, s.count])) as Record<SectionKey, number>;
   return (
     <div className="pn-grid">
       <Section id="needs" title={TITLES.needs} count={counts.needs} onJobs={onJobs}>
-        {data.needs.map((n) => <NeedsItem key={n.id} item={n} actions={actions} />)}
+        {data.needs.map((n, i) => <NeedsItem key={n.id} item={n} actions={actions} primary={i === 0} />)}
       </Section>
       <Section id="awaiting" title={TITLES.awaiting} count={counts.awaiting} onJobs={onJobs}>
-        {data.awaiting.map((a) => <AwaitingItem key={a.id} item={a} actions={actions} />)}
+        {data.awaiting.map((a, i) => <AwaitingItem key={a.id} item={a} actions={actions} primary={i === 0} />)}
       </Section>
       <Section id="safe" title={TITLES.safe} count={counts.safe} onJobs={onJobs}>
         {data.auto.map((r) => <SafeItem key={r.id} item={r} actions={actions} />)}

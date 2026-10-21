@@ -6,8 +6,8 @@ import Person from './Person';
 import type { PendingActions } from './usePendingActions';
 import type { NeedsItem as Item } from './sections';
 
-/** A reply that Waypoint cannot answer alone. One primary action: send the reply. Editing the text is quiet. */
-export default function NeedsItem({ item, actions }: { item: Item; actions: PendingActions }) {
+/** A reply that Waypoint cannot answer alone. The first item of the section has the one primary button. The others are plain. */
+export default function NeedsItem({ item, actions, primary = false }: { item: Item; actions: PendingActions; primary?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState<string | null>(null);
   const body = text ?? item.draft;
@@ -33,7 +33,7 @@ export default function NeedsItem({ item, actions }: { item: Item; actions: Pend
       {item.reason && <p className="pn-reason">{item.reason}</p>}
       {error && <ErrorNote live what="Waypoint could not copy this reply." fix={error} />}
       <div className="pn-actions">
-        <Button variant="go" busy={busy} aria-label={`${item.action} to ${item.who}`} onClick={() => actions.send(item, body)}>{busy ? 'Copying…' : item.action}</Button>
+        <Button variant={primary ? 'go' : 'plain'} busy={busy} aria-label={`${item.action} to ${item.who}`} onClick={() => actions.send(item, body)}>{busy ? 'Copying…' : item.action}</Button>
         <Button variant="link" aria-label={`${editing ? 'Finish editing' : 'Edit'} the reply to ${item.who}`} onClick={() => setEditing(!editing)}>{editing ? 'Done' : 'Edit'}</Button>
       </div>
     </li>

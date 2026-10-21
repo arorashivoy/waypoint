@@ -18,7 +18,7 @@ export default function TopBar({ task, jobOpen, onBack }: { task: string | null;
       )}
       {task && (
         <span className="sh-pill">
-          <TaskIndicator text={task} />
+          <TaskIndicator text={task} silent />
         </span>
       )}
     </header>

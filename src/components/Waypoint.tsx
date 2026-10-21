@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useSWRConfig } from 'swr';
 import { useWizardBypass } from './onboarding/bypass';
 import Onboarding from './onboarding/Onboarding';
@@ -18,15 +19,27 @@ import { claudeLine, taskLine } from './shell/task';
 import { saveCountry } from './settings/countries';
 import { openSection } from './settings/model';
 import { useCollapsed, useLocation } from './shell/useShell';
-import { ErrorNote } from './ui';
+import { ErrorNote, TaskAnnouncer, Toast } from './ui';
 
+/** The toast and the task announcer stay in the page for every state, so a screen reader hears each new text. */
 export default function Waypoint() {
+  const toast = useToast();
+  const [task, setTask] = useState<string | null>(null);
+  return (
+    <>
+      <Shell setToast={toast.show} onTask={setTask} />
+      <Toast message={toast.message} nonce={toast.nonce} onHide={toast.hide} />
+      <TaskAnnouncer text={task} />
+    </>
+  );
+}
+
+function Shell({ setToast, onTask }: { setToast: (s: string) => void; onTask: (s: string | null) => void }) {
   const { data: state, error, mutate: reloadMe } = useMe();
   const refresh = useRefresh();
   const { mutate } = useSWRConfig();
   const { loc, go, openJob, closeJob } = useLocation();
   const [collapsed, setCollapsed] = useCollapsed();
-  const [toast, setToast] = useToast();
   const [bypass, setBypass] = useWizardBypass();
   const loadError = state === undefined && error && !(error instanceof ApiError && error.status === 401) ? String(error.message) : null;
 
@@ -47,7 +60,8 @@ export default function Waypoint() {
   // The empty Jobs list opens the Job search section. Go to Settings first, then name the section in the URL before Settings reads it.
   const openJobSearch = () => openSection(go, 'job-search');
 
-  const toastEl = toast && <div className="toast" role="status">{toast}</div>;
+  const taskText = state ? taskLine(state.analysing) : null;
+  useEffect(() => onTask(taskText), [taskText, onTask]);
 
   if (!state) {
     return (
@@ -60,7 +74,6 @@ export default function Waypoint() {
     return (
       <>
         <Onboarding me={state} setToast={setToast} toggleCountry={toggleCountry} refresh={refresh} onLeave={() => { setBypass(true); go('jobs'); }} />
-        {toastEl}
       </>
     );
   }
@@ -111,8 +124,6 @@ export default function Waypoint() {
       </div>
 
       <TabBar {...nav} />
-
-      {toastEl}
     </div>
   );
 }

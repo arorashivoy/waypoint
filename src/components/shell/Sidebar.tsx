@@ -32,7 +32,7 @@ export default function Sidebar({ place, go, needsCount, task, user, claudeLine,
 
       {task && (
         <div className="sh-work">
-          <TaskIndicator text={task} />
+          <TaskIndicator text={task} silent />
         </div>
       )}
 

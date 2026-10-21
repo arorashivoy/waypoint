@@ -24,6 +24,7 @@ import {
   Skeleton,
   Tabs,
   TaskIndicator,
+  TaskAnnouncer,
   Toast,
   trapIndex,
   WayIn,
@@ -242,6 +243,12 @@ describe('small parts', () => {
   it('TaskIndicator renders nothing without text', () => {
     expect(render(h(TaskIndicator, { text: null }))).toBe('');
     expect(render(h(TaskIndicator, { text: 'Checking 12 jobs' }))).toContain('role="status"');
+  });
+  it('TaskIndicator can drop its live region, and TaskAnnouncer stays in the page with no text', () => {
+    expect(render(h(TaskIndicator, { text: 'Checking 12 jobs', silent: true }))).not.toContain('role="status"');
+    const empty = render(h(TaskAnnouncer, { text: null }));
+    expect(empty).toContain('role="status"');
+    expect(render(h(TaskAnnouncer, { text: 'Checking 12 jobs' }))).toContain('Checking 12 jobs');
   });
   it('Toast is a polite live region', () => {
     const html = render(h(Toast, { message: 'Copied', onHide: () => {} }));

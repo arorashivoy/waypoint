@@ -72,12 +72,13 @@ describe('PendingSections markup', () => {
     expect([...at].sort((a, b) => a - b)).toEqual(at);
   });
 
-  it('gives each needs-you item one primary action', () => {
+  it('gives the first needs-you item the one primary button of the section', () => {
     const html = render(data());
     const needs = html.slice(html.indexOf('data-section="needs"'), html.indexOf('data-section="awaiting"'));
     const items = needs.split('<li').slice(1);
     expect(items).toHaveLength(2);
-    for (const item of items) expect(item.match(/class="btn ui-btn go/g)).toHaveLength(1);
+    expect(items[0].match(/class="btn ui-btn go/g)).toHaveLength(1);
+    expect(items[1]).not.toMatch(/class="btn ui-btn go/);
   });
 
   it('shows the count of needs-you in a coral badge', () => {
@@ -85,13 +86,20 @@ describe('PendingSections markup', () => {
     expect(render(data({ needs: [] }))).not.toContain('ui-badge-coral');
   });
 
-  it('shows an empty state with a cause and an action in an empty section', () => {
+  it('shows one empty state for the screen when all 4 sections are empty', () => {
     const html = render(data({ needs: [], awaiting: [], auto: [], appliedList: [] }));
-    for (const key of ['needs', 'awaiting', 'safe', 'applied'] as const) expect(html).toContain(EMPTY_TEXT[key].cause);
+    expect(html).toContain('Nothing is pending.');
+    expect(html.match(/ui-empty"/g)).toHaveLength(1);
     expect(html.match(/See the jobs/g)).toHaveLength(1);
+    expect(html.match(/<button/g)).toHaveLength(1);
+    expect(html).not.toContain('data-section=');
+  });
+
+  it('shows an empty state with a cause and an action in an empty section next to full ones', () => {
+    const html = render(data({ needs: [], awaiting: [] }));
+    for (const key of ['needs', 'awaiting'] as const) expect(html).toContain(EMPTY_TEXT[key].cause);
     expect(html).toContain('Find a contact in a job');
-    expect(html.match(/<button/g)).toHaveLength(2);
-    expect(html).not.toContain('pn-count');
+    expect(html).not.toContain('Nothing is pending.');
     expect(render(data())).toContain('class="pn-count"');
   });
 
@@ -119,6 +127,12 @@ describe('PendingSections markup', () => {
     const open = (initialForm: 'accepted' | 'replied') => renderToStaticMarkup(h(AwaitingItem, { item: data().awaiting[0], actions, initialForm }));
     expect(open('replied')).toContain('aria-label="Draft a reply to Anna Weber"');
     expect(open('accepted')).toContain('aria-label="Draft the referral message for Anna Weber"');
+  });
+
+  it('gives the form button of a waiting item the gradient only for the first item', () => {
+    const open = (primary: boolean) => renderToStaticMarkup(h(AwaitingItem, { item: data().awaiting[0], actions, initialForm: 'replied', primary }));
+    expect(open(true)).toMatch(/ui-btn go/);
+    expect(open(false)).not.toMatch(/ui-btn go/);
   });
 
   it('gives the counts words for a screen reader', () => {

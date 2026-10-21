@@ -7,7 +7,7 @@ import type { PendingActions } from './usePendingActions';
 import { plainText, type AwaitingItem as Item } from './sections';
 
 /** A request that went out. The user says what happened next: they replied, or an alumnus accepted. */
-export default function AwaitingItem({ item, actions, initialForm = null }: { item: Item; actions: PendingActions; initialForm?: 'accepted' | 'replied' | null }) {
+export default function AwaitingItem({ item, actions, initialForm = null, primary = false }: { item: Item; actions: PendingActions; initialForm?: 'accepted' | 'replied' | null; primary?: boolean }) {
   const [form, setForm] = useState<'accepted' | 'replied' | null>(initialForm);
   const [who, setWho] = useState({ name: '', url: '' });
   const [incoming, setIncoming] = useState('');
@@ -39,7 +39,7 @@ export default function AwaitingItem({ item, actions, initialForm = null }: { it
           <input id={`url-${item.id}`} className="field" placeholder="https://www.linkedin.com/in/…" autoComplete="off" value={who.url} onChange={(e) => setWho({ ...who, url: e.target.value })} />
           {error && form === 'accepted' && <ErrorNote live what="Waypoint could not draft the referral message." fix={error} />}
           <Button
-            variant="go"
+            variant={primary ? 'go' : 'plain'}
             busy={busy}
             aria-label={`Draft the referral message for ${item.who}`}
             disabled={!who.name.trim()}
@@ -55,7 +55,7 @@ export default function AwaitingItem({ item, actions, initialForm = null }: { it
           <textarea id={`in-${item.id}`} className="note-area" value={incoming} onChange={(e) => setIncoming(e.target.value)} />
           {error && form === 'replied' && <ErrorNote live what="Waypoint could not read this reply." fix={error} />}
           <Button
-            variant="go"
+            variant={primary ? 'go' : 'plain'}
             busy={busy}
             aria-label={`Draft a reply to ${item.who}`}
             disabled={!incoming.trim()}

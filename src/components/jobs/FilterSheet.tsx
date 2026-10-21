@@ -89,9 +89,11 @@ export default function FilterSheet({ open, onClose, opener, filters, levels, co
         </div>
       </div>
 
-      <Button variant="go" onClick={onClose}>
-        Show {count} {count === 1 ? 'job' : 'jobs'}
-      </Button>
+      <div className="fs-foot">
+        <Button variant="go" onClick={onClose}>
+          Show {count} {count === 1 ? 'job' : 'jobs'}
+        </Button>
+      </div>
     </Sheet>
   );
 }
