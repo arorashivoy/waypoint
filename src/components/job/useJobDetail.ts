@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, del, draftCopyOpen, patch, post } from '../api';
+import { cvResult, messageResult, parser, referralResult, wordingResult } from '../task-results';
 import { runTask } from '../tasks';
 import { suggestBlockedNote } from './CvSection';
 import type { Cv, CvBusy, JobDetailState, JobView, Wording } from './types';
 
-type Referral = { copy: string; open: string | null; name: string; resume: { tailored: boolean; lead: string | null; publicUrl: string | null; reason: string | null; shareReason: string | null } | null };
 
 /**
  * The open job: its data, and the actions of the sections. A task outlives a click
@@ -66,7 +66,7 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
     setBusy('send');
     setWayError(null);
     try {
-      const { res, copied, opened } = await draftCopyOpen(runTask<Referral>(() => post('/api/outreach', { jobId: id, action: 'referral' })));
+      const { res, copied, opened } = await draftCopyOpen(runTask(() => post<{ taskId: string }>('/api/outreach', { jobId: id, action: 'referral' }), { parse: parser(referralResult) }));
       if (shown.current !== id) return;
       setJob((cur) => cur && { ...cur, isSent: true, referral: { copy: res.copy, open: res.open, name: res.name } });
       setBlocked(!opened);
@@ -91,7 +91,7 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
     setBusy('alumni');
     setWayError(null);
     try {
-      const { res, copied, opened } = await draftCopyOpen(runTask<{ copy: string; open: string; name: string }>(() => post('/api/outreach', { jobId: id, action: 'alumni' })));
+      const { res, copied, opened } = await draftCopyOpen(runTask(() => post<{ taskId: string }>('/api/outreach', { jobId: id, action: 'alumni' }), { parse: parser(messageResult) }));
       if (shown.current !== id) return;
       setJob((cur) => cur && { ...cur, isSent: true, referral: { copy: res.copy, open: res.open, name: res.name, alumni: true } });
       setBlocked(!opened);
@@ -128,14 +128,17 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
     setCvBusy(kind);
     setCvError(null);
     try {
-      const fresh = await runTask<Cv & Partial<Wording>>(start);
-      if (shown.current === forId) {
-        // A suggest task builds no PDF. Its result holds only the suggestions and the keyword report.
-        if (kind !== 'suggest') {
+      // A suggest task builds no PDF. Its result holds only the suggestions and the keyword report.
+      if (kind === 'suggest') {
+        const w = await runTask(start, { parse: parser(wordingResult) });
+        if (shown.current === forId) setWording({ suggestions: w.suggestions, keywords: w.keywords });
+      } else {
+        const fresh = await runTask(start, { parse: parser(cvResult) });
+        if (shown.current === forId) {
           setCv(fresh);
           setCvRev((r) => r + 1);
+          if (fresh.suggestions && fresh.keywords) setWording({ suggestions: fresh.suggestions, keywords: fresh.keywords });
         }
-        if (fresh.suggestions && fresh.keywords) setWording({ suggestions: fresh.suggestions, keywords: fresh.keywords });
       }
       return true;
     } catch (e) {

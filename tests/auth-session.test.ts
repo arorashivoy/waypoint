@@ -5,7 +5,7 @@ import { createSession, endUserSessions, isHttps, readSession, TOUCH_MS } from '
 import { hashToken } from '@/lib/auth/tokens';
 import { makeUser, request } from './helpers/http';
 
-const reqWith = (token: string) => request('/api/state', { cookie: `${SESSION_COOKIE}=${token}` });
+const reqWith = (token: string) => request('/api/me', { cookie: `${SESSION_COOKIE}=${token}` });
 
 describe('sessions', () => {
   it('stores only the hash of the token', async () => {
@@ -21,7 +21,7 @@ describe('sessions', () => {
     const s = await readSession(reqWith(token));
     expect(s?.user.id).toBe(user.id);
     expect(await readSession(reqWith('wrong-token'))).toBeNull();
-    expect(await readSession(request('/api/state'))).toBeNull();
+    expect(await readSession(request('/api/me'))).toBeNull();
   });
 
   it('ends an expired session', async () => {

@@ -17,11 +17,13 @@ export function ago(iso: string, now = Date.now()): string {
   return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
 }
 
-/** For a message time: "5 min ago", "3 h ago", "2 d ago". */
-export function shortAgo(iso: string, now = Date.now()): string {
+/** For a message or a build: "just now", "5 minutes ago", "2 hours ago", "3 days ago". */
+export function longAgo(iso: string, now = Date.now()): string {
   const mins = Math.floor((now - Date.parse(iso)) / 60_000);
-  if (mins < 60) return `${Math.max(1, mins)} min ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} h ago`;
-  return `${Math.floor(hrs / 24)} d ago`;
+  if (!(mins >= 1)) return 'just now';
+  if (mins < 60) return `${mins} ${mins === 1 ? 'minute' : 'minutes'} ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} ${days === 1 ? 'day' : 'days'} ago`;
 }

@@ -2,6 +2,7 @@
 
 import { useState, type RefObject } from 'react';
 import { post } from '../api';
+import { parser, pasteResult } from '../task-results';
 import { runTask } from '../tasks';
 import { Button, ErrorNote, Field, Sheet } from '../ui';
 
@@ -40,7 +41,7 @@ export default function AddJobSheet({ open, onClose, opener, refresh, openJob, s
     setResult(null);
     try {
       // The task reads the job from the board. A warning or a note comes back with the result.
-      const res = await runTask<{ jobId: string; warning: string | null; note?: string | null }>(() => post<{ taskId: string }>('/api/jobs/paste', { url: url.trim() }));
+      const res = await runTask(() => post<{ taskId: string }>('/api/jobs/paste', { url: url.trim() }), { parse: parser(pasteResult) });
       await refresh();
       if (res.warning || res.note) setResult({ jobId: res.jobId, warning: res.warning, note: res.note ?? null });
       else close(res.jobId);

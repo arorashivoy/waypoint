@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { post } from '../api';
+import { githubResult, parser } from '../task-results';
 import { runTask } from '../tasks';
 import { Button, Field } from '../ui';
 import { countOf } from './model';
@@ -33,7 +34,7 @@ export default function GithubSource({ done, setToast }: { done: () => Promise<v
     setBusy(true);
     try {
       const { taskIds } = await post<{ taskIds: string[] }>('/api/profile/github/import', { username: username.trim(), repos: picked });
-      const results = await Promise.allSettled(taskIds.map((taskId) => runTask<{ drafts: number; dropped: number }>(async () => ({ taskId }))));
+      const results = await Promise.allSettled(taskIds.map((taskId) => runTask(async () => ({ taskId }), { parse: parser(githubResult) })));
       let drafts = 0;
       let dropped = 0;
       let firstError = '';
@@ -76,7 +77,7 @@ export default function GithubSource({ done, setToast }: { done: () => Promise<v
                 <input type="checkbox" checked={on} disabled={!on && picked.length >= MAX} onChange={(e) => setPicked((p) => (e.target.checked ? [...p, r.name] : p.filter((x) => x !== r.name)))} />
                 <span className="pf-row-text">
                   <span className="pf-row-title">{r.name}{r.fork ? ' (fork)' : ''}{r.private ? ' (private)' : ''}</span>
-                  <span className="pf-row-sub">{[r.language, r.description].filter(Boolean).join(' · ')}</span>
+                  <span className="pf-row-sub">{[r.language, r.description].filter(Boolean).join('. ')}</span>
                 </span>
               </label>
             );

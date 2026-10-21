@@ -13,18 +13,30 @@ const canPass = (e: unknown) => !(e instanceof ApiError) || e.status >= 500;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+type Opts = { intervalMs?: number; timeoutMs?: number; onProgress?: (v: TaskView) => void };
+const TIMED_OUT = 'The task did not finish in time. It still runs; check again later.';
+
 /**
  * Starts a task and waits for it. `start` calls a route that returns the task ID.
  * The helper asks for the status each `intervalMs` and uses `api()`, so a 401 goes to the login page.
- * The task keeps running if the time limit ends the wait.
+ * The last poll is at the time limit, not one interval before it. The task keeps running if the time limit ends the wait.
+ * A caller that reads the result gives `parse`, which checks it (see task-results.ts). With no `parse` the result is `unknown`.
  */
+export async function runTask(start: () => Promise<{ taskId: string }>, opts?: Opts): Promise<unknown>;
+export async function runTask<T>(start: () => Promise<{ taskId: string }>, opts: Opts & { parse: (raw: unknown) => T }): Promise<T>;
 export async function runTask<T>(
   start: () => Promise<{ taskId: string }>,
-  opts: { intervalMs?: number; timeoutMs?: number; onProgress?: (v: TaskView) => void } = {},
-): Promise<T> {
-  const { intervalMs = DEFAULT_INTERVAL_MS, timeoutMs = DEFAULT_TIMEOUT_MS, onProgress } = opts;
+  opts: Opts & { parse?: (raw: unknown) => T } = {},
+): Promise<T | unknown> {
+  const { intervalMs = DEFAULT_INTERVAL_MS, timeoutMs = DEFAULT_TIMEOUT_MS, onProgress, parse } = opts;
   const { taskId } = await start();
   const deadline = Date.now() + timeoutMs;
+  /** Waits for the next poll. At the time limit there is no next poll. */
+  const next = async () => {
+    const left = deadline - Date.now();
+    if (left <= 0) throw new Error(TIMED_OUT);
+    await sleep(Math.min(intervalMs, left));
+  };
   let errors = 0;
   for (;;) {
     let v: TaskView;
@@ -34,14 +46,12 @@ export async function runTask<T>(
     } catch (e) {
       // The task runs on in the worker. Ask again, up to MAX_POLL_ERRORS failed polls in a row.
       if (!canPass(e) || ++errors > MAX_POLL_ERRORS) throw e;
-      if (Date.now() + intervalMs > deadline) throw new Error('The task did not finish in time. It still runs; check again later.');
-      await sleep(intervalMs);
+      await next();
       continue;
     }
     onProgress?.(v);
-    if (v.status === 'done') return v.result as T;
+    if (v.status === 'done') return parse ? parse(v.result) : v.result;
     if (v.status === 'failed') throw new Error(v.error ?? 'The task failed.');
-    if (Date.now() + intervalMs > deadline) throw new Error('The task did not finish in time. It still runs; check again later.');
-    await sleep(intervalMs);
+    await next();
   }
 }

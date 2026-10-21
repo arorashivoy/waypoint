@@ -3,13 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { post } from '../api';
 import type { Me } from '../data';
+import { parser, refreshResult } from '../task-results';
 import { runTask } from '../tasks';
 import { Button, ErrorNote, Skeleton } from '../ui';
 import AddJobSheet from './AddJobSheet';
 import FilterSheet from './FilterSheet';
 import JobRow from './JobRow';
 import JobsEmpty from './JobsEmpty';
-import { refreshLine, type RefreshResult } from './refresh';
+import { refreshLine } from './refresh';
 import { useJobList } from './useJobList';
 
 interface Props {
@@ -44,7 +45,7 @@ export default function JobList({ me, list, loading, error, onRetry, refresh, se
     setRefreshing(true);
     setRefreshError(null);
     try {
-      const res = await runTask<RefreshResult>(() => post<{ taskId: string }>('/api/jobs/refresh', { force }));
+      const res = await runTask(() => post<{ taskId: string }>('/api/jobs/refresh', { force }), { parse: parser(refreshResult) });
       await refresh();
       setReport(refreshLine(res));
       if (reportTimer.current) clearTimeout(reportTimer.current);
@@ -88,7 +89,7 @@ export default function JobList({ me, list, loading, error, onRetry, refresh, se
           ref={searchRef}
           type="search"
           className="field jl-search"
-          placeholder="Search role, company, city"
+          placeholder="Search"
           autoComplete="off"
           value={q}
           onChange={(e) => setQ(e.target.value)}

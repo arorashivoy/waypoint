@@ -24,10 +24,29 @@ export function compileBudget(timeoutMs: number): number {
   return Math.min(timeoutMs, MAX_COMPILE_MS);
 }
 
-/** The first 20 lines of the log that start with "!". A path in the work folder
+/** The error lines of a log: each "!" line with the first "l.<n>" line after it
+ *  (the line of the .tex), and the "error:" lines of tectonic. */
+function errorLines(text: string): string[] {
+  const out: string[] = [];
+  let wantLine = false;
+  for (const l of text.split('\n')) {
+    if (l.startsWith('!')) {
+      out.push(l);
+      wantLine = true;
+    } else if (wantLine && /^l\.\d+/.test(l)) {
+      out.push(l);
+      wantLine = false;
+    } else if (l.startsWith('error:')) {
+      out.push(l);
+    }
+  }
+  return out;
+}
+
+/** The first 20 error lines of the log. A path in the work folder
  *  shows relative to it, and any other absolute path shows as its base name. */
 export function cleanLog(text: string, work: string): string {
-  return latexLogExcerpt(text.split('\n').filter((l) => l.startsWith('!')).join('\n'), work);
+  return latexLogExcerpt(errorLines(text).join('\n'), work);
 }
 
 /** RESUME_ENGINE wins when its file name is an engine on the list. A path to

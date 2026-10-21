@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runTask } from '@/components/tasks';
+import { parser, refreshResult } from '@/components/task-results';
 
 const view = (status: string, extra: object = {}) => ({ id: 't1', kind: 'cv', status, attempts: 1, runAt: '2026-10-17T00:00:00.000Z', error: null, result: null, ...extra });
 
@@ -23,7 +24,7 @@ describe('runTask', () => {
   it('resolves with the result', async () => {
     const f = fakeFetch([view('queued'), view('running'), view('done', { result: { url: 'x' } })]);
     const seen: string[] = [];
-    const p = runTask<{ url: string }>(async () => ({ taskId: 't1' }), { onProgress: (v) => seen.push(v.status) });
+    const p = runTask(async () => ({ taskId: 't1' }), { onProgress: (v) => seen.push(v.status) });
     await vi.advanceTimersByTimeAsync(1500 * 3);
     await expect(p).resolves.toEqual({ url: 'x' });
     expect(f).toHaveBeenCalledTimes(3);
@@ -45,6 +46,29 @@ describe('runTask', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(await caught).toEqual(new Error('The task did not finish in time. It still runs; check again later.'));
   });
+
+  it('polls at the time limit, not one interval before it', async () => {
+    const f = fakeFetch([view('running'), view('running'), view('running'), view('done', { result: 7 })]);
+    const p = runTask(async () => ({ taskId: 't1' }), { timeoutMs: 4000 });
+    const caught = p.catch((e: Error) => e);
+    await vi.advanceTimersByTimeAsync(3999);
+    expect(f).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await caught).toBe(7);
+    expect(f).toHaveBeenCalledTimes(4);
+  });
+
+  it('gives the result to the parser of the caller', async () => {
+    fakeFetch([view('done', { result: { added: 2, total: 9, report: [], extra: 'kept' } })]);
+    const p = runTask(async () => ({ taskId: 't1' }), { parse: parser(refreshResult) });
+    await expect(p).resolves.toEqual({ added: 2, total: 9, report: [], extra: 'kept' });
+  });
+
+  it('throws when the result does not match the parser', async () => {
+    fakeFetch([view('done', { result: { added: 'two' } })]);
+    const caught = runTask(async () => ({ taskId: 't1' }), { parse: parser(refreshResult) }).catch((e: Error) => e);
+    expect(((await caught) as Error).message).toMatch(/result that Waypoint cannot read/);
+  });
 });
 
 describe('runTask and lost polls', () => {
@@ -63,7 +87,7 @@ describe('runTask and lost polls', () => {
 
   it('keeps polling through 5 lost polls in a row', async () => {
     const f = flakyFetch([view('running'), 'net', 'net', 502, 'net', 'net', view('done', { result: { ok: 1 } })]);
-    const p = runTask<{ ok: number }>(async () => ({ taskId: 't1' }));
+    const p = runTask(async () => ({ taskId: 't1' }));
     await vi.advanceTimersByTimeAsync(1500 * 7);
     await expect(p).resolves.toEqual({ ok: 1 });
     expect(f).toHaveBeenCalledTimes(7);
@@ -71,7 +95,7 @@ describe('runTask and lost polls', () => {
 
   it('a good poll resets the count', async () => {
     flakyFetch(['net', 'net', 'net', 'net', 'net', view('running'), 'net', 'net', 'net', 'net', 'net', view('done', { result: 2 })]);
-    const p = runTask<number>(async () => ({ taskId: 't1' }));
+    const p = runTask(async () => ({ taskId: 't1' }));
     await vi.advanceTimersByTimeAsync(1500 * 12);
     await expect(p).resolves.toBe(2);
   });

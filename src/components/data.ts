@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import useSWR, { useSWRConfig, type SWRConfiguration, type SWRResponse } from 'swr';
 import type { ClaimsDoc } from '@/lib/profile/doc';
 import type { buildJobs, buildMe, buildPending, buildProfileView } from '@/lib/state';
-import { ago, daysSince, shortAgo } from '@/lib/time-ago';
+import { ago, daysSince, longAgo } from '@/lib/time-ago';
 import { api } from './api';
 
 /**
@@ -33,13 +33,27 @@ export const KEYS = {
 
 const isAbort = (e: unknown) => e instanceof DOMException && e.name === 'AbortError';
 
-/** The requests in flight, by key, and how many mounted hooks use each key. */
-const watched = new Map<string, { users: number; controller: AbortController | null }>();
+/** The requests in flight, by key, and how many mounted hooks use each key. A key can have more than one request in flight. */
+const watched = new Map<string, { users: number; controllers: Set<AbortController> }>();
 const watchOf = (key: string) => {
   let w = watched.get(key);
-  if (!w) watched.set(key, (w = { users: 0, controller: null }));
+  if (!w) watched.set(key, (w = { users: 0, controllers: new Set() }));
   return w;
 };
+
+/** A new request for a key. Its controller stays in the set until the request ends. */
+export function startRequest(key: string): AbortController {
+  const c = new AbortController();
+  watchOf(key).controllers.add(c);
+  return c;
+}
+export const endRequest = (key: string, c: AbortController) => watchOf(key).controllers.delete(c);
+/** Stops every request in flight for a key: a newer request does not hide an older one. */
+export function abortRequests(key: string) {
+  const w = watchOf(key);
+  for (const c of w.controllers) c.abort();
+  w.controllers.clear();
+}
 
 function useData<T>(key: string | null, config: SWRConfiguration<T> = {}): SWRResponse<T> {
   useEffect(() => {
@@ -51,8 +65,7 @@ function useData<T>(key: string | null, config: SWRConfiguration<T> = {}): SWRRe
       // A short delay: React in development unmounts and mounts a screen at once, and that must not abort its request.
       setTimeout(() => {
         if (w.users > 0) return;
-        w.controller?.abort();
-        w.controller = null;
+        abortRequests(key);
       }, 50);
     };
   }, [key]);
@@ -60,9 +73,8 @@ function useData<T>(key: string | null, config: SWRConfiguration<T> = {}): SWRRe
   const res = useSWR<T>(
     key,
     (url: string) => {
-      const controller = new AbortController();
-      watchOf(url).controller = controller;
-      return api<T>(url, { signal: controller.signal });
+      const controller = startRequest(url);
+      return api<T>(url, { signal: controller.signal }).finally(() => endRequest(url, controller));
     },
     { shouldRetryOnError: false, revalidateOnFocus: true, ...config },
   );
@@ -100,12 +112,13 @@ export function useJobs() {
 
 export function usePending() {
   const res = useData<Pending>(KEYS.pending);
-  const data = res.data && {
+  // The same object until the data changes, so the screen does not draw again on each render of its parent.
+  const data = useMemo(() => res.data && {
     ...res.data,
-    needs: res.data.needs.map((n) => ({ ...n, when: shortAgo(n.createdAt) })),
+    needs: res.data.needs.map((n) => ({ ...n, when: longAgo(n.createdAt) })),
     awaiting: res.data.awaiting.map((a) => ({ ...a, when: `Sent ${ago(a.sentAt)}` })),
-    appliedList: res.data.appliedList.map((p) => ({ ...p, cvSent: p.cvSentAt ? shortAgo(p.cvSentAt) : null })),
-  };
+    appliedList: res.data.appliedList.map((p) => ({ ...p, cvSent: p.cvSentAt ? longAgo(p.cvSentAt) : null })),
+  }, [res.data]);
   return { ...res, data };
 }
 

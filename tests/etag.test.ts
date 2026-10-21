@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { jsonWithEtag } from '@/lib/etag';
 import { db } from '@/lib/db';
@@ -43,7 +44,8 @@ describe('ETag on the routes', () => {
     // Only one country is on for this user, and its code is unique to this test,
     // so no job from another test file enters the state.
     await db.countryPref.updateMany({ where: { userId: user.id }, data: { on: false } });
-    const cc = `X${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`;
+    // X + a letter, then a part unique to this run, like the other files (api-state-split, jobs-card-fields).
+    const cc = `XE${randomBytes(4).toString('hex')}`;
     await db.countryPref.create({ data: { userId: user.id, cc, rank: 0, on: true } });
     // Freeze the clock, so the relative times in the state do not change between requests.
     vi.useFakeTimers({ toFake: ['Date'] });

@@ -2,7 +2,8 @@
 
 import { useCallback, useState } from 'react';
 import { post } from '../api';
-import { refreshLine, type RefreshResult } from '../jobs/refresh';
+import { refreshLine } from '../jobs/refresh';
+import { parser, refreshResult } from '../task-results';
 import { runTask } from '../tasks';
 
 export type FirstJobs = { phase: 'idle' } | { phase: 'running' } | { phase: 'done'; line: string } | { phase: 'error'; message: string };
@@ -13,7 +14,7 @@ export function useFirstJobs(reload: () => Promise<unknown>) {
   const run = useCallback(async () => {
     setState({ phase: 'running' });
     try {
-      const res = await runTask<RefreshResult>(() => post<{ taskId: string }>('/api/jobs/refresh', { force: false }));
+      const res = await runTask(() => post<{ taskId: string }>('/api/jobs/refresh', { force: false }), { parse: parser(refreshResult) });
       await reload();
       setState({ phase: 'done', line: refreshLine(res) });
     } catch (e) {

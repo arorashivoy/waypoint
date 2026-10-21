@@ -46,7 +46,7 @@ describe('middleware', () => {
   });
 
   it('lets API reads through; the route checks the session', () => {
-    expect(passes(run('/api/state'))).toBe(true);
+    expect(passes(run('/api/me'))).toBe(true);
   });
 
   it('refuses a cross-origin write', async () => {

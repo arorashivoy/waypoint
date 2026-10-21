@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ApiError, upload } from '../api';
+import { importResult, parser } from '../task-results';
 import { runTask } from '../tasks';
 import FileButton from './FileButton';
 import GithubSource from './GithubSource';
@@ -23,7 +24,7 @@ export default function ImportSources({ imported, setToast }: { imported: () => 
         </div>
         <FileButton label="Upload a résumé" accept={FILE_ACCEPT.resume} run={async (f) => {
           try {
-            const r = await runTask<{ drafts: number; dropped: number; hidden: number }>(() => upload<{ taskId: string }>('/api/profile/resume-import', f));
+            const r = await runTask(() => upload<{ taskId: string }>('/api/profile/resume-import', f), { parse: parser(importResult) });
             setToast(`Made ${countOf(r.drafts, 'draft')}.${r.dropped ? ` Dropped ${countOf(r.dropped, 'item')} whose quote is not in the file.` : ''}${r.hidden ? ' The file has hidden text. Check the warnings on the drafts.' : ''}`);
             await imported();
           } catch (e) { fail(e); }

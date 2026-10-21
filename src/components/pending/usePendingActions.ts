@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { copyAndOpen, draftCopyOpen, patch, post } from '../api';
+import { messageResult, parser, replyResult } from '../task-results';
 import { runTask } from '../tasks';
 import { keepFocus, sectionOfItem } from './focus';
 import type { AwaitingItem, NeedsItem } from './sections';
@@ -62,7 +63,7 @@ export function usePendingActions(refresh: () => Promise<unknown>, setToast: (s:
       run(a.id, async () => {
         // An alumnus who accepted is a connection now, so they get the same referral message, with the CV link, that a 1st-degree contact would.
         const { res, copied, opened } = await draftCopyOpen(
-          runTask<{ copy: string; open: string | null; name: string }>(() => post('/api/outreach', { jobId: a.jobId, action: 'accepted', name: who.name, profileUrl: who.url })),
+          runTask(() => post<{ taskId: string }>('/api/outreach', { jobId: a.jobId, action: 'accepted', name: who.name, profileUrl: who.url }), { parse: parser(messageResult) }),
         );
         await refresh();
         const first = res.name.split(' ')[0];
@@ -74,7 +75,7 @@ export function usePendingActions(refresh: () => Promise<unknown>, setToast: (s:
       }),
     submitReply: (a, incoming) =>
       run(a.id, async () => {
-        const res = await runTask<{ certain: boolean }>(() => post('/api/outreach', { jobId: a.jobId, action: 'replied', incoming }));
+        const res = await runTask(() => post<{ taskId: string }>('/api/outreach', { jobId: a.jobId, action: 'replied', incoming }), { parse: parser(replyResult) });
         await refresh();
         setToast(res.certain ? 'The answer was already on file, so the reply is drafted and marked safe to send.' : 'That reply needs a decision from you. It is in Needs you with the reason.');
       }),
