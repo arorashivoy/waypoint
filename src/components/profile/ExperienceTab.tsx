@@ -8,7 +8,7 @@ import { Button, Field, Fold } from '../ui';
 import Problems from './Problems';
 import type { ProfileTab } from './model';
 import ItemList from './ItemList';
-import { useProfileVersion } from './version';
+import { useEditVersion } from './version';
 
 type Props = { doc: ClaimsDoc; levels?: string[]; onSaved: (reply: any) => void; setToast: (s: string) => void; onGoto?: (tab: ProfileTab) => void };
 
@@ -16,7 +16,7 @@ export default function ExperienceTab({ doc, levels, onSaved, setToast, onGoto }
   const [name, setName] = useState(doc.profile.name);
   const [headline, setHeadline] = useState(doc.profile.headline);
   const [errors, setErrors] = useState<string[]>([]);
-  const { version, reload } = useProfileVersion();
+  const { version, reload, begin, rebase } = useEditVersion();
 
   // A new profile from another tab fills the form only when the user has no unsaved edits.
   const synced = useRef({ name: doc.profile.name, headline: doc.profile.headline });
@@ -36,12 +36,14 @@ export default function ExperienceTab({ doc, levels, onSaved, setToast, onGoto }
     synced.current = { name: fresh.doc.profile.name, headline: fresh.doc.profile.headline };
     setName(fresh.doc.profile.name);
     setHeadline(fresh.doc.profile.headline);
+    rebase(null);
     setErrors([]);
   };
   const saveMeta = async () => {
     setErrors([]);
     try {
       onSaved(await put('/api/profile/meta', { name, headline, version }));
+      rebase(null);
       setToast('Saved.');
     } catch (e) {
       setErrors(e instanceof ApiError && Array.isArray(e.data.errors) ? e.data.errors : [(e as Error).message]);
@@ -52,9 +54,9 @@ export default function ExperienceTab({ doc, levels, onSaved, setToast, onGoto }
       <section className="glass ui-panel pf-meta" aria-labelledby="pf-meta-h">
         <h2 id="pf-meta-h" className="ui-panel-title">Name and headline</h2>
         <div className="pf-fields">
-          <Field label="Name">{(c) => <input {...c} type="text" value={name} onChange={(e) => setName(e.target.value)} />}</Field>
+          <Field label="Name">{(c) => <input {...c} type="text" value={name} onChange={(e) => { begin(); setName(e.target.value); }} />}</Field>
           <Field label="Headline" hint="For example: Backend engineer, Java and Kafka">
-            {(c) => <input {...c} type="text" value={headline} onChange={(e) => setHeadline(e.target.value)} />}
+            {(c) => <input {...c} type="text" value={headline} onChange={(e) => { begin(); setHeadline(e.target.value); }} />}
           </Field>
         </div>
         <Problems live list={errors} />

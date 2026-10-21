@@ -8,7 +8,7 @@ import { STALE_PROFILE_MESSAGE } from '@/lib/profile/stale';
 import { Button, Field, Fold } from '../ui';
 import Problems, { fieldProblem } from './Problems';
 import { countOf } from './model';
-import { useProfileVersion } from './version';
+import { useEditVersion } from './version';
 import { errorsFor, FIELDS, fromForm, targetOptions, toForm } from './fields';
 
 type Props = {
@@ -33,7 +33,8 @@ export default function ItemEditor({ kind, doc, itemKey: key, item, mode, onDone
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
   const [tried, setTried] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
-  const { version, reload } = useProfileVersion();
+  // The form copies its values from the profile when it opens, so it keeps the version of that moment.
+  const { version, reload, rebase } = useEditVersion(true);
 
   const next = useMemo(() => fromForm(kind, form, item, { evidence, listed }), [kind, form, item, evidence, listed]);
   const errs = useMemo(() => errorsFor(doc, kind, next, mode === 'profile' ? key : null), [doc, kind, next, key, mode]);
@@ -160,7 +161,7 @@ export default function ItemEditor({ kind, doc, itemKey: key, item, mode, onDone
         <Problems list={tried || touched.size > 0 ? errs.other : undefined} />
         <Problems live list={serverErrors} />
         {serverErrors.includes(STALE_PROFILE_MESSAGE) && (
-          <div><Button onClick={async () => { if (await reload()) setServerErrors([]); }}>Load the new version</Button></div>
+          <div><Button onClick={async () => { const fresh = await reload(); if (fresh) { rebase(fresh.version); setServerErrors([]); } }}>Load the new version</Button></div>
         )}
       </div>
       <div className="pf-wide pf-actions">

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useMemo } from 'react';
+import { createContext, useContext, useMemo, useRef } from 'react';
 import type { KeyedMutator } from 'swr';
 import { STALE_PROFILE_MESSAGE } from '@/lib/profile/stale';
 import { ApiError } from '../api';
@@ -34,4 +34,34 @@ export function useProfileVersionValue(data: ProfileData | undefined, mutate: Ke
     }),
     [data?.version, mutate],
   );
+}
+
+/**
+ * The version that a form sends. It is the version from the moment the user started the edit, not the latest
+ * one: when another tab saves and this tab loads the new profile, the form must still get the 409.
+ * A form with no edits has no base and follows the latest version.
+ */
+export const editVersion = (base: number | null, latest: number): number => base ?? latest;
+
+/** The base after an edit starts. The first edit sets it. Later edits keep it. */
+export const startEdit = (base: number | null, latest: number): number => base ?? latest;
+
+/**
+ * For a form that keeps edits. `begin` goes in every change handler. `send` gives the version for a write.
+ * `rebase(v)` sets a new base (after "Load the new version" with the edits kept); `rebase(null)` ends the edit.
+ * `startNow` takes the base when the form opens, for a form that copies its values from the profile once.
+ */
+export function useEditVersion(startNow = false) {
+  const { version, reload } = useProfileVersion();
+  const base = useRef<number | null>(startNow ? version : null);
+  return {
+    version: editVersion(base.current, version),
+    reload,
+    begin: () => {
+      base.current = startEdit(base.current, version);
+    },
+    rebase: (v: number | null) => {
+      base.current = v;
+    },
+  };
 }
