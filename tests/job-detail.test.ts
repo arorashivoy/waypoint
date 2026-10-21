@@ -252,6 +252,14 @@ describe('the polish of the job detail', () => {
     expect(render(view({ cv }))).toContain('What to change');
   });
 
+  it('says one time why Claude cannot run, above the Claude tools', () => {
+    const note = 'Add an API key in Settings to use Claude.';
+    const off = render(view({ cv }), { claudeNote: note });
+    expect(off.split(note).length - 1).toBe(1);
+    expect(off.indexOf(note)).toBeLessThan(off.indexOf('Refine with Claude'));
+    expect(off).toContain('aria-describedby="jd-claude-note"');
+  });
+
   it('tells the user what to do after a LaTeX failure', () => {
     const p = errorParts('pdflatex failed:\n! Undefined control sequence.\nl.42 \\x');
     expect(p.what).toBe('The CV did not build (pdflatex failed).');

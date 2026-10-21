@@ -11,6 +11,8 @@ import type { Cv, CvBusy, JobDetailState, Part, Wording } from './types';
 
 const EMPTY_WORDING: Wording = { suggestions: { dropped: 0, items: [] }, keywords: { inResume: [], missingWithEvidence: [] } };
 const COMPILE_FAILED = 'the CV did not compile';
+/** The id of the one line that says why Claude cannot run. The disabled Claude buttons point to it. */
+const CLAUDE_NOTE_ID = 'jd-claude-note';
 
 /** What to tell the user when "Suggest wording" cannot run. Null when Claude is on. */
 export function cliOffNote(cliOff: boolean): string {
@@ -111,8 +113,8 @@ function RefineCv({ d, cv }: { d: JobDetailState; cv: Cv }) {
   return (
     <div className="jd-block">
       <h3>Refine with Claude{turns ? `, ${turns} ${turns === 1 ? 'change' : 'changes'}` : ''}</h3>
-      {/* With no Claude, the field cannot do anything: one line says why. */}
-      <p className="jd-hint">{d.claudeNote ?? 'Claude only reorders and chooses between entries that are already in your CV and claims. It never writes new lines. Each change builds the PDF again.'}</p>
+      {/* With no Claude, the field cannot do anything. The note above the Claude tools says why. */}
+      {!d.claudeNote && <p className="jd-hint">Claude only reorders and chooses between entries that are already in your CV and claims. It never writes new lines. Each change builds the PDF again.</p>}
       {cv.chat.map((t, i) => (
         <p key={i} className={`jd-turn jd-turn-${t.role}`}>{t.text}</p>
       ))}
@@ -163,12 +165,12 @@ function SuggestWording({ d }: { d: JobDetailState }) {
         </div>
       )}
       <div className="jd-actions">
-        <Button busy={d.cvBusy === 'suggest'} disabled={!!d.cvBusy || !!d.claudeNote} aria-describedby={d.claudeNote ? 'jd-suggest-note' : undefined} onClick={d.suggest}>
+        <Button busy={d.cvBusy === 'suggest'} disabled={!!d.cvBusy || !!d.claudeNote} aria-describedby={d.claudeNote ? CLAUDE_NOTE_ID : undefined} onClick={d.suggest}>
           {d.cvBusy === 'suggest' ? 'Looking for wording…' : 'Suggest wording'}
         </Button>
-        <p className="jd-hint jd-grow" id={d.claudeNote ? 'jd-suggest-note' : undefined}>
-          {d.claudeNote ?? 'Claude proposes new words for your bullets. Waypoint checks each one against your profile. Nothing changes until you accept it.'}
-        </p>
+        {!d.claudeNote && (
+          <p className="jd-hint jd-grow">Claude proposes new words for your bullets. Waypoint checks each one against your profile. Nothing changes until you accept it.</p>
+        )}
       </div>
       {dropped > 0 && (
         <p className="jd-hint">Waypoint dropped {dropped} {dropped === 1 ? 'suggestion' : 'suggestions'}, because the text had a number, a name or a tool that your profile does not show.</p>
@@ -221,9 +223,10 @@ export function CvSection({ d, open = false, onPart, onBack }: { d: JobDetailSta
               <PdfPreview url={cv.pdfUrl} rev={d.cvRev} />
               <DriveLink cv={cv} setToast={d.setToast} />
               <CvSummary cv={cv} />
-              <RefineCv d={d} cv={cv} />
             </>
           )}
+          {(cv || d.wording) && d.claudeNote && <p className="jd-hint" id={CLAUDE_NOTE_ID}>{d.claudeNote}</p>}
+          {cv && <RefineCv d={d} cv={cv} />}
           {(cv || d.wording) && <SuggestWording d={d} />}
 
           <div className="jd-block">
