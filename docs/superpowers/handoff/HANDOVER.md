@@ -29,7 +29,7 @@ The cloud session could not push to `multi-user`. All of its work is on `origin/
 
 ```
 git fetch origin
-git log --oneline origin/multi-user..origin/claude/epic-lovelace-0vqgu7 | wc -l   # 51 commits
+git log --oneline origin/multi-user..origin/claude/epic-lovelace-0vqgu7 | wc -l   # about 50 commits
 git diff --stat origin/multi-user origin/claude/epic-lovelace-0vqgu7 -- package.json
 git merge --ff-only origin/claude/epic-lovelace-0vqgu7
 npm ci              # postinstall copies the pdf.js worker to public/pdfjs
