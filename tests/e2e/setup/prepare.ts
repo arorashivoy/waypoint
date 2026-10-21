@@ -1,14 +1,18 @@
 // Makes the scratch database for the device tests: all migrations, an admin, one new member for each project and the jobs.
-// The webServer command runs it before the app starts. It never opens data/.
-import { mkdirSync, rmSync } from 'node:fs';
+// start.sh runs it before the app starts, with only the keys the app needs. It never opens data/.
+import { randomBytes } from 'node:crypto';
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { applyMigrations } from '../../setup/migrate';
-import { ADMIN, PASSWORD, PROJECTS, SCRATCH, memberOf } from './accounts';
+import { ADMIN, CREDENTIALS, NO_CV, PROJECTS, SCRATCH, memberOf } from './accounts';
 
 async function main() {
-  rmSync(SCRATCH, { recursive: true, force: true });
   mkdirSync(SCRATCH, { recursive: true });
+  // A new password for each run. The file is for the tests only, and only this user can read it.
+  const PASSWORD = randomBytes(18).toString('base64url');
+  writeFileSync(CREDENTIALS, JSON.stringify({ password: PASSWORD }), { mode: 0o600 });
+  chmodSync(CREDENTIALS, 0o600);
   const url = `file:${join(SCRATCH, 'e2e.db')}`;
   process.env.DATABASE_URL = url;
   const client = new PrismaClient({ datasourceUrl: `${url}?connection_limit=1` });
@@ -26,6 +30,8 @@ async function main() {
     const admin = await createUser({ ...ADMIN, password: PASSWORD, role: 'admin' });
     // The admin skips the wizard. A new member sees it.
     await db.userSettings.upsert({ where: { userId: admin.id }, update: { onboardedAt: new Date() }, create: { userId: admin.id, onboardedAt: new Date(), resumeMode: 'own-tex' } });
+    const noCv = await createUser({ ...NO_CV, password: PASSWORD });
+    await db.userSettings.upsert({ where: { userId: noCv.id }, update: { onboardedAt: new Date() }, create: { userId: noCv.id, onboardedAt: new Date(), resumeMode: 'template' } });
     for (const p of PROJECTS) await createUser({ ...memberOf(p), password: PASSWORD });
     await seedJobs(ADMIN.email);
   } finally {

@@ -10,12 +10,16 @@ test('the job detail: the route, Your way in and Your CV, and Back on a phone', 
   const route = page.locator('.ui-route li');
   await expect(route.first()).toBeVisible();
   expect(await route.count()).toBeGreaterThan(2);
-  await expect(page.locator('.ui-route .ui-stop-word', { hasText: 'Missing' }).or(page.locator('.ui-route .ui-stop-word', { hasText: 'Met' })).first()).toBeVisible();
+  // Each stop has one of the 3 words.
+  const words = (await page.locator('.ui-route .ui-stop-word').allTextContents()).map((w) => w.trim());
+  expect(words).toHaveLength(await route.count());
+  for (const word of words) expect(['Met', 'Partial', 'Missing']).toContain(word);
   await expectNoSideScroll(page);
 
   const phone = isPhone(page);
   for (const [title, part] of [['Your way in', 'wayin'], ['Your CV for this role', 'cv']] as const) {
     await page.getByRole('button', { name: new RegExp(`^${title}`) }).click();
+    if (part === 'wayin') await expect(page.locator('.jd-wayin .ui-fold-body').getByText('Anna Weber').first()).toBeVisible();
     if (phone) {
       // A phone opens the part as its own screen, with a Back button.
       await expect(page).toHaveURL(new RegExp(`part=${part}`));
@@ -30,7 +34,7 @@ test('the job detail: the route, Your way in and Your CV, and Back on a phone', 
     }
   }
 
-  // The way in is open last on a wide screen; on a phone the job list shows again after the Jobs button.
+  // The shot shows the job as it stands: on a wide screen with both parts open, on a phone after Back. A phone then goes back to the list.
   await shot(page, info, 'job-detail');
   if (phone) {
     await page.getByRole('button', { name: 'Jobs', exact: true }).first().click();

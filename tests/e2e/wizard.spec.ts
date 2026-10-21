@@ -25,5 +25,10 @@ test('the wizard: do 2 steps, skip the rest, land on Jobs', async ({ page }, inf
   await expect(page.getByRole('heading', { name: 'Find your first jobs' })).toBeHidden();
   await expect(page.getByRole('navigation').first()).toBeVisible();
   await expectNoSideScroll(page);
+
+  // The wizard stays done after a reload.
+  await page.reload();
+  await expect(page.locator('button.jr').first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Welcome, / })).toBeHidden();
   await shot(page, info, 'wizard-jobs');
 });

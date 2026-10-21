@@ -1,6 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { join } from 'node:path';
-import { BASE_URL, PORT, SCRATCH } from './tests/e2e/setup/accounts';
+import { BASE_URL, PORT, RESULTS, SCRATCH } from './tests/e2e/setup/accounts';
 
 /**
  * Device smoke tests: 6 profiles, one app on port 3150 with a scratch database.
@@ -17,7 +16,7 @@ const ipadPro = { ...devices['iPad Pro 11'], viewport: { width: 1024, height: 13
 
 export default defineConfig({
   testDir: './tests/e2e',
-  outputDir: join(SCRATCH, 'results'),
+  outputDir: RESULTS,
   globalSetup: './tests/e2e/setup/global-setup.ts',
   // One app and one database serve all projects. The tests run one at a time, so a slow Raspberry Pi never
   // compiles a page while a test waits for it.
@@ -40,20 +39,7 @@ export default defineConfig({
     url: `${BASE_URL}/login`,
     reuseExistingServer: false,
     timeout: 240_000,
-    env: {
-      PORT: String(PORT),
-      DATABASE_URL: `file:${join(SCRATCH, 'e2e.db')}`,
-      WAYPOINT_SECRET_KEY: 'BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=',
-      WAYPOINT_USERS_DIR: join(SCRATCH, 'users'),
-      WAYPOINT_PUBLIC_URL: BASE_URL,
-      // Claude is off: no key and no CLI.
-      WAYPOINT_CLAUDE_BIN: '/nonexistent/claude',
-      ANTHROPIC_API_KEY: '',
-      CLAUDE_CODE_OAUTH_TOKEN: '',
-      // The admin has a base CV and no LaTeX source, so a build gives the base CV and needs no LaTeX engine.
-      RESUME_PDF: join(process.cwd(), 'tests/e2e/fixtures/base-cv.pdf'),
-      RESUME_TEX: '',
-      LOG_LEVEL: 'warn',
-    },
+    // start.sh gives the app its own short list of keys. These 2 only tell the script where to work.
+    env: { E2E_PORT: String(PORT), E2E_SCRATCH: SCRATCH },
   },
 });

@@ -1,11 +1,16 @@
 import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { SCRATCH, stateFile } from './setup/accounts';
+import { RESULTS, stateFile } from './setup/accounts';
 
 /** A test as the admin, who has jobs and has finished the wizard. */
 export const adminTest = base.extend({
   storageState: async ({}, use) => { await use(stateFile('admin')); },
+});
+
+/** A test as a member who has finished the wizard and has no CV source. */
+export const noCvTest = base.extend({
+  storageState: async ({}, use) => { await use(stateFile('no-cv')); },
 });
 
 /** A test as the new member of this project. The wizard shows to this member. */
@@ -24,7 +29,7 @@ export async function expectNoSideScroll(page: Page) {
 
 /** The screenshot at the end of a test: saved in the scratch folder and attached to the report. */
 export async function shot(page: Page, info: TestInfo, name: string) {
-  const dir = join(SCRATCH, 'shots', info.project.name);
+  const dir = join(RESULTS, 'shots', info.project.name);
   mkdirSync(dir, { recursive: true });
   // The lists rise in when a screen opens. The shot waits until they stop.
   await page.waitForTimeout(800);
