@@ -1,3 +1,5 @@
+> **Ended on 2026-10-21.** The cloud session has stopped. The local session on the Pi owns all work now. Read `docs/superpowers/handoff/HANDOVER.md`. The text below is the old cloud brief, kept for the record.
+
 # Handoff: production-ready Waypoint, part 5 from Task 11
 
 Give this file to a Claude Code cloud session. It tells that session how to continue the work that a local session on the owner's Raspberry Pi started.
