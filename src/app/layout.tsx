@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from 'next';
-import { Onest, Syne } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 
-const syne = Syne({ subsets: ['latin'], weight: ['600', '700'], variable: '--font-syne', display: 'swap' });
-const onest = Onest({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-onest', display: 'swap' });
+// The fonts are files in the repository (src/app/fonts), so a build needs no network. Each file is a variable font, latin subset.
+const syne = localFont({ src: './fonts/Syne-latin-variable.woff2', weight: '600 700', variable: '--font-syne', display: 'swap' });
+const onest = localFont({ src: './fonts/Onest-latin-variable.woff2', weight: '400 600', variable: '--font-onest', display: 'swap' });
 
 export const metadata: Metadata = {
   title: 'Waypoint',

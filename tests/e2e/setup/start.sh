@@ -37,7 +37,6 @@ run() {
     WAYPOINT_PUBLIC_URL="http://127.0.0.1:$PORT" \
     WAYPOINT_CLAUDE_BIN=/nonexistent/claude \
     RESUME_PDF="$ROOT/tests/e2e/fixtures/base-cv.pdf" \
-    NEXT_FONT_GOOGLE_MOCKED_RESPONSES="$ROOT/tests/e2e/setup/fonts-mock.cjs" \
     LOG_LEVEL=warn \
     "$@"
 }
