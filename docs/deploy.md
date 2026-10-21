@@ -44,6 +44,7 @@ use `scripts/deploy.sh` for each update (step 10).
    | `WAYPOINT_ZROK_NAMESPACE` | optional | The namespace of the share. The default is `public`. |
    | `WAYPOINT_BACKUP_REMOTE` | optional | An rclone remote for the backups, for example `gdrive:waypoint-backups`. |
    | `WAYPOINT_USERS_DIR` | optional | The folder for the files of the users. See step 8. |
+   | `WAYPOINT_CLAUDE_BIN` | optional | The full path of the `claude` CLI, for example `/home/<user>/.local/bin/claude`. The units have a short `PATH` (the folder of node, `/usr/local/bin`, `/usr/bin`, `/bin`). If the CLI is in another folder, set this key, or CLI mode stays off. |
    | `LOG_LEVEL` | optional | `fatal`, `error`, `warn`, `info` or `debug`. The default is `info`. |
 
    Do not change `DATABASE_URL` or `PORT` if they already work. systemd reads `.env` as plain
@@ -98,14 +99,31 @@ use `scripts/deploy.sh` for each update (step 10).
    The migrations also include `6_pasted_by`, which adds the column that keeps a pasted job with the user
    who pasted it. `npx prisma migrate deploy` applies it. Old jobs stay shared.
 
+   A database from before part 1 has no migration history: `npx prisma migrate status` lists all
+   migrations, `0_init` too, as not applied. Then `migrate deploy` fails, because the tables exist.
+   Do these steps first (the Pi copy needed them on 2026-10-21):
+
+   1. Make an empty database from `0_init` only, and compare it with the live database. The compare
+      must print nothing and exit with 0. If it exits with 2, stop: the database is not the `0_init`
+      schema.
+
+      ```bash
+      node -e "const {DatabaseSync}=require('node:sqlite');new DatabaseSync('/tmp/base.db').exec(require('fs').readFileSync('prisma/migrations/0_init/migration.sql','utf8'))"
+      npx prisma migrate diff --from-url "file:$PWD/data/waypoint.db" --to-url "file:/tmp/base.db" --exit-code
+      ```
+
+   2. Mark `0_init` as applied: `npx prisma migrate resolve --applied 0_init`.
+
+   Then run:
+
    ```bash
    npm ci
    npx prisma migrate deploy
    npm run user:create-admin
    ```
 
-   If the admin account exists already, skip the last command. The command asks for the email,
-   the name and the password.
+   Run the last command also when the admin account exists: a user from before part 2 has no
+   password, and the command sets one. The command asks for the email, the name and the password.
 
 4. Move the profile of the admin into the database. Use the email of the admin.
 
