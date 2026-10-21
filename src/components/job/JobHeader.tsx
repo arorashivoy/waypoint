@@ -10,7 +10,7 @@ export function postedLine(postedAt: string, now = Date.now()): string {
   return `Posted ${text}`;
 }
 
-/** Role, company, place, the score ring and a link to the posting. On a phone the top row holds "‹ Jobs" and "Open posting". */
+/** Role, company, place, the score ring and a link to the posting. On a phone the top row holds "‹ Jobs" and "Open the posting". */
 export function JobHeader({ job, onBack }: { job: JobView; onBack: () => void }) {
   const where = [job.company, job.city, job.mode.toLowerCase()].filter(Boolean).join(', ');
   // The visa note is a sentence of its own ("Sponsorship not stated"), not a part of the place.
@@ -29,7 +29,7 @@ export function JobHeader({ job, onBack }: { job: JobView; onBack: () => void })
           </svg>
           Jobs
         </button>
-        <a className="btn link" href={job.url} target="_blank" rel="noopener noreferrer">Open posting</a>
+        <a className="btn link" href={job.url} target="_blank" rel="noopener noreferrer">Open the posting</a>
       </div>
       <div className="jd-title">
         <h2 ref={heading} tabIndex={-1}>{job.role}</h2>
