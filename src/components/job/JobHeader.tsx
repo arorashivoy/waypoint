@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'react';
 import { ScoreRing } from '../ui';
+import { PHONE_QUERY } from '../jobs/focus';
 import { ago } from '@/lib/time-ago';
 import type { JobView } from './types';
 
@@ -12,6 +14,11 @@ export function postedLine(postedAt: string, now = Date.now()): string {
 export function JobHeader({ job, onBack }: { job: JobView; onBack: () => void }) {
   const where = [job.company, job.city, job.mode.toLowerCase()].filter(Boolean).join(', ');
   // The visa note is a sentence of its own ("Sponsorship not stated"), not a part of the place.
+  // A job is a full screen on a phone. Focus goes to its heading, so a keyboard or a screen reader starts at the job.
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (window.matchMedia(PHONE_QUERY).matches) heading.current?.focus({ preventScroll: true });
+  }, []);
   const visa = job.visa ? ` ${job.visa.replace(/\.$/, '')}.` : '';
   return (
     <header className="jd-header">
@@ -25,7 +32,7 @@ export function JobHeader({ job, onBack }: { job: JobView; onBack: () => void })
         <a className="btn link" href={job.url} target="_blank" rel="noopener noreferrer">Open posting</a>
       </div>
       <div className="jd-title">
-        <h2>{job.role}</h2>
+        <h2 ref={heading} tabIndex={-1}>{job.role}</h2>
         <p className="jd-where">{where}.{visa} {postedLine(job.postedAt)}.</p>
       </div>
       <div className="jd-ring" key={job.id}>

@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Sheet, Skeleton } from './ui';
 import type { JobCard, Me } from './data';
 import JobDetail from './job/JobDetail';
 import JobList from './jobs/JobList';
+import { rowToFocus } from './jobs/focus';
 import { useJobList } from './jobs/useJobList';
 
 type Props = {
@@ -39,6 +40,17 @@ export default function JobsScreen({ me, jobs, error, onRetry, refresh, setToast
   const list = useJobList({ me, jobs, selected, openJob, closeJob });
   const tablet = useTablet();
   const { activeId } = list;
+
+  // When a job closes on a phone or a tablet, focus goes back to the row of that job. On a tablet the sheet gives focus
+  // back to its opener first. After a `j` there is no opener, so focus is on the page body and the row takes it.
+  const lastSelected = useRef<string | null>(null);
+  useEffect(() => {
+    const active = document.activeElement;
+    const lost = !active || active === document.body || !active.isConnected;
+    const id = rowToFocus(lastSelected.current, selected, lost);
+    lastSelected.current = selected;
+    if (id) document.querySelector<HTMLElement>(`[data-job-id="${CSS.escape(id)}"]`)?.focus();
+  }, [selected]);
   const detail = (id: string) => <JobDetail key={id} id={id} claude={me.claude} refresh={refresh} setToast={setToast} onClose={closeJob} />;
 
   return (
