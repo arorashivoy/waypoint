@@ -36,7 +36,7 @@ export function FitSection({ job }: { job: JobView }) {
       {job.warning && <p className="jd-note jd-note-warn">{job.warning}</p>}
       {flags && <p className="jd-flag">{flags}</p>}
 
-      {shown.length > 0 && <Route items={shown.map(toItem)} />}
+      {shown.length > 0 && <Route items={shown.map(toItem)} total={job.requirements.length} />}
       {rest > 0 && (
         <Button variant="link" className="jd-more" aria-expanded={all} onClick={() => setAll(!all)}>
           {all ? 'Show fewer requirements' : `Show all ${job.requirements.length} requirements`}

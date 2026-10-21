@@ -54,6 +54,12 @@ describe('routeSummary', () => {
   it('says so when there is nothing', () => {
     expect(routeSummary([])).toBe('No requirements.');
   });
+
+  it('says that it counts only the top stops when the route shows a part of the list', () => {
+    const top = [{ status: 'missing' as const, label: 'Go' }, { status: 'met' as const, label: 'C' }];
+    expect(routeSummary(top, [], 9)).toBe('Top 2 of 9 requirements: 1 met, 1 missing.');
+    expect(routeSummary(top, [], 2)).toBe('1 of 2 met, 1 missing.');
+  });
 });
 
 describe('Route', () => {
