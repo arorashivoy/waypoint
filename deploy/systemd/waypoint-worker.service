@@ -1,0 +1,22 @@
+# The Waypoint worker. install-units.sh fills in @CHECKOUT@ and @NODE_BIN@.
+# systemd reads the .env file as KEY=VALUE lines. It removes quotes around a
+# value, does not expand ~ or $, and does not allow a comment after a value.
+[Unit]
+Description=Waypoint worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@CHECKOUT@
+EnvironmentFile=@CHECKOUT@/.env
+Environment=PATH=@NODE_BIN@:/usr/local/bin:/usr/bin:/bin
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/env npm run worker
+KillSignal=SIGTERM
+TimeoutStopSec=90
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

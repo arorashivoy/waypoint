@@ -1,0 +1,20 @@
+{
+  "id": "misfit-frontend",
+  "title": "Senior Frontend Engineer",
+  "company": "Pixelbarn",
+  "location": "Lisbon",
+  "cc": "PT",
+  "description": "Pixelbarn builds design tools for small studios. You will lead the frontend of our editor.\n\nRequirements\n- 6+ years of frontend work with React and TypeScript.\n- Deep knowledge of the browser rendering path, CSS and accessibility.\n- You have shipped a design system.\n- Experience with WebGL or canvas is a strong plus.\n\nYou will mentor 3 engineers. Hybrid in Lisbon.",
+  "expected": {
+    "field": "Other",
+    "level": "Senior",
+    "blockers": [],
+    "noFakeBlockers": true,
+    "legitimacy": [],
+    "injection": false,
+    "allowedBlockers": [
+      "location",
+      "seniority"
+    ]
+  }
+}

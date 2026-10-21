@@ -1,0 +1,22 @@
+{
+  "id": "spam-no-company",
+  "title": "Developer Wanted",
+  "company": "Confidential",
+  "location": "Remote",
+  "cc": "US",
+  "description": "A growing company in the technology sector is looking for a developer for an important project. We cannot say the company name at this stage.\n\nThe employer will tell you the details after the first call. Python or Java skills help. Good pay. Contact the agent for more information.",
+  "notes": "The company is hidden and the work is not described.",
+  "expected": {
+    "field": "Other",
+    "blockers": [],
+    "noFakeBlockers": false,
+    "legitimacy": [
+      "no-company",
+      "vague-role"
+    ],
+    "injection": false,
+    "fieldAlt": [
+      "Backend"
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+# One backup run. The timer starts it. install-units.sh fills in the placeholders.
+# It has no Restart and no Install section: a failed backup waits for the next night.
+[Unit]
+Description=Waypoint backup
+
+[Service]
+Type=oneshot
+WorkingDirectory=@CHECKOUT@
+EnvironmentFile=@CHECKOUT@/.env
+Environment=PATH=@NODE_BIN@:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env npm run backup

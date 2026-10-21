@@ -1,0 +1,101 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 15 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 149 >>
+stream
+BT 0 0 0 rg /F2 12 Tf 72 700 Td (Visible line here) Tj ET
+BT 1 1 1 rg /F1 12 Tf 72 650 Td (ABCDEF) Tj ET
+BT 1 1 1 rg /F1 12 Tf 150 650 Td (GHH) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type3 /FontBBox [0 0 600 700] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs << /g65 6 0 R /g66 7 0 R /g67 8 0 R /g68 9 0 R /g69 10 0 R /g70 11 0 R /g71 12 0 R /g72 13 0 R >> /Encoding << /Type /Encoding /Differences [65 /g65 66 /g66 67 /g67 68 /g68 69 /g69 70 /g70 71 /g71 72 /g72] >> /FirstChar 65 /LastChar 72 /Widths [600 600 600 600 600 600 600 600] /ToUnicode 14 0 R /Resources << >> >>
+endobj
+6 0 obj
+<< /Length 27 >>
+stream
+600 0 d0 50 50 500 600 re f
+endstream
+endobj
+7 0 obj
+<< /Length 27 >>
+stream
+600 0 d0 50 50 500 600 re f
+endstream
+endobj
+8 0 obj
+<< /Length 27 >>
+stream
+600 0 d0 50 50 500 600 re f
+endstream
+endobj
+9 0 obj
+<< /Length 27 >>
+stream
+600 0 d0 50 50 500 600 re f
+endstream
+endobj
+10 0 obj
+<< /Length 27 >>
+stream
+600 0 d0 50 50 500 600 re f
+endstream
+endobj
+11 0 obj
+<< /Length 27 >>
+stream
+600 0 d0 50 50 500 600 re f
+endstream
+endobj
+12 0 obj
+<< /Length 27 >>
+stream
+600 0 d0 50 50 500 600 re f
+endstream
+endobj
+13 0 obj
+<< /Length 27 >>
+stream
+600 0 d0 50 50 500 600 re f
+endstream
+endobj
+14 0 obj
+<< /Length 318 >>
+stream
+/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /T3 def 1 begincodespacerange <00> <FF> endcodespacerange 8 beginbfchar <41> <24D8> <42> <24D6> <43> <24DD> <44> <24DE> <45> <24E1> <46> <24D4> <47> <D83CDD30> <48> <D83CDD3B> endbfchar endcmap CMapName currentdict /CMap defineresource pop end end
+endstream
+endobj
+15 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 16
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000252 00000 n 
+0000000452 00000 n 
+0000000883 00000 n 
+0000000960 00000 n 
+0000001037 00000 n 
+0000001114 00000 n 
+0000001191 00000 n 
+0000001269 00000 n 
+0000001347 00000 n 
+0000001425 00000 n 
+0000001503 00000 n 
+0000001873 00000 n 
+trailer
+<< /Size 16 /Root 1 0 R >>
+startxref
+1944
+%%EOF

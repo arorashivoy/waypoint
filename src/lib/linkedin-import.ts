@@ -1,5 +1,34 @@
 import AdmZip from 'adm-zip';
 import Papa from 'papaparse';
+import { HttpError } from './auth/http';
+import { checkUploadLength as checkLength } from './uploads';
+import { slugify } from './profile/doc';
+import type { NewDraft } from './profile/drafts';
+
+export const MAX_EXPORT_BYTES = 50 * 1024 * 1024;
+/** The largest total size of the CSV files in an archive, after unpacking. */
+export const MAX_UNPACKED_BYTES = 200 * 1024 * 1024;
+const TOO_LARGE = 'The file is larger than 50 MB.';
+
+/** The Content-Length check of a LinkedIn upload (50 MB, plus 1 MB of multipart framing). */
+export function checkUploadLength(headers: Headers): void {
+  checkLength(headers, MAX_EXPORT_BYTES, TOO_LARGE);
+}
+
+/**
+ * Checks a LinkedIn upload before it is parsed: 50 MB or less, and the bytes
+ * must be a zip archive (PK\x03\x04) or a text CSV file. The name alone
+ * proves nothing.
+ */
+export async function checkExportUpload(file: File): Promise<Buffer> {
+  if (file.size > MAX_EXPORT_BYTES) throw new HttpError(413, TOO_LARGE);
+  const buf = Buffer.from(await file.arrayBuffer());
+  const isZip = buf.length >= 4 && buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04;
+  const head = buf.subarray(0, 4096);
+  const isCsv = /\.csv$/i.test(file.name) && !head.includes(0) && !head.subarray(0, 5).equals(Buffer.from('%PDF-'));
+  if (!isZip && !isCsv) throw new HttpError(400, 'Upload the LinkedIn export as a .zip file, or Connections.csv.');
+  return buf;
+}
 
 /**
  * Parses a LinkedIn "Get a copy of your data" export.
@@ -56,12 +85,17 @@ export function parseExport(buffer: Buffer): ImportedProfile {
   // Every zip starts with the local-file-header magic "PK"; anything else is
   // taken to be Connections.csv on its own, uploaded to refresh contacts.
   const archive = buffer.subarray(0, 2).toString('latin1') === 'PK';
-  const entries = archive
-    ? new AdmZip(buffer)
-        .getEntries()
-        .filter((e) => !e.isDirectory && e.entryName.toLowerCase().endsWith('.csv'))
-        .map((e) => ({ name: e.entryName.split('/').pop() || e.entryName, text: e.getData().toString('utf8') }))
-    : [{ name: 'Connections.csv', text: buffer.toString('utf8') }];
+  let entries: { name: string; text: string }[];
+  if (archive) {
+    const csvs = new AdmZip(buffer).getEntries().filter((e) => !e.isDirectory && e.entryName.toLowerCase().endsWith('.csv'));
+    // The header sizes come from the central directory. Check them before
+    // any entry unpacks, so a small zip cannot fill the memory.
+    const unpacked = csvs.reduce((sum, e) => sum + e.header.size, 0);
+    if (unpacked > MAX_UNPACKED_BYTES) throw new HttpError(413, 'The CSV files in the archive are larger than 200 MB after unpacking.');
+    entries = csvs.map((e) => ({ name: e.entryName.split('/').pop() || e.entryName, text: e.getData().toString('utf8') }));
+  } else {
+    entries = [{ name: 'Connections.csv', text: buffer.toString('utf8') }];
+  }
 
   const profileRows = pick(entries, 'Profile.csv');
   const headline = profileRows[0]?.['Headline'] || '';
@@ -116,4 +150,51 @@ export function parseExport(buffer: Buffer): ImportedProfile {
     },
     archive,
   };
+}
+
+const clip = (s: string | null | undefined, max: number) => (s ? s.trim().slice(0, max) || null : null);
+const ym = (d: Date | null) => (d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : null);
+
+/**
+ * The profile part of an export as drafts in the claims.yml shape (spec 3.3).
+ * A position without a start date stays a draft: checkDoc refuses it until the
+ * user adds the date. A URL that is not http(s) is dropped.
+ */
+export function linkedinDrafts(p: ImportedProfile, name: string): NewDraft[] {
+  const taken = { position: new Set<string>(), education: new Set<string>(), project: new Set<string>(), claim: new Set<string>() };
+  const out: NewDraft[] = [];
+  if (p.headline.trim()) out.push({ type: 'meta', data: { name: name.slice(0, 400), headline: p.headline.trim().slice(0, 400) } });
+  for (const x of p.positions.slice(0, 50)) {
+    out.push({
+      type: 'position',
+      data: {
+        id: slugify(`${x.company} ${x.title}`, taken.position, 'position'),
+        title: x.title.slice(0, 400),
+        company: x.company.slice(0, 400),
+        location: clip(x.location, 4000),
+        start: ym(x.startedAt),
+        end: ym(x.endedAt),
+        summary: clip(x.summary, 4000),
+        bullets: [],
+      },
+    });
+  }
+  for (const x of p.educations.slice(0, 20)) {
+    out.push({ type: 'education', data: { id: slugify(x.school, taken.education, 'school'), school: x.school.slice(0, 400), degree: clip(x.degree, 4000), field: clip(x.field, 4000), years: clip(x.years, 4000), aliases: [] } });
+  }
+  for (const x of p.projects.slice(0, 100)) {
+    out.push({
+      type: 'project',
+      data: { id: slugify(x.title, taken.project, 'project'), title: x.title.slice(0, 400), org: null, description: clip(x.description, 4000), url: x.url && /^https?:\/\/\S+$/i.test(x.url) ? x.url.slice(0, 4000) : null, source: 'linkedin' },
+    });
+  }
+  // The same skill twice (also in another case) is one claim, not "java" and "java-2".
+  const seenSkills = new Set<string>();
+  for (const s of p.skills.slice(0, 200)) {
+    const key = s.trim().toLowerCase();
+    if (seenSkills.has(key)) continue;
+    seenSkills.add(key);
+    out.push({ type: 'claim', data: { slug: slugify(s, taken.claim, 'skill'), kind: 'skill', label: s.slice(0, 400), aliases: [], links: [], evidence: [], mentions: [{ surface: 'linkedin-skills', listed: true }] } });
+  }
+  return out;
 }

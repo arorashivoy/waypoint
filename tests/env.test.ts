@@ -1,0 +1,58 @@
+import { describe, expect, it } from 'vitest';
+import { parseEnv, EnvError } from '@/lib/env';
+
+const KEY = Buffer.alloc(32, 7).toString('base64');
+const ok = { DATABASE_URL: 'file:../data/waypoint.db', WAYPOINT_SECRET_KEY: KEY };
+
+describe('parseEnv', () => {
+  it('accepts the two required keys and fills defaults', () => {
+    const e = parseEnv(ok);
+    expect(e.WAYPOINT_CLAUDE_BIN).toBe('claude');
+    expect(e.WAYPOINT_CLAUDE_TIMEOUT_MS).toBe(120_000);
+    expect(e.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
+  it('names a missing secret key and says how to make one', () => {
+    expect(() => parseEnv({ DATABASE_URL: ok.DATABASE_URL })).toThrow(EnvError);
+    expect(() => parseEnv({ DATABASE_URL: ok.DATABASE_URL })).toThrow(/WAYPOINT_SECRET_KEY.*npm run secret:new/s);
+  });
+
+  it('refuses a secret key that is not 32 bytes of base64', () => {
+    expect(() => parseEnv({ ...ok, WAYPOINT_SECRET_KEY: 'short' })).toThrow(/WAYPOINT_SECRET_KEY/);
+  });
+
+  it('treats an empty API key as not set', () => {
+    expect(parseEnv({ ...ok, ANTHROPIC_API_KEY: '' }).ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
+  it('reads the timeout as a number', () => {
+    expect(parseEnv({ ...ok, WAYPOINT_CLAUDE_TIMEOUT_MS: '9000' }).WAYPOINT_CLAUDE_TIMEOUT_MS).toBe(9000);
+  });
+
+  it('refuses a timeout above 600000 and names the limit', () => {
+    expect(() => parseEnv({ ...ok, WAYPOINT_CLAUDE_TIMEOUT_MS: '600001' })).toThrow(/WAYPOINT_CLAUDE_TIMEOUT_MS must be 600000 \(10 minutes\) or less/);
+    expect(parseEnv({ ...ok, WAYPOINT_CLAUDE_TIMEOUT_MS: '600000' }).WAYPOINT_CLAUDE_TIMEOUT_MS).toBe(600_000);
+  });
+
+  it('reads the shared monthly budget, with a default of 5', () => {
+    expect(parseEnv(ok).WAYPOINT_SHARED_MONTHLY_USD).toBe(5);
+    expect(parseEnv({ ...ok, WAYPOINT_SHARED_MONTHLY_USD: '2.5' }).WAYPOINT_SHARED_MONTHLY_USD).toBe(2.5);
+  });
+
+  it('refuses a public URL that is not a URL and names the key', () => {
+    expect(() => parseEnv({ ...ok, WAYPOINT_PUBLIC_URL: 'not a url' })).toThrow(EnvError);
+    expect(() => parseEnv({ ...ok, WAYPOINT_PUBLIC_URL: 'not a url' })).toThrow(/WAYPOINT_PUBLIC_URL/);
+  });
+
+  it('LOG_LEVEL must be one of the levels', () => {
+    expect(parseEnv(ok).LOG_LEVEL).toBe('info');
+    expect(parseEnv({ ...ok, LOG_LEVEL: 'debug' }).LOG_LEVEL).toBe('debug');
+    expect(() => parseEnv({ ...ok, LOG_LEVEL: 'loud' })).toThrow(/LOG_LEVEL must be one of fatal, error, warn, info, debug/);
+  });
+
+  it('WAYPOINT_BACKUP_REMOTE is optional', () => {
+    expect(parseEnv(ok).WAYPOINT_BACKUP_REMOTE).toBeUndefined();
+    expect(parseEnv({ ...ok, WAYPOINT_BACKUP_REMOTE: '' }).WAYPOINT_BACKUP_REMOTE).toBeUndefined();
+    expect(parseEnv({ ...ok, WAYPOINT_BACKUP_REMOTE: 'me@host:b/' }).WAYPOINT_BACKUP_REMOTE).toBe('me@host:b/');
+  });
+});

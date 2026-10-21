@@ -1,0 +1,18 @@
+{
+  "id": "blocker-other",
+  "title": "Junior Software Developer (Student Programme)",
+  "company": "Oakfield Tech",
+  "location": "Dublin",
+  "cc": "IE",
+  "description": "Oakfield Tech runs a work-study programme for software developers.\n\nThis programme is only open to people who are enrolled in a full-time university degree in Ireland during the whole programme. Graduates cannot apply. You will work 20 hours a week on Python tools and our REST API, with a mentor.\n\n0 to 1 years of experience. Python is a plus.",
+  "expected": {
+    "field": "Backend",
+    "level": "Entry",
+    "blockers": [
+      "other"
+    ],
+    "noFakeBlockers": false,
+    "legitimacy": [],
+    "injection": false
+  }
+}

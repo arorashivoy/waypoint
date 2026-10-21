@@ -1,0 +1,22 @@
+{
+  "id": "blocker-location",
+  "title": "Platform Engineer",
+  "company": "Saltmarsh Cloud",
+  "location": "Reykjavik",
+  "cc": "IS",
+  "description": "Saltmarsh Cloud runs data centres on geothermal power. The platform team writes Python tools and runs Docker workloads.\n\nRequirements: 2+ years of Python, Docker, and Linux.\n\nThis role is on-site in Reykjavik only. We do not offer remote work. We do not offer relocation help, and you must already live within commuting distance of the Reykjavik office.",
+  "expected": {
+    "field": "Backend",
+    "level": "Mid",
+    "blockers": [
+      "location"
+    ],
+    "noFakeBlockers": false,
+    "legitimacy": [],
+    "injection": false,
+    "mustMet": [
+      "python",
+      "docker"
+    ]
+  }
+}

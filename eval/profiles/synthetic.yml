@@ -1,0 +1,170 @@
+# A made-up profile for the prompt eval. The person and the employers do not exist.
+# It is the same form as the YAML profile import. The `mustMet` lists in
+# eval/postings/*.json name the slugs below.
+version: 1
+profile:
+  name: Alex Morgan
+  headline: Backend engineer with C++ and machine learning projects
+targets:
+  positions:
+    - id: harbor-pay
+      title: Backend Engineer
+      company: Harbor Payments
+      location: Berlin
+      start: 2023-02
+      end: null
+      summary: Builds payment services in Java and Spring Boot.
+      bullets:
+        - id: ledger
+          match: rebuilt the settlement ledger service in Java and Spring Boot
+        - id: events
+          match: moved payment events to Kafka and cut retries by half
+        - id: db
+          match: tuned PostgreSQL queries and added Redis caching
+        - id: deploy
+          match: packaged services in Docker and ran them on AWS
+    - id: lumen-intern
+      title: Software Engineering Intern
+      company: Lumen Labs
+      location: Amsterdam
+      start: 2022-06
+      end: 2022-09
+      summary: Built internal tools in Python.
+      bullets:
+        - id: tools
+          match: wrote Python scripts and a REST API for the data team
+  educations:
+    - id: uni
+      school: Northfield University
+      degree: MSc
+      field: Computer Science
+      years: 2021-2023
+      aliases: [Northfield]
+  projects:
+    - id: tick-engine
+      title: Tick engine
+      org: Personal
+      description: A multithreaded C++ order book that handles market data with low latency.
+    - id: review-classifier
+      title: Review classifier
+      org: Northfield University
+      description: A PyTorch transformer model that sorts product reviews. Thesis project.
+    - id: line-follower
+      title: Line follower robot
+      org: Northfield University
+      description: A small wheeled robot with ROS nodes in Python.
+claims:
+  - slug: java
+    kind: language
+    label: Java
+    evidence:
+      - { target: position:harbor-pay/ledger, depth: built, proof: Rebuilt the settlement ledger service in Java., since: 2023-02 }
+    mentions:
+      - { surface: resume }
+  - slug: spring-boot
+    kind: skill
+    label: Spring Boot
+    evidence:
+      - { target: position:harbor-pay/ledger, depth: built, proof: Runs the ledger service on Spring Boot. }
+    mentions:
+      - { surface: resume }
+  - slug: python
+    kind: language
+    label: Python
+    evidence:
+      - { target: position:lumen-intern/tools, depth: used, proof: Wrote data tools in Python. }
+      - { target: project:review-classifier, depth: used }
+    mentions:
+      - { surface: resume }
+  - slug: rest-apis
+    kind: skill
+    label: REST APIs
+    evidence:
+      - { target: position:lumen-intern/tools, depth: built, proof: Built a REST API for the data team. }
+    mentions:
+      - { surface: resume }
+  - slug: microservices
+    kind: skill
+    label: Microservices
+    evidence:
+      - { target: position:harbor-pay/events, depth: built, proof: Split payment events into services that talk through Kafka. }
+    mentions:
+      - { surface: resume }
+  - slug: kafka
+    kind: skill
+    label: Kafka
+    evidence:
+      - { target: position:harbor-pay/events, depth: used, proof: Moved payment events to Kafka. }
+    mentions:
+      - { surface: resume }
+  - slug: postgresql
+    kind: skill
+    label: PostgreSQL
+    evidence:
+      - { target: position:harbor-pay/db, depth: built, proof: Tuned slow queries. }
+    mentions:
+      - { surface: resume }
+  - slug: redis
+    kind: skill
+    label: Redis
+    evidence:
+      - { target: position:harbor-pay/db, depth: used }
+    mentions:
+      - { surface: resume }
+  - slug: docker
+    kind: skill
+    label: Docker
+    evidence:
+      - { target: position:harbor-pay/deploy, depth: used }
+    mentions:
+      - { surface: resume }
+  - slug: aws
+    kind: skill
+    label: AWS
+    evidence:
+      - { target: position:harbor-pay/deploy, depth: used, proof: Runs services on AWS. }
+    mentions:
+      - { surface: resume }
+  - slug: cpp
+    kind: language
+    label: C++
+    evidence:
+      - { target: project:tick-engine, depth: built, proof: Wrote a C++ order book. }
+    mentions:
+      - { surface: resume }
+  - slug: multithreading
+    kind: skill
+    label: Multithreading
+    evidence:
+      - { target: project:tick-engine, depth: built, proof: Lock-free queue between the feed thread and the book thread. }
+    mentions:
+      - { surface: resume }
+  - slug: pytorch
+    kind: skill
+    label: PyTorch
+    evidence:
+      - { target: project:review-classifier, depth: built, proof: Trained a transformer classifier. }
+    mentions:
+      - { surface: resume }
+  - slug: nlp
+    kind: skill
+    label: NLP
+    evidence:
+      - { target: project:review-classifier, depth: built, proof: Text classification for a thesis. }
+    mentions:
+      - { surface: resume }
+  - slug: ros
+    kind: skill
+    label: ROS
+    evidence:
+      - { target: project:line-follower, depth: used, proof: Wrote ROS nodes for a small robot. }
+  # Only mentioned, so a check cannot cite it. A posting that needs Kubernetes stays "missing".
+    mentions:
+      - { surface: resume }
+  - slug: kubernetes
+    kind: skill
+    label: Kubernetes
+    evidence:
+      - { target: position:harbor-pay/deploy, depth: mentioned }
+    mentions:
+      - { surface: resume }

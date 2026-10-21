@@ -1,0 +1,72 @@
+import { z } from 'zod';
+
+/** The most characters of a message from a contact that Waypoint reads. */
+export const INCOMING_MAX = 8000;
+
+/**
+ * The shapes of the model replies that the app uses today.
+ *
+ * The API path sends each schema as a structured output, so the reply always
+ * matches. The CLI path has no such option: it checks the reply against the
+ * same schema and asks one time for a repair (claude/index.ts). The schemas
+ * are plain (no transforms), because the structured output needs a JSON
+ * schema. Old cached replies that wrapped a string in an object are fixed by
+ * `coerceText` where the app reads them (analysis.ts).
+ */
+
+export const coerceText = (v: unknown): string =>
+  typeof v === 'string' ? v : v && typeof v === 'object' ? coerceText(Object.values(v).find((x) => typeof x === 'string') ?? '') : String(v ?? '');
+
+export const BLOCKER_TYPES = ['citizenship', 'clearance', 'language', 'location', 'seniority', 'other'] as const;
+export const LEGITIMACY_FLAGS = ['no-company', 'pay-to-apply', 'reposted', 'vague-role'] as const;
+
+/**
+ * The reply of the job check, parsed leniently. The API sends enums and list
+ * limits only as descriptions, so it does not enforce them, and a strict schema
+ * would throw away a paid reply for one value outside a list. This schema checks
+ * only the outline. `checkReply` (jobcheck.ts) coerces each value. `fields` is
+ * the list that `field` should use; it goes to the model as a description.
+ */
+export function jobCheckSchema(fields: readonly string[]) {
+  const choices = [...new Set([...fields, 'Other'])];
+  return z.object({
+    requirements: z.array(
+      z.object({
+        text: z.string(),
+        importance: z.string().describe('"must" or "nice"'),
+        status: z.string().describe('"met", "partial" or "missing"'),
+        evidence: z.array(z.string()),
+      }),
+    ),
+    blockers: z.array(z.object({ type: z.string().describe(BLOCKER_TYPES.map((t) => `"${t}"`).join(', ')), quote: z.string() })),
+    legitimacy: z.array(z.string().describe(LEGITIMACY_FLAGS.map((t) => `"${t}"`).join(', '))),
+    level: z.string().describe('"Entry", "Mid" or "Senior"'),
+    mode: z.string().describe('"Remote", "Hybrid" or "On-site"'),
+    sponsor: z.boolean(),
+    visa: z.string(),
+    field: z.string().describe(choices.map((t) => `"${t}"`).join(', ')),
+    summary: z.string(),
+  });
+}
+
+/** The schema with the default list of fields. */
+export const JobCheckReply = jobCheckSchema([]);
+
+export const SlotsReply = z.object({ highlight: z.string(), hook: z.string(), proof: z.string() });
+
+export const HookReply = z.object({ hook: z.string() });
+
+export const RefineReply = z.object({
+  projects: z.array(z.string()).nullable(),
+  bullets: z.array(z.string()).nullable(),
+  skills: z.array(z.string()).nullable(),
+  reply: z.string(),
+});
+
+export const DraftReply = z.object({ draft: z.string(), certain: z.boolean(), reason: z.string() });
+
+export type JobCheckReplyT = z.infer<typeof JobCheckReply>;
+export type SlotsReplyT = z.infer<typeof SlotsReply>;
+export type HookReplyT = z.infer<typeof HookReply>;
+export type RefineReplyT = z.infer<typeof RefineReply>;
+export type DraftReplyT = z.infer<typeof DraftReply>;

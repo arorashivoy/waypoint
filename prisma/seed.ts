@@ -1,13 +1,13 @@
 import { PrismaClient } from '@prisma/client';
-import { COUNTRIES } from '../src/lib/countries';
 
 const db = new PrismaClient();
 
 const SEED_SAMPLES = process.env.WAYPOINT_SEED_SAMPLES === '1';
 
 /**
- * Seeds the single local account plus the sample listings ported from the design
- * file, so the UI is populated before any network call. Two deliberate choices:
+ * Seeds the sample listings ported from the design file, behind WAYPOINT_SEED_SAMPLES=1,
+ * so the UI is populated before any network call. The admin account comes from
+ * `npm run user:create-admin`, not from this file. Two deliberate choices:
  *
  *  - Sample jobs are marked source 'Sample' and link to a LinkedIn search, not a
  *    fabricated posting URL. Pressing "Refresh feeds" brings in real openings.
@@ -38,51 +38,10 @@ const SAMPLE_JOBS = [
 ];
 
 async function main() {
-  const email = process.env.WAYPOINT_EMAIL || 'you@local';
-  const name = process.env.WAYPOINT_NAME || 'Your Name';
-
-  const user = await db.user.upsert({ where: { email }, update: { name }, create: { email, name } });
-
-  for (const [i, c] of COUNTRIES.entries()) {
-    await db.countryPref.upsert({
-      where: { userId_cc: { userId: user.id, cc: c.cc } },
-      update: { rank: i },
-      create: { userId: user.id, cc: c.cc, rank: i, on: true },
-    });
-  }
-
   if (!SEED_SAMPLES) {
-    console.log(`Ready for ${name} <${email}> with ${COUNTRIES.length} countries.`);
-    console.log('No profile or listings seeded. Import your LinkedIn export on the Resume screen,');
-    console.log('then press "Refresh feeds" on the Jobs screen.');
-    console.log('(Set WAYPOINT_SEED_SAMPLES=1 to seed placeholder data instead.)');
+    console.log('No listings seeded. Set WAYPOINT_SEED_SAMPLES=1 to seed placeholder listings.');
+    console.log('Make the admin account with `npm run user:create-admin`.');
     return;
-  }
-
-  // Everything below is placeholder data, behind the flag.
-  if ((await db.position.count({ where: { userId: user.id } })) === 0) {
-    await db.position.create({
-      data: {
-        userId: user.id,
-        title: 'Software Engineer',
-        company: 'Example Company',
-        location: 'Your city',
-        startedAt: new Date('2024-07-01'),
-        summary: '[Placeholder] Replace with your own role by importing your LinkedIn export',
-      },
-    });
-    await db.education.create({
-      data: { userId: user.id, school: 'Your university', degree: 'B.Tech', field: 'Computer Science', years: '[Add years]' },
-    });
-    await db.projectItem.createMany({
-      data: [
-        { userId: user.id, title: 'Sample backend project', org: 'Personal project', description: '[Placeholder] A REST service with a database behind it', tags: 'backend,distributed systems' },
-        { userId: user.id, title: 'Sample machine learning project', org: 'Personal project', description: '[Placeholder] A model trained and evaluated on a public dataset', tags: 'machine learning,NLP' },
-      ],
-    });
-    await db.skill.createMany({
-      data: ['Python', 'Java', 'SQL', 'Distributed systems', 'Machine learning'].map((n) => ({ userId: user.id, name: n })),
-    });
   }
 
   for (const j of SAMPLE_JOBS) {
@@ -109,7 +68,7 @@ async function main() {
     });
   }
 
-  console.log(`Seeded ${name} <${email}> with ${SAMPLE_JOBS.length} PLACEHOLDER listings and a placeholder profile.`);
+  console.log(`Seeded ${SAMPLE_JOBS.length} PLACEHOLDER listings.`);
   console.log('These are not real. Import your LinkedIn export and press "Refresh feeds" to replace them.');
 }
 

@@ -30,14 +30,34 @@ Then create your `.env`:
 cp .env.example .env
 ```
 
-Nothing in it is required to start. Set `WAYPOINT_ACCESS_CODE` before exposing the app beyond
-localhost (see [Remote access](#remote-access)).
+Set `WAYPOINT_SECRET_KEY` in it (make one with `npm run secret:new`). Then make the admin account
+(see [Accounts](#accounts)). Set `WAYPOINT_PUBLIC_URL` before you open the app to other people
+(see [Remote access](#remote-access)).
 
 ```bash
 npm run dev
 ```
 
 Open <http://localhost:3117>.
+
+## Checks
+
+```bash
+npm run typecheck   # TypeScript
+npm run lint        # includes the rule that only src/lib/exec.ts starts processes
+npm test            # unit tests, no Claude calls
+npm run test:live   # a few real Claude calls; spends a little quota
+```
+
+`npm run build` runs `npm run lint` first, so a lint error fails the build.
+
+Claude calls go to Sonnet only. The `claude` CLI runs with no tools, no settings files and an
+empty folder, so text in a posting cannot make it read files. For the credential order, see the
+`ANTHROPIC_API_KEY` row in the settings table.
+
+Syne and Onest, the two fonts, are files in `src/app/fonts`, so `npm run build` needs no network.
+`npm install` also copies the pdf.js worker to `public/pdfjs/` (the `postinstall` script). Do not run
+`npm ci --ignore-scripts`, or the CV preview has no worker.
 
 ## Running it again
 
@@ -53,8 +73,8 @@ Reachable from anywhere — starts the server *and* a public HTTPS tunnel:
 cd ~/Programs/job-apply && ./scripts/remote.sh
 ```
 
-It prints a fresh `https://….trycloudflare.com` URL each run and refuses to start if no passcode is
-set. Ctrl-C stops both. On your phone, on the same wifi, you can skip the tunnel and use
+It prints a fresh `https://….trycloudflare.com` URL each run. Accounts protect the app, so
+sign-in is always required. Ctrl-C stops both. On your phone, on the same wifi, you can skip the tunnel and use
 `http://<your-mac-lan-ip>:3117` — find it with `ipconfig getifaddr en0`.
 
 For sustained use, production mode is faster. Stop the dev server first, since the build overwrites
@@ -70,20 +90,18 @@ npm run build && npm start
 
 The app is empty until you do these three things, in order.
 
-**1. Sign in.** "Continue with LinkedIn" opens your local account. If `LINKEDIN_CLIENT_ID` is set it
-runs real OpenID Connect instead — but understand what that buys: **name, email and photo. Nothing
-else.** No experience, no education, no connections. That is the entire OIDC scope.
+**1. Sign in.** Use the email and password of your Waypoint account. See [Accounts](#accounts).
 
 **2. Import your LinkedIn data export.** This is the step that matters. In LinkedIn go to
 **Settings → Data privacy → Get a copy of your data**, pick the full archive, and request it.
 LinkedIn emails a `.zip` — usually about ten minutes, sometimes up to 24 hours. Upload it on the
-**Profile** or **Resume** screen.
+**Profile** screen, on the **Imports** tab.
 
 `Connections.csv` inside that archive is the only place your 1st-degree connections exist, and it is
 what turns "No 1st-degree contact at Stripe" into an actual named referral route. Re-upload any time
 to refresh; a new import replaces the profile wholesale and re-grades every cached analysis.
 
-**3. Press "Refresh feeds"** on the Jobs screen. This pulls live openings from the company boards in
+**3. Press "Refresh"** on the Jobs screen. This pulls live openings from the company boards in
 `config/watchlist.json` plus the aggregators, then queues the most promising unread ones for Claude
 to read in the background.
 
@@ -177,54 +195,55 @@ or a question your profile answers outright. Anything touching a preference, sal
 commitment, or a country off your list goes to Needs you. With Claude unreachable nothing is ever
 certain — it fails toward asking you.
 
-### Resume
-The lines every CV you send must carry, which project to lead with per role type, and your imported
-profile.
-
-### Places (Countries and boards)
-Your eight countries in rank order with settlement timelines, salary thresholds and the boards
-searched for each. Toggle a country to **Paused** to drop it from the Jobs list and from fetching.
-
 ### Profile
 Your identity, where the data came from, full experience/education/projects/skills, your connections
-with a breakdown of which companies you know people at, and your inferred level.
+with a breakdown of which companies you know people at, and your inferred level. The **Imports** tab
+takes the LinkedIn export, a résumé and GitHub. The **Résumé** tab holds the lines every CV you send
+must carry, which project to lead with per role type, and the CV source.
+
+### Settings
+**Job search** holds your countries in rank order with settlement timelines, salary thresholds and the
+boards searched for each. Pause a country to drop it from the Jobs list and from fetching. The other
+sections are Account, Claude (your key), Integrations, Data and, for the admin, Admin.
 
 ---
+
+## Accounts
+
+Waypoint is for a small group of invited people. Run `npm run user:create-admin` one time to make
+the admin.
+
+The admin makes invite links and password reset links in Settings → Admin. Waypoint sends no
+email, so the admin sends each link. A link works one time, for 7 days. A password has 12
+characters or more.
 
 ## Remote access
 
 `./scripts/remote.sh` starts the server and a public tunnel in the background and hands the
 terminal back; `./scripts/remote.sh stop` stops both (`restart`, `status` and `logs` also work, and
 `./scripts/start.sh` takes the same commands in production mode). By default the tunnel is a
-Cloudflare quick tunnel, and before it will open one you must set `WAYPOINT_ACCESS_CODE` in `.env`,
-and that is not bureaucracy: past the sign-in page sit the names,
-employers and job titles of **every LinkedIn connection you have** — other people's personal data,
-not only yours — plus your CV and a button that spends your Claude subscription.
+Cloudflare quick tunnel.
 
-The passcode is compared in constant time and rate-limited to 10 attempts per 15 minutes, after
-which that client is locked out for the full window even with the correct code.
+The tunnel makes the app public, so protect the data behind the sign-in page. That data holds the
+names, employers and job titles of every LinkedIn connection you have. This is personal data of
+other people. It also holds your CV and a button that spends your Claude credit. Accounts protect
+all of it (see [Accounts](#accounts)). The server limits the rate of sign-in attempts. It refuses a
+write from another origin.
 
-Generate one with:
-
-```bash
-node -e "console.log(require('crypto').randomBytes(9).toString('base64url'))"
-```
+Set `WAYPOINT_PUBLIC_URL` in `.env` to the public URL of the copy. Invite links and reset links use
+it. `GET /api/health` answers without a session. `remote.sh` uses it to check the tunnel.
 
 Alternatives, in rough order of safety:
 
 - **Tailscale** (`brew install --cask tailscale`) — a private network between your devices. Nothing
   is public, so there is no URL for anyone to find. Safest option; needs the app running on each device.
-- **Cloudflare Tunnel + Cloudflare Access** — a stable URL with real email login instead of a shared
-  code. Needs a free Cloudflare account and a domain.
+- **Cloudflare Tunnel + Cloudflare Access** — a stable URL with real email login, in front of the
+  Waypoint sign-in. Needs a free Cloudflare account and a domain.
 - **Quick tunnel** (what `remote.sh` uses) — instant, no account, but the URL is public and changes
-  every run. The passcode is what makes it acceptable.
-- **zrok** (`WAYPOINT_TUNNEL=zrok` in `.env`) — a fixed `https://<name>.shares.zrok.io` URL behind
-  HTTP basic auth, on a free zrok.io account. Install `zrok2`, run `zrok2 enable <token>` and
-  `zrok2 create name waypoint`, and put one `user:password` line in
-  `~/.config/waypoint/zrok-basic-auth` (or point `WAYPOINT_ZROK_AUTH_FILE` elsewhere). The basic
-  auth is the lock, so the passcode is optional. zrok's Google sign-in loops on the hosted service
-  ([openziti/zrok#1276](https://github.com/openziti/zrok/issues/1276)), which is why this uses a
-  password.
+  every run. Sign-in with an account is the lock.
+- **zrok** (`WAYPOINT_TUNNEL=zrok` in `.env`) — a fixed `https://<name>.shares.zrok.io` URL, on a
+  free zrok.io account. Install `zrok2`, run `zrok2 enable <token>` and `zrok2 create name waypoint`.
+  The share has no basic auth. The Waypoint sign-in is the lock. Set `WAYPOINT_PUBLIC_URL` to the URL.
 
 `nginx` alone will not do this: your machine sits behind NAT, so you would also need port forwarding,
 dynamic DNS and your own TLS — and none of that works at all if your ISP uses CGNAT.
@@ -444,6 +463,10 @@ The checker and the app call the same `validate()` in `src/lib/claims.ts`, so th
 The ledger is personal data, so `data/profile/` is gitignored and the file is never committed —
 back it up yourself. `CLAIMS_FILE` points the app at a different path.
 
+On the `prod` branch the profile of each user is in the database. `claims.yml` is the import and
+export form: Settings → Data downloads it and imports it again, and `npm run migrate:claims` moves
+an existing file into the database. `npm run check:claims` still checks a file before you import it.
+
 ## Tailored CVs
 
 With `RESUME_TEX` set, each referral gets a CV whose content is chosen for that posting
@@ -478,7 +501,11 @@ Nothing is generated: every line on the PDF is one you wrote, either in the base
 entry, so the CV cannot say anything you have not.
 
 Producing the PDF is best-effort. It needs a LaTeX engine (tectonic, pdflatex, xelatex or lualatex,
-auto-detected). If the section cannot be mapped to the ledger or the compile fails, the base
+auto-detected) for the `RESUME_TEX` of the admin. The built-in template and an own `.tex` of a member
+compile only with `pdflatex` or `xelatex`; `tectonic` alone is not enough. On Debian, install
+`texlive-latex-base`, `texlive-latex-recommended` and `lmodern`, with `poppler-utils` and `ghostscript`
+for the PDF import. After a Ghostscript upgrade, run `npx vitest run tests/profile-extract.test.ts`
+and check that it passes before the next deploy. If the section cannot be mapped to the ledger or the compile fails, the base
 `RESUME_PDF` goes out unchanged and the UI says why. Output is keyed on a hash of the rendered
 LaTeX, so an unchanged order is a cache hit. `GET /api/resume/<applicationId>` serves the PDF for
 one application, and `Application.cvUrl` / `cvPath` / `cvLead` record which version a given company
@@ -488,12 +515,10 @@ received.
 
 These constraints shape half the app, so they are worth stating plainly.
 
-- **Sign in with LinkedIn returns name, email and photo. That is all.** OpenID Connect gives no
-  experience, education, projects, connections or messages. The sign-in route is real
-  (`src/app/api/auth/linkedin/*`) and used when `LINKEDIN_CLIENT_ID` is set; without it the button
-  opens the single local account, which is the same person either way.
+- **Waypoint does not use LinkedIn sign-in.** LinkedIn sign-in gives no experience, education,
+  projects, connections or messages, so accounts use an email and a password.
 - **Everything else comes from your data export.** LinkedIn → Settings → Data privacy → Get a copy
-  of your data → full archive. Upload the `.zip` on the Resume screen. `Connections.csv` — name,
+  of your data → full archive. Upload the `.zip` on the Profile screen, on the Imports tab. `Connections.csv` — name,
   company, position, connection date — is what makes referral routing possible at all. Re-upload any
   time to refresh; a fresh import replaces the profile wholesale and invalidates cached analyses.
   When `claims.yml` is in force, or you upload a bare `Connections.csv` instead of the `.zip`, only
@@ -519,7 +544,7 @@ source, because the description and posting date come from the employer.
 | `workday` | The search API behind the company's Workday careers site; token is `tenant\|host\|site` | NVIDIA, Intel, Boston Dynamics, and India-heavy employers: Salesforce, Adobe, Analog Devices, Cadence, Morgan Stanley, Citi, Deutsche Bank, State Street, Wells Fargo, Target |
 | `google` | Google's published jobs feed (`/about/careers/applications/jobs/feed.xml`, every open role, DeepMind and YouTube included). Its `robots.txt` blocks the results pages, not the feed | Google |
 | `microsoft`, `amazon`, `apple` | The search endpoint the company's own careers page calls, permitted by its `robots.txt` | Microsoft, Amazon, Apple |
-| `link` | **Never fetched** — shown as a link on the Countries screen | Meta: its terms forbid automated collection and metacareers.com rejects non-browser clients. The Muse's Meta listings stopped updating in January 2026, so there is no current feed to use |
+| `link` | **Never fetched** — shown as a link in Settings → Job search | Meta: its terms forbid automated collection and metacareers.com rejects non-browser clients. The Muse's Meta listings stopped updating in January 2026, so there is no current feed to use |
 
 The big employers list warehouse, retail and sales roles alongside engineering ones — Amazon has ~700
 openings in Germany alone. So the careers-site fetchers keep only technical titles *before* making
@@ -534,7 +559,7 @@ per country. A job-board API returns a company's openings worldwide in one respo
 optional `countries` list lets a refresh skip that board when none of its countries is on.
 
 **India.** Naukri, foundit, Instahyre, Cutshort and Wellfound forbid automated access, so they stay
-links on the Countries screen. Indian coverage comes from the Indian companies and India-heavy employers
+links in Settings → Job search. Indian coverage comes from the Indian companies and India-heavy employers
 in the watchlist, plus Adzuna's India feed once `ADZUNA_APP_ID` and `ADZUNA_APP_KEY` are set.
 
 **Aggregators**
@@ -543,7 +568,7 @@ in the watchlist, plus Adzuna's India feed once `ADZUNA_APP_ID` and `ADZUNA_APP_
 - **The Muse** — public jobs API, software roles in the main cities of each active country.
 - **Adzuna** — optional, needs a free `ADZUNA_APP_ID` / `ADZUNA_APP_KEY`. Coverage varies by country.
 
-**Not fetched:** LinkedIn Jobs, Indeed, StepStone, Glassdoor, Meta. The Countries screen links
+**Not fetched:** LinkedIn Jobs, Indeed, StepStone, Glassdoor, Meta. Settings → Job search links
 out to them for searching by hand.
 
 ### Priority companies
@@ -582,23 +607,22 @@ Copy `.env.example` to `.env`. Everything has a working default except the optio
 | Variable | Default | Purpose |
 |---|---|---|
 | `DATABASE_URL` | `file:../data/waypoint.db` | SQLite file. Point at Postgres and change the provider in `prisma/schema.prisma` to move. |
-| `WAYPOINT_NAME` | `Shivoy Arora` | Name on the local account. |
-| `WAYPOINT_EMAIL` | `you@local` | Identifier for the local account. |
-| `WAYPOINT_ACCESS_CODE` | *(unset)* | Passcode required at sign-in. **Set before exposing beyond localhost.** Unset means no passcode field appears. |
-| `WAYPOINT_CLAUDE_MODE` | `cli` | `cli` uses your subscription via the Claude Code CLI; `api` forces the HTTP API. |
+| `WAYPOINT_NAME` | `Shivoy Arora` | Name in the Drive file names. |
+| `WAYPOINT_SECRET_KEY` | *(unset)* | Required. Encrypts the secrets that each user saves. Make one with `npm run secret:new`. |
+| `WAYPOINT_PUBLIC_URL` | *(unset)* | The public URL of this copy. Invite and reset links use it, and the origin check accepts it. |
+| `WAYPOINT_SHARED_MONTHLY_USD` | `5` | The monthly limit in USD for each user on the shared `ANTHROPIC_API_KEY`. |
 | `WAYPOINT_CLAUDE_BIN` | `claude` | Full path to the CLI if it is not on `PATH`. |
-| `WAYPOINT_CLAUDE_TIMEOUT_MS` | `120000` | Per-call timeout. Raise it on a slow connection. |
-| `ANTHROPIC_API_KEY` | *(unset)* | Only to bypass the subscription and pay API credit. Stripped from the CLI's environment so it cannot silently bill you. |
+| `WAYPOINT_CLAUDE_TIMEOUT_MS` | `120000` | Per-call timeout. Raise it on a slow connection, up to 600000. |
+| `ANTHROPIC_API_KEY` | *(unset)* | The shared key. Waypoint uses credentials in this order: the user's own key (Settings), then `ANTHROPIC_API_KEY` up to `WAYPOINT_SHARED_MONTHLY_USD` each month for each user, then the `claude` CLI for the admin only. A failed API call does not fall back to the CLI. |
 | `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | *(unset)* | Free key from [developer.adzuna.com](https://developer.adzuna.com). Best lever for broader NL/PL/IN coverage. |
-| `LINKEDIN_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` | *(unset)* | Real OIDC sign-in. Returns name, email and photo only. |
 | `GDRIVE_CLIENT_ID` / `_SECRET` / `_REFRESH_TOKEN` | *(unset)* | Upload each tailored CV to your Drive and put its link in the referral message. See [First run, step 4](#first-run-getting-your-real-data-in). |
 | `GDRIVE_FOLDER_ID` | *(unset)* | Drive folder to upload into. Unset uploads to the Drive root. |
 | `RESUME_PDF` | *(unset)* | Base CV sent when tailoring is unavailable. With neither this nor `RESUME_TEX`, CV features are off. `~` is expanded. |
 | `RESUME_TEX` | *(unset)* | LaTeX source of the same CV. Turns on per-job tailoring. See [Tailored CVs](#tailored-cvs). |
 | `RESUME_PUBLIC_URL` | *(unset)* | A link a recruiter can open. The referral message offers a link only when this or Drive is set. |
-| `RESUME_ENGINE` | auto | `tectonic`, `pdflatex`, `xelatex` or `lualatex`. |
+| `RESUME_ENGINE` | auto | `tectonic`, `pdflatex`, `xelatex` or `lualatex`. It applies only to the `RESUME_TEX` of the admin. The template and an own `.tex` use `pdflatex` or `xelatex`. |
 | `RESUME_MAX_PROJECTS` | *(unset)* | How many projects the tailored CV carries, picked from `claims.yml`. Unset keeps the base CV's count. |
-| `RESUME_OUT_DIR` / `RESUME_TIMEOUT_MS` | `data/resumes` / `180000` | Where tailored PDFs go; per-compile timeout. |
+| `RESUME_TIMEOUT_MS` | `180000` | Per-compile timeout. Tailored PDFs go to `data/users/<userId>/resumes/`. |
 | `CLAIMS_FILE` | `data/profile/claims.yml` | Path to the claims ledger. |
 | `WAYPOINT_SEED_SAMPLES` | *(unset)* | `1` makes `npm run db:seed` insert placeholder listings and a placeholder profile. Off by default on purpose. |
 
@@ -609,9 +633,11 @@ Copy `.env.example` to `.env`. Everything has a working default except the optio
 | `npm run setup` | Generate the Prisma client, create the database, register the account and countries |
 | `npm run dev` | Dev server on :3117 |
 | `npm run build` / `npm start` | Production build and serve |
-| `npm run db:push` | Apply schema changes to the database |
+| `npm run db:deploy` | Apply the migrations in `prisma/migrations/` to the database. A database made with the old `db push` needs `npx prisma migrate resolve --applied 0_init` one time first (back it up first). Without it, Prisma fails with P3005. Check with `migrate diff` first; see SETUP_WITH_CLAUDE.md section 0 |
+| `npm run db:migrate` | Make a new migration after a change to `prisma/schema.prisma` |
 | `npm run db:seed` | Re-run the seed (placeholder data only with `WAYPOINT_SEED_SAMPLES=1`) |
 | `npm run gdrive:auth` | One-time Google consent; prints the `GDRIVE_REFRESH_TOKEN` for `.env` |
+| `npm run test:e2e` | Device smoke tests (6 phone, tablet and desktop profiles) on port 3150 with a scratch database. On the Pi the iPhone and iPad profiles run in WebKit. See [docs/devices.md](docs/devices.md) |
 | `npm run check:claims` | Validate `data/profile/claims.yml` and report coverage gaps |
 | `./scripts/remote.sh [start\|stop\|restart\|status\|logs]` | Server plus a public HTTPS tunnel, in the background |
 | `./scripts/start.sh [start\|stop\|restart\|status\|logs]` | Same, but builds and serves in production mode — use on the Pi |
@@ -629,7 +655,7 @@ the app and run `npm run gdrive:auth` again. If you deleted a CV from Drive by h
 **`EADDRINUSE` on 3117.** Something already holds the port:
 `lsof -nP -iTCP:3117 -sTCP:LISTEN`, then kill it.
 
-**A source shows an error after "Refresh feeds".** Boards move; a company that changed ATS shows up
+**A source shows an error after "Refresh".** Boards move; a company that changed ATS shows up
 by name in the toast rather than failing the whole fetch. Fix or remove its entry in
 `config/watchlist.json`.
 

@@ -11,21 +11,38 @@ generator client {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  picture   String?
-  linkedin  String?
-  createdAt DateTime @default(now())
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  picture      String?
+  linkedin     String?
+  // argon2id. Null only for a user from before part 2 until
+  // `npm run user:create-admin` sets a password.
+  passwordHash String?
+  role         String    @default("member") // "admin" | "member"
+  disabledAt   DateTime?
+  createdAt    DateTime  @default(now())
 
   countries    CountryPref[]
   positions    Position[]
   educations   Education[]
   projects     ProjectItem[]
-  skills       Skill[]
+  profileMeta  ProfileMeta?
+  claims       Claim[]
+  revisions    ProfileRevision[]
+  drafts       ProfileDraft[]
+  githubCache  GithubCache[]
   contacts     Contact[]
   applications Application[]
   imports      ProfileImport[]
+  sessions     Session[]
+  secrets      UserSecret[]
+  usage        LlmUsage[]
+  analyses     JobAnalysis[]
+  tasks        Task[]
+  invitesMade  Invite[]          @relation("InviteCreator")
+  resetLinks   Invite[]          @relation("InviteUser")
+  settings     UserSettings?
 }
 
 model CountryPref {
@@ -48,44 +65,193 @@ model ProfileImport {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// The profile of one user (spec 3.1). store.ts writes all of these rows in one
+// transaction after checkDoc. `order` keeps the order of claims.yml.
+model ProfileMeta {
+  userId    String   @id
+  name      String
+  headline  String   @default("")
+  // Goes up by one on each write. The in-memory cache compares it.
+  version   Int      @default(0)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 model Position {
-  id        String    @id @default(cuid())
-  userId    String
-  title     String
-  company   String
-  location  String?
-  startedAt DateTime?
-  endedAt   DateTime?
-  summary   String?
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id       String           @id @default(cuid())
+  userId   String
+  slug     String
+  title    String
+  company  String
+  location String?
+  // YYYY or YYYY-MM, as in claims.yml.
+  start    String
+  end      String?
+  summary  String?
+  order    Int
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bullets  PositionBullet[]
+
+  @@unique([userId, slug])
+}
+
+model PositionBullet {
+  id         String   @id @default(cuid())
+  positionId String
+  slug       String
+  // A phrase that finds the bullet in an own .tex file.
+  match      String
+  // The full line, for the built-in templates.
+  text       String?
+  order      Int
+  position   Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@unique([positionId, slug])
 }
 
 model Education {
-  id      String @id @default(cuid())
+  id      String  @id @default(cuid())
   userId  String
+  slug    String
   school  String
   degree  String?
   field   String?
   years   String?
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // JSON array of strings.
+  aliases String  @default("[]")
+  order   Int
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, slug])
 }
 
 model ProjectItem {
   id          String  @id @default(cuid())
   userId      String
+  slug        String
   title       String
   org         String?
   description String?
   url         String?
-  tags        String  @default("")
+  tex         String?
+  // JSON array of strings.
+  bullets     String  @default("[]")
+  // manual | github | resume | linkedin | yaml
+  source      String  @default("manual")
+  repoUrl     String?
+  order       Int
   user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, slug])
 }
 
-model Skill {
+model Claim {
+  id             String          @id @default(cuid())
+  userId         String
+  slug           String
+  kind           String
+  label          String
+  // JSON array of strings.
+  aliases        String          @default("[]")
+  value          Float?
+  scaleMax       Float?
+  higherIsBetter Boolean?
+  order          Int
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  linksFrom      ClaimLink[]     @relation("LinkFrom")
+  linksTo        ClaimLink[]     @relation("LinkTo")
+  evidence       ClaimEvidence[]
+  mentions       ClaimMention[]
+
+  @@unique([userId, slug])
+}
+
+model ClaimLink {
   id     String @id @default(cuid())
-  userId String
-  name   String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromId String
+  toId   String
+  rel    String
+  w      Float
+  order  Int
+  from   Claim  @relation("LinkFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to     Claim  @relation("LinkTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@index([fromId])
+  @@index([toId])
+}
+
+model ClaimEvidence {
+  id      String  @id @default(cuid())
+  claimId String
+  // For example "project:recipebert" or "position:gs-analyst/validator".
+  target  String
+  depth   String
+  proof   String?
+  since   String?
+  order   Int
+  claim   Claim   @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@index([claimId])
+}
+
+model ClaimMention {
+  id      String  @id @default(cuid())
+  claimId String
+  surface String
+  url     String?
+  listed  Boolean
+  order   Int
+  claim   Claim   @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@index([claimId])
+}
+
+// The full profile before one change, as JSON of the ClaimsDoc. "Restore"
+// writes it back. store.ts keeps the newest 50 for each user.
+model ProfileRevision {
+  id        String   @id @default(cuid())
+  userId    String
+  snapshot  String
+  note      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+// An item that an import found. The user accepts, edits or rejects it.
+// type: meta | position | education | project | claim | profile (a full YAML file).
+// data: JSON in the claims.yml shape of that item. matches: the key of the
+// item it would replace. warnings: JSON array of strings.
+model ProfileDraft {
+  id               String   @id @default(cuid())
+  userId           String
+  batchId          String
+  source           String
+  type             String
+  data             String
+  status           String   @default("pending")
+  warnings         String   @default("[]")
+  warningsApproved Boolean  @default(false)
+  matches          String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+// GitHub replies with their ETag, so a second import costs no rate limit.
+// For each user, because a token can read private repos.
+model GithubCache {
+  userId    String
+  url       String
+  etag      String
+  body      String
+  fetchedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, url])
 }
 
 // One row per 1st-degree LinkedIn connection, from the data export.
@@ -121,24 +287,21 @@ model Job {
   description String   @default("")
   postedAt    DateTime @default(now())
   fetchedAt   DateTime @default(now())
-  analysis    String?
-
-  // `analysis` may hold a keyword guess written after a failed Claude call, so
-  // it cannot double as "this has been read". These two can: `analysedAt` is
-  // set only when Claude actually answered, and `analysisTries` bounds the
-  // retries so one permanently failing posting cannot eat the queue budget on
-  // every refresh.
-  analysedAt    DateTime?
-  analysisTries Int       @default(0)
 
   // Set when the company is marked `priority` in config/watchlist.json, whichever
   // source the listing came from. Moves the job up the analysis queue and the list
   // without touching its match score.
   priority Boolean @default(false)
 
+  // The user who pasted this job and was first to add it. Only that user sees the row and gets an analysis of it.
+  // A refresh of the same job sets it to null, and then the job is a normal feed job.
+  pastedBy String?
+
   applications Application[]
+  analyses     JobAnalysis[]
 
   @@index([cc, postedAt])
+  @@index([pastedBy])
 }
 
 model Application {
@@ -166,9 +329,11 @@ model Application {
   // rebuild so a link already sent keeps working. `cvSteer` is the "Refine with
   // Claude" selection (JSON `Steer` from resume.ts) every rebuild applies, and
   // `cvChat` the conversation that produced it (JSON array of turns).
-  cvDriveId String?
-  cvSteer   String?
-  cvChat    String  @default("[]")
+  cvDriveId     String?
+  cvSteer       String?
+  cvChat        String  @default("[]")
+  // The checked wording suggestions for this job (JSON, zod-checked on read, see resume/suggest.ts).
+  cvSuggestions String?
 
   user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   job      Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
@@ -214,4 +379,157 @@ model LlmCache {
   usedAt    DateTime @default(now())
 
   @@index([kind, usedAt])
+}
+
+// The cookie holds a random token. Only its SHA-256 hash is stored here.
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  userAgent  String?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// An invite (kind "invite") or a password reset link (kind "reset").
+// Valid for 7 days, one use. Only the SHA-256 hash of the token is stored.
+model Invite {
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  kind        String
+  email       String?
+  userId      String?
+  createdById String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  user        User?     @relation("InviteUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation("InviteCreator", fields: [createdById], references: [id], onDelete: Cascade)
+}
+
+// Attempt counts for sign-in and token links. A table, so that a restart
+// does not reset the counts.
+model RateLimit {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+}
+
+// An encrypted secret of one user (AES-256-GCM). kind: "anthropic" | "github" | "gdrive".
+model UserSecret {
+  userId     String
+  kind       String
+  iv         String
+  tag        String
+  data       String
+  keyVersion Int      @default(1)
+  last4      String
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, kind])
+}
+
+// One row for each Claude call. credential: "own" | "shared" | "cli".
+model LlmUsage {
+  id              String   @id @default(cuid())
+  userId          String
+  credential      String
+  model           String
+  kind            String
+  inputTokens     Int
+  outputTokens    Int
+  cacheReadTokens Int      @default(0)
+  costUsd         Float
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, credential, createdAt])
+}
+
+// The analysis of one job for one user. It replaces Job.analysis, because the
+// prompt contains the profile of the user.
+model JobAnalysis {
+  userId     String
+  jobId      String
+  analysis   String
+  analysedAt DateTime?
+  tries      Int       @default(0)
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([userId, jobId])
+  @@index([jobId])
+}
+
+// One job for the worker. kind: "refresh" | "analysis" | "cv" | "resume-import" |
+// "github-import" | "maintenance". status: "queued" | "running" | "done" | "failed".
+// payload and result hold JSON text. userId is null only for "maintenance".
+model Task {
+  id        String    @id @default(cuid())
+  kind      String
+  userId    String?
+  payload   String
+  result    String?
+  status    String    @default("queued")
+  runAt     DateTime  @default(now())
+  attempts  Int       @default(0)
+  lastError String?
+  dedupeKey String?
+  startedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, runAt])
+  @@index([userId, kind, status])
+  @@index([dedupeKey, status])
+}
+
+// One row only (id "worker"). The worker writes it each 30 seconds.
+model WorkerHeartbeat {
+  id        String   @id
+  pid       Int
+  beatAt    DateTime
+  startedAt DateTime
+}
+
+// The last fetch of one job board, for the ETag check. status: "ok" | "not-modified" | "failed".
+model FeedFetch {
+  board        String   @id
+  etag         String?
+  lastModified String?
+  fetchedAt    DateTime
+  status       String
+  error        String?
+}
+
+model UserSettings {
+  userId      String    @id
+  // JSON text: string[] of field names from FIELD_CHOICES.
+  fields      String    @default("[]")
+  visaStatus  String    @default("")
+  // "template" | "own-tex"
+  resumeMode  String    @default("template")
+  // The file name that the server made for the .tex of the user. Never a path from the client.
+  ownTex      String?
+  templateId  String    @default("classic")
+  // Null until the user finishes or skips the onboarding wizard. The migration sets it for each user that existed before the wizard.
+  onboardedAt DateTime?
+  // The last wizard step that the user opened: "account" | "search" | "claude" | "import" | "review" | "refresh". Null when the wizard is done.
+  wizardStep  String?
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// A small key-value table for state of the app. The value is JSON text.
+model AppState {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }

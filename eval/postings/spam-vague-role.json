@@ -1,0 +1,17 @@
+{
+  "id": "spam-vague-role",
+  "title": "Exciting Opportunity in Tech",
+  "company": "Pinecrest Partners",
+  "location": "Frankfurt",
+  "cc": "DE",
+  "description": "Pinecrest Partners is a dynamic, fast moving team with a passion for excellence. We are looking for a motivated person to join us and help the business to grow.\n\nYou will support different teams and take on tasks as they come up. You will work with many people and make an impact. We value energy, ownership and a positive attitude. Apply today to take the next step.",
+  "expected": {
+    "field": "Other",
+    "blockers": [],
+    "noFakeBlockers": true,
+    "legitimacy": [
+      "vague-role"
+    ],
+    "injection": false
+  }
+}

@@ -1,43 +1,34 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser } from '@/lib/user';
-import { CvError, refineCv, resetCv } from '@/lib/cv';
+import { visibleTo } from '@/lib/job-scope';
+import { handle, HttpError } from '@/lib/auth/http';
+import { requireUser } from '@/lib/auth/guard';
+import { CV_MESSAGE_MAX } from '@/lib/cv';
+import { refuseUserRequest } from '@/lib/injection';
+import { enqueueCv } from '@/lib/tasks/cv';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;
 
-async function application(userId: string, jobId: string) {
-  const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
-  const app = await db.application.upsert({
-    where: { userId_jobId: { userId, jobId } },
-    update: {},
-    create: { userId, jobId },
-  });
-  return { job, app };
+async function start(userId: string, jobId: string, payload: { action: 'refine' | 'reset'; message?: string }) {
+  if (!(await db.job.findFirst({ where: { id: jobId, ...visibleTo(userId) }, select: { id: true } }))) throw new HttpError(404, 'Not found.');
+  return NextResponse.json({ taskId: await enqueueCv(userId, jobId, payload) });
 }
 
-const failed = (e: unknown) =>
-  NextResponse.json({ error: (e as Error).message }, { status: e instanceof CvError ? 400 : 500 });
-
-/** One "Refine with Claude" turn: Claude picks, the CV rebuilds, Drive updates in place. */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const user = await requireUser();
+/** One "Refine with Claude" turn, in the worker. The route returns the task ID. */
+export const POST = handle<{ params: { id: string } }>(async (req, { params }) => {
+  const user = await requireUser(req);
   const body = await req.json().catch(() => ({}));
-  try {
-    const { job, app } = await application(user.id, params.id);
-    return NextResponse.json(await refineCv(app, job, String(body?.message ?? '')));
-  } catch (e) {
-    return failed(e);
-  }
-}
+  const message = String(body?.message ?? '');
+  if (!message.trim()) throw new HttpError(400, 'Type what to change first.');
+  if (message.length > CV_MESSAGE_MAX) throw new HttpError(400, `Write at most ${CV_MESSAGE_MAX} characters.`);
+  // Refuse an unsafe request before any task or model call.
+  const reason = refuseUserRequest(message);
+  if (reason) throw new HttpError(400, `Waypoint did not send this request, because ${reason}.`);
+  return start(user.id, params.id, { action: 'refine', message });
+});
 
-/** Forgets the conversation and its choices; the CV goes back to the posting's own selection. */
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  const user = await requireUser();
-  try {
-    const { job, app } = await application(user.id, params.id);
-    return NextResponse.json(await resetCv(app, job));
-  } catch (e) {
-    return failed(e);
-  }
-}
+/** Forgets the conversation and its choices, in the worker. The CV goes back to the selection of the posting. */
+export const DELETE = handle<{ params: { id: string } }>(async (req, { params }) => {
+  const user = await requireUser(req);
+  return start(user.id, params.id, { action: 'reset' });
+});

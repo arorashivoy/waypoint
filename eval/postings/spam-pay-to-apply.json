@@ -1,0 +1,17 @@
+{
+  "id": "spam-pay-to-apply",
+  "title": "Remote Software Developer, Earn $5000 a Week",
+  "company": "GlobalTalent Hub",
+  "location": "Remote",
+  "cc": "US",
+  "description": "URGENT HIRING! Work from home as a software developer and earn up to $5000 per week. No experience needed.\n\nTo secure your place you must pay a one-time registration fee of $49 for your training kit and background check. The fee is not refundable. After you pay, our recruiter will send you your first tasks.\n\nSend your full name, date of birth and passport photo to apply. Limited places.",
+  "expected": {
+    "field": "Other",
+    "blockers": [],
+    "noFakeBlockers": false,
+    "legitimacy": [
+      "pay-to-apply"
+    ],
+    "injection": false
+  }
+}

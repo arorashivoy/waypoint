@@ -1,0 +1,14 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "num_turns": 1,
+  "result": "{\"hook\":\"OK\"}",
+  "stop_reason": "end_turn",
+  "total_cost_usd": 0.002578,
+  "usage": { "input_tokens": 2, "cache_creation_input_tokens": 576, "cache_read_input_tokens": 0, "output_tokens": 27 },
+  "modelUsage": {
+    "claude-sonnet-5": { "inputTokens": 2, "outputTokens": 27, "cacheReadInputTokens": 0, "cacheCreationInputTokens": 576, "costUSD": 0.002578 }
+  },
+  "permission_denials": []
+}

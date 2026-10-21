@@ -1,9 +1,11 @@
 import type { Contact } from '@prisma/client';
 
-export type Requirement = { t: string; ok: boolean };
-
 /**
- * match % = 20·(requirements met) + 40·(field fit) + 40·(level fit).
+ * match % = 20·(requirement ratio) + 40·(field fit) + 40·(level fit).
+ *
+ * The requirement ratio is a value from 0 to 1. `scoreCheck` in jobcheck.ts
+ * weighs it (must 3, nice 1; met 1, partial 0.5, missing 0) and takes 25 points
+ * for each blocker after this sum.
  *
  * Requirements are weighted *low on purpose*. A job posting's requirement list
  * is a wish-list, not a bar: teams routinely list every technology they touch
@@ -35,8 +37,7 @@ export type Requirement = { t: string; ok: boolean };
  * Worked example: 3 of 4 requirements met, field matches, level is adjacent
  * (posting Senior, candidate Mid) → 20·0.75 + 40·1 + 40·0.5 = 15 + 40 + 20 = 75.
  */
-export function matchScore(reqs: Requirement[], fieldFit: number, levelFit: number): number {
-  const ratio = reqs.length ? reqs.filter((r) => r.ok).length / reqs.length : 0;
+export function matchScore(ratio: number, fieldFit: number, levelFit: number): number {
   return Math.round(20 * ratio + 40 * fieldFit + 40 * levelFit);
 }
 
@@ -51,7 +52,6 @@ export function levelFit(jobLevel: string, profileLevels: string[]): number {
 
 export function fieldFit(jobField: string, strongFields: string[]): number {
   if (strongFields.includes(jobField)) return 1;
-  if (jobField === 'Backend') return 0.6; // Backend overlaps almost everything the profile has
   if (jobField === 'Other') return 0; // not a software role at all
   return 0.3;
 }
@@ -148,24 +148,24 @@ export function rankRoutes(contacts: Contact[], ctx: RouteContext): Route[] {
       const alum = ctx.schools.find((s) => mentionsTerm(position, s));
       if (alum) {
         score = 110;
-        why = `1st-degree · ${alum} alum`;
+        why = `1st-degree, ${alum} alum`;
       } else if (employer && (company.includes(employer) || norm(position).includes(employer))) {
         score = 105;
-        why = `1st-degree · same ${ctx.currentEmployer} org`;
+        why = `1st-degree, former colleague at ${ctx.currentEmployer}`;
       } else if (ctx.interests.some((i) => norm(position).includes(norm(i)))) {
         score = 90;
-        why = `1st-degree · shared interest: ${ctx.interests.find((i) => norm(position).includes(norm(i)))}`;
+        why = `1st-degree, shared interest: ${ctx.interests.find((i) => norm(position).includes(norm(i)))}`;
       }
       // `\brecruit\b` never matched "Recruiter" or "Recruiting", so the penalty
       // had been silently dead. It matters more now that alumni score 110: a
       // recruiter who happens to be an alumnus would otherwise top the list.
-      if (/\b(recruit\w*|talent|sourcer)\b/i.test(position)) { score -= 25; why += ' · recruiter'; }
+      if (/\b(recruit\w*|talent|sourcer)\b/i.test(position)) { score -= 25; why += ', recruiter'; }
 
       const name = `${c.firstName} ${c.lastName}`.trim();
       return {
         init: `${c.firstName[0] || '?'}${c.lastName[0] || ''}`.toUpperCase(),
         name,
-        role: [position, c.company].filter(Boolean).join(' · '),
+        role: position && c.company ? `${position} at ${c.company}` : position || c.company || '',
         why,
         best: false,
         profileUrl: c.profileUrl,
@@ -183,7 +183,7 @@ export function rankRoutes(contacts: Contact[], ctx: RouteContext): Route[] {
 /** The label the job card shows for how you would get in. */
 export function routeLabel(routes: Route[], company: string): string {
   if (!routes.length) return `No 1st-degree contact at ${company}`;
-  return routes[0].why.replace(/^1st-degree · /, '').replace(/^1st-degree connection at the company$/, '1st-degree connection');
+  return routes[0].why.replace(/^1st-degree, /, '').replace(/^1st-degree connection at the company$/, '1st-degree connection');
 }
 
 /**

@@ -1,0 +1,21 @@
+{
+  "id": "blocker-seniority",
+  "title": "Principal Backend Engineer",
+  "company": "Anvil Commerce",
+  "location": "Zurich",
+  "cc": "CH",
+  "description": "Anvil Commerce runs one of the larger online marketplaces in Switzerland.\n\nWe look for a Principal Engineer with at least 12 years of backend experience and 4 years as a technical lead of a team of 10 or more engineers. You decide the architecture of our order platform (Java, Kafka, PostgreSQL) and you report to the CTO.\n\nVisa support is available for the right person.",
+  "expected": {
+    "field": "Backend",
+    "level": "Senior",
+    "blockers": [
+      "seniority"
+    ],
+    "noFakeBlockers": false,
+    "legitimacy": [],
+    "injection": false,
+    "mustMet": [
+      "java"
+    ]
+  }
+}

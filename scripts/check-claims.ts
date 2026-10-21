@@ -1,14 +1,8 @@
 /**
- * Validates data/profile/claims.yml.
+ * Checks a claims.yml file.
  *
- * The file is hand-edited — by Shivoy, and by Claude in a session that learned
- * a new fact — and it silently outranks the LinkedIn import at runtime. A bad
- * edit therefore does not crash anything; it quietly changes what gets said
- * about him to a stranger, or drops the file back to the fallback without
- * anyone noticing. This script is the gate that makes such an edit loud.
- *
- * It shares `validate()` with the app, so what passes here is exactly what the
- * app will accept — the two cannot drift.
+ * The file is the import form of a profile. `migrate:claims` and the app use
+ * the same `checkDoc`, so a file that passes here also passes there.
  *
  *   npm run check:claims             the default path
  *   npm run check:claims -- --strict warnings fail too
@@ -27,7 +21,7 @@ const C = process.stdout.isTTY
 
 if (!existsSync(path)) {
   console.log(`${C.yellow}·${C.off} ${path} does not exist.`);
-  console.log(`${C.dim}  Not an error: the app falls back to the imported LinkedIn profile when it is absent.${C.off}`);
+  console.log(`${C.dim}  Not an error. Import a claims.yml in Settings → Data, or run npm run migrate:claims.${C.off}`);
   process.exit(0);
 }
 
@@ -64,7 +58,7 @@ if (errors.length && warnings.length) console.log('');
 show(C.yellow, '!', warnings);
 
 if (errors.length) {
-  console.log(`\n${C.red}${C.bold}${errors.length} error${errors.length > 1 ? 's' : ''}${C.off} — the app will IGNORE this file and fall back to the LinkedIn import until they are fixed.`);
+  console.log(`\n${C.red}${C.bold}${errors.length} error${errors.length > 1 ? 's' : ''}${C.off} — fix them before you import this file.`);
   process.exit(1);
 }
 

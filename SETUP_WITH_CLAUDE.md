@@ -11,18 +11,18 @@ order. Before you start, read `README.md`.
 - **The user is not the original author.** Never reuse names, schools, emails, Drive
   ids, tokens or URLs from the repo history, the README examples or this file. All of
   them come from the user.
-- **Never echo a secret back** (tokens, client secrets, passcodes). Write it into `.env`
+- **Never echo a secret back** (tokens, client secrets, passwords). Write it into `.env`
   and confirm that it is set.
 - Steps marked **[USER]** need the user's browser or their accounts. Explain exactly what to
   click, and wait for them. Never claim one of these steps is done without checking it
   (each step says how to check).
 - Ask before anything public: pushing to their GitHub, publishing pages.
-- Run `npx prisma generate` and `npx prisma db push` **only from this checkout's root**,
+- Run `npx prisma generate` and `npx prisma migrate deploy` **only from this checkout's root**,
   never from a git worktree that shares this `node_modules`. The generated client stores
   the absolute path of the schema it was generated from. Generating from a worktree points
   the app at that worktree's database, and the app then fails with
   `Error code 14: Unable to open the database file`.
-- After pulling new code, run `npx prisma db push` (to add any new columns), then restart
+- After pulling new code, run `npx prisma migrate deploy` (to apply new migrations; on an old install, do step 3 of section 0 first), then restart
   the server, and tell the user to hard-reload the tab (Cmd/Ctrl+Shift+R). An open tab
   keeps running old client code. Buttons that call removed routes then return 404.
 
@@ -33,13 +33,31 @@ order. Before you start, read `README.md`.
 If `data/waypoint.db` and `.env` already exist, this is an existing install. Do **not**
 run `npm run setup` or re-create `.env`. Instead:
 
-1. **Back up** before touching anything: copy `data/waypoint.db`, `.env` and
-   `data/profile/claims.yml`.
-2. `git pull`, then `npm install`, then `npx prisma db push`. The push adds new columns,
-   for example `cvDriveId`, `cvSteer` and `cvChat` on `Application`. Then run
-   `npx prisma generate`, from this checkout's root.
-3. Restart the server, and have the user hard-reload every open tab.
-4. Bring the setup that lives outside git up to date. **Check each item; don't assume
+1. **Back up** before touching anything. Stop the server first (`./scripts/remote.sh stop`).
+   Then copy `data/waypoint.db` and, if they exist, `data/waypoint.db-wal` and
+   `data/waypoint.db-shm` together. Also copy `.env` and `data/profile/claims.yml`.
+2. `git pull`, then `npm install`.
+3. Do this step one time only, and only if the database was made before the `0_init`
+   migration existed. Run `npx prisma migrate status`. If it says the database is not
+   managed by Prisma Migrate, do these sub-steps. The old `db push` did not make a
+   `_prisma_migrations` table, so without them `migrate deploy` fails with error P3005.
+   Do not run them on a new database.
+   1. From the checkout root, run
+      `npx prisma migrate diff --from-url "file:$PWD/data/waypoint.db" --to-schema-datamodel prisma/schema.prisma --exit-code`.
+   2. If the exit code is 2, the database differs from the schema. Stop. Check that the
+      backup from step 1 exists. Run `npx prisma db push` one time (the old tool, only
+      for this catch-up). Run the diff again. Repeat until the exit code is 0.
+   3. If the exit code is 0, run `npx prisma migrate resolve --applied 0_init`. If you
+      skip the check, this command hides a missing column and no error shows.
+4. Run `npx prisma migrate deploy`. It applies the migrations that come after `0_init`,
+   if there are any. Then run `npx prisma generate`, from this checkout's root.
+5. **Move claims.yml into the database.** Part 3 keeps each profile in the database. Run this one
+   time for the admin, with the server stopped:
+   `npm run migrate:claims -- --user <admin email> --file data/profile/claims.yml`.
+   If the script prints errors, nothing changed: fix the file with `npm run check:claims` and run it
+   again. After this, edit the profile on the Profile screen, or import a claims.yml in
+   Settings → Data. Section 9 (keep claims.yml in sync) does not apply to the `prod` branch.
+6. Bring the setup that lives outside git up to date. **Check each item; don't assume
    it's done.**
    - **Drive token:** run the token check in section 5, step 8. If it returns
      `invalid_grant`, the Google app is probably still in Testing. Do section 5, steps 2–4
@@ -51,7 +69,21 @@ run `npm run setup` or re-create `.env`. Instead:
    - **Obsolete settings:** remove `WAYPOINT_SCHOOL_LINKEDIN_SLUG` from `.env` and any
      `linkedin:` key under an education in `claims.yml`. Neither is used any more.
    - **Check:** `npm run check:claims` exits 0.
-5. Run the checklist in section 7.
+7. Check `.env` for `WAYPOINT_SECRET_KEY`. If the line is missing, run `npm run secret:new`.
+   Append the line that it prints to `.env`. Do not overwrite the file.
+   Optional: append `WAYPOINT_SHARED_MONTHLY_USD=5` (the default is 5).
+8. Add the public URL to `.env` (append one line; do not overwrite the file):
+   `WAYPOINT_PUBLIC_URL=https://<name>.shares.zrok.io`
+9. Set the admin password: `npm run user:create-admin`. The migration made your
+   existing account the admin. The script asks for the email, the name and the password.
+10. Remove `WAYPOINT_ACCESS_CODE`, `WAYPOINT_ZROK_AUTH_FILE` and the `LINKEDIN_*` lines
+   from `.env`. They do nothing now.
+11. Restart with `./scripts/start.sh restart`. The zrok share now has no basic auth.
+    Sign in with the admin email and password.
+    Tell the user to hard-reload every open tab.
+12. Run the checklist in section 7.
+
+For the first deploy of the `multi-user` branch on an always-on host (units, worker, backups), follow `docs/deploy.md`.
 
 ## 1. Machine prerequisites
 
@@ -59,7 +91,8 @@ run `npm run setup` or re-create `.env`. Instead:
 |---|---|---|
 | Node 18+ | `node -v` | nodejs.org or NodeSource (on a Raspberry Pi use **64-bit** Pi OS) |
 | Claude Code CLI | `claude --version` | https://claude.com/claude-code |
-| A LaTeX engine for tailored CVs | `which tectonic` | `brew install tectonic`, or the aarch64/x86_64 release binary on Linux |
+| `pdflatex` for the template CV (`tectonic` alone is not enough) | `which pdflatex` | Linux: `sudo apt install texlive-latex-base texlive-latex-recommended lmodern`. macOS: `brew install --cask mactex-no-gui` |
+| `pdftotext` and `gs` for PDF import | `which pdftotext gs` | Linux: `sudo apt install poppler-utils ghostscript`. macOS: `brew install poppler ghostscript`. After a Ghostscript upgrade, run `npx vitest run tests/profile-extract.test.ts` and check that it passes before the next deploy. |
 | cloudflared (only for remote access) | `which cloudflared` | `brew install cloudflared` / the Linux package |
 
 **Claude auth.** Either the user runs `claude login` on this machine, or **[USER]** they run
@@ -71,7 +104,7 @@ bill the same Claude subscription.
 ## 2. Install and database
 
 ```bash
-npm install && npm run setup     # prisma generate + db push + seed the account and country list
+npm install && npm run setup     # prisma generate + migrate deploy + seed the account and country list
 cp .env.example .env
 ```
 
@@ -82,13 +115,15 @@ Fill these in from `.env.example`. Ask the user for each value; do not invent an
 | Variable | Value |
 |---|---|
 | `DATABASE_URL` | keep `file:../data/waypoint.db` (the path is relative to `prisma/`) |
-| `WAYPOINT_NAME`, `WAYPOINT_EMAIL` | the user's name and email |
-| `WAYPOINT_ACCESS_CODE` | **required before any remote access.** Generate one with `openssl rand -base64 18`, write it, and tell the user it is in `.env` (don't print it) |
+| `WAYPOINT_NAME` | the user's name. The Drive file names use it |
+| `WAYPOINT_SECRET_KEY` | required. Make one with `npm run secret:new` |
+| `WAYPOINT_PUBLIC_URL` | only for remote access. The public URL of this copy. Invite links use it |
+| `WAYPOINT_SHARED_MONTHLY_USD` | optional. The monthly limit for each user on the shared `ANTHROPIC_API_KEY`. The default is 5 |
 | `CLAUDE_CODE_OAUTH_TOKEN` | see section 1 |
 | `RESUME_TEX`, `RESUME_PDF` | absolute paths to the user's LaTeX CV and its compiled PDF. Tailoring needs the `.tex`; keep any custom `.cls` next to it |
 | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` | optional. Free at developer.adzuna.com. Without them the Adzuna source returns nothing, silently |
 | `GDRIVE_*` | section 5 |
-| `PORT` | only for a second copy on the same machine (section 8), e.g. `PORT=3118`. Read by `npm run dev`, `npm start` and `remote.sh`; a `PORT` in the shell or systemd unit wins over `.env`. If LinkedIn sign-in is configured, change the port in `LINKEDIN_REDIRECT_URI` to match |
+| `PORT` | only for a second copy on the same machine (section 8), e.g. `PORT=3118`. Read by `npm run dev`, `npm start` and `remote.sh`; a `PORT` in the shell or systemd unit wins over `.env`. |
 
 Check: `grep -c '^[A-Z]' .env` goes up, and `npm run dev` starts without errors.
 
@@ -131,6 +166,10 @@ import { profileSummary } from './src/lib/user';
 EOF
 npx tsx --env-file=.env .probe.ts; rm .probe.ts
 ```
+
+On the `prod` branch the profile of each user is in the database. `claims.yml` is the import and
+export form: Settings → Data downloads it and imports it again, and `npm run migrate:claims` moves
+an existing file into the database. `npm run check:claims` still checks a file before you import it.
 
 ## 5. Google Drive (CV links in referral messages)
 
@@ -202,7 +241,7 @@ missing, run the token check from step 8 first.
 ## 6. LinkedIn data **[USER]**
 
 In LinkedIn, the user opens **Settings → Data privacy → Get a copy of your data**, chooses
-the full archive, and uploads the zip on the Profile or Resume screen. `Connections.csv`
+the full archive, and uploads the zip on the Profile screen, on the Imports tab. `Connections.csv`
 inside it is the only source of 1st-degree contacts. Without it, every job uses the alumni
 fallback.
 
@@ -214,14 +253,25 @@ LinkedIn's User Agreement and puts the user's account at risk.
 
 ```bash
 npm run dev                      # development, http://localhost:3117
+npm run worker                   # the task worker. Run it next to npm run dev, in a second terminal
 npm run build && npm start       # production. Stop the dev server first: build overwrites .next
-./scripts/remote.sh              # dev server plus a public tunnel. Refuses to start without WAYPOINT_ACCESS_CODE
+./scripts/remote.sh              # dev server, worker and a public tunnel. Accounts protect the app
 ./scripts/start.sh               # same, but builds and runs the production server
 ```
 
+A build needs no network: the fonts are files in `src/app/fonts`. `npm install` copies the pdf.js
+worker to `public/pdfjs/` (the `postinstall` script), so do not use `--ignore-scripts`. The
+`7_onboarding` migration marks every existing user as onboarded and keeps `RESUME_TEX` for the
+admin. When the worker starts, a Claude CLI check runs with a 30 s limit. If it times out on a slow
+start, CLI mode stays off until the next start: restart the worker. For the phone and tablet checks,
+run `npm run test:e2e` (WebKit on the Pi) and follow `docs/devices.md`.
+
+Dev mode needs the worker. Without it, every task (refresh, CV build, import, analysis) stays
+in the queue, and the screen waits. `remote.sh` and `start.sh` start the worker for you.
+
 Checklist with the user:
 1. Sign in works.
-2. **Refresh feeds** adds jobs. The refresh logs `[refresh] <source> failed: …` for any
+2. **Refresh** (on the Jobs screen) adds jobs. The refresh logs `[refresh] <source> failed: …` for any
    dead job board; fix or remove those entries in `config/watchlist.json`.
 3. On a job's detail screen:
    - **Generate résumé** builds a CV and shows a Drive link (section 5).
@@ -247,7 +297,7 @@ Per person:
   personal-use exemption allows fewer than 100 users. Each person runs `gdrive:auth` with
   *their* Google account (one at a time, because it uses port 3119), gets their own refresh
   token, and gets their own app-created folder.
-- **`WAYPOINT_ACCESS_CODE`:** a different one for each.
+- **`WAYPOINT_PUBLIC_URL`:** a different URL for each. Each copy has its own admin and its own database.
 
 Run each copy in production mode under systemd. Do not use `npm run dev` on a Pi: it
 compiles pages on demand and uses about 1 GB more memory.

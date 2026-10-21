@@ -1,0 +1,35 @@
+import { describe, expect, it, vi } from 'vitest';
+import { ApiError, leaveSession, upload } from '@/components/api';
+
+describe('leaveSession (sign out from Settings)', () => {
+  it('goes to /login when the request works, and shows no message', async () => {
+    const go = vi.fn();
+    const toast = vi.fn();
+    await leaveSession(async () => ({ ok: true }), toast, go);
+    expect(go).toHaveBeenCalledWith('/login');
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('shows the error and stays on the page when the request fails', async () => {
+    const go = vi.fn();
+    const toast = vi.fn();
+    await leaveSession(async () => { throw new ApiError('Something went wrong.', 500); }, toast, go);
+    expect(toast).toHaveBeenCalledWith('Something went wrong.');
+    expect(go).not.toHaveBeenCalled();
+  });
+});
+
+describe('upload', () => {
+  it('posts the file as the form field "file" and gives the error body to ApiError', async () => {
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      expect((init.body as FormData).get('file')).toBeInstanceOf(File);
+      return new Response(JSON.stringify({ error: 'The file has errors.', errors: ['a: b'] }), { status: 422 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(upload('/api/profile/yaml', new File(['x'], 'claims.yml'))).rejects.toMatchObject({ status: 422, data: { errors: ['a: b'] } });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

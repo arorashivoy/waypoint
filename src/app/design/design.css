@@ -1,0 +1,31 @@
+/* Style page only. The parts themselves live in src/components/ui and the ui primitives block of globals.css. */
+.ds { max-width: 1120px; margin: 0 auto; padding: var(--s6) var(--s4) var(--s7); display: flex; flex-direction: column; gap: var(--s7); }
+.ds h1 { font-size: var(--t-31); line-height: 1.1; margin: 0; letter-spacing: -0.02em; }
+.ds h2 { font-size: var(--t-25); margin: 0 0 var(--s4); letter-spacing: -0.01em; }
+.ds h3 { font-size: var(--t-20); margin: 0; }
+.ds p { margin: 0; }
+.ds-lede { color: var(--soft); max-width: 56ch; margin-top: var(--s2) !important; }
+.ds-grid { display: grid; gap: var(--s3); grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
+.ds-stack { display: flex; flex-direction: column; gap: var(--s3); }
+.ds-wrap { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; }
+.ds-panel { border-radius: var(--r-panel); padding: var(--s5); }
+
+.ds-sw { border-radius: var(--r-row); padding: var(--s3); display: flex; flex-direction: column; gap: var(--s2); }
+.ds-sw i { display: block; height: 44px; border-radius: var(--r-ctl); border: 1px solid var(--edge); }
+.ds-sw b { font-weight: 600; }
+.ds-sw small { color: var(--soft); font-size: var(--t-13); overflow-wrap: anywhere; }
+
+.ds-type { display: grid; gap: var(--s4); }
+.ds-type > div { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: var(--s3); align-items: baseline; }
+.ds-type small { color: var(--soft); font-size: var(--t-13); }
+.ds-head { font-family: var(--f-head); font-weight: 700; line-height: 1.1; letter-spacing: -0.01em; }
+.ds-body { font-family: var(--f-body); }
+
+/* The brand mark: the only glow besides the met stop, the primary button and the background. */
+.ds-mark { width: 14px; height: 14px; border-radius: 50%; background: conic-gradient(var(--mint), var(--lav), var(--mint)); box-shadow: 0 0 16px var(--glow-lav); display: inline-block; }
+.ds-states { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.ds-state { border-radius: var(--r-panel); padding: var(--s4); display: flex; flex-direction: column; gap: var(--s3); min-height: 300px; }
+.ds-state h3 { color: var(--soft); }
+.ds-sub { color: var(--soft); font-size: var(--t-13); }
+.ds-tabs-demo { max-width: 560px; }
+.ds-form { margin-top: var(--s4); }

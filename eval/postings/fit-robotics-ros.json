@@ -1,0 +1,19 @@
+{
+  "id": "fit-robotics-ros",
+  "title": "Robotics Software Engineer (Junior)",
+  "company": "Marlowe Robotics",
+  "location": "Gothenburg",
+  "cc": "SE",
+  "description": "Marlowe Robotics makes small autonomous carts for hospital logistics. The software team writes the navigation and the fleet tools.\n\nAs a junior engineer you will write ROS nodes in C++ and Python, test them in simulation, and help us run the carts on the ward at night.\n\nWe ask for\n- A degree in computer science, robotics or a close field, or equal work.\n- Some experience with ROS, even from a university project.\n- C++ or Python.\n\n0 to 2 years of work experience. We will teach you the rest. We help with the work permit and the move.",
+  "expected": {
+    "field": "Robotics",
+    "level": "Entry",
+    "blockers": [],
+    "noFakeBlockers": true,
+    "legitimacy": [],
+    "injection": false,
+    "mustMet": [
+      "ros"
+    ]
+  }
+}

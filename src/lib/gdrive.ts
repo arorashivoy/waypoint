@@ -1,5 +1,7 @@
 import { createHash } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
+import { fetchSignal } from '@/lib/fetch-timeout';
+import { scrub } from '@/lib/log';
 
 /**
  * Uploads a tailored CV to Google Drive and returns a link a recruiter can open.
@@ -44,6 +46,7 @@ async function accessToken(cfg: DriveConfig): Promise<string> {
   if (token && token.expires > Date.now() + 60_000) return token.value;
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
+    signal: fetchSignal(),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: cfg.clientId,
@@ -53,7 +56,7 @@ async function accessToken(cfg: DriveConfig): Promise<string> {
     }),
   });
   const data: any = await res.json();
-  if (!res.ok) throw new Error(data.error_description || data.error || `token request failed (${res.status})`);
+  if (!res.ok) throw new Error(scrub(String(data.error_description || data.error || `token request failed (${res.status})`)));
   token = { value: data.access_token, expires: Date.now() + (data.expires_in || 3600) * 1000 };
   return token.value;
 }
@@ -93,20 +96,22 @@ export async function uploadResume(pdfPath: string, company: string, role: strin
   const at = await accessToken(cfg);
   const res = await fetch(UPLOAD_URL, {
     method: 'POST',
+    signal: fetchSignal(),
     headers: { Authorization: `Bearer ${at}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
     body: new Uint8Array(Buffer.concat([head, new Uint8Array(bytes), tail])),
   });
   const file: any = await res.json();
-  if (!res.ok) throw new Error(file?.error?.message || `upload failed (${res.status})`);
+  if (!res.ok) throw new Error(scrub(String(file?.error?.message || `upload failed (${res.status})`)));
 
   const perm = await fetch(`${FILES_URL}/${file.id}/permissions`, {
     method: 'POST',
+    signal: fetchSignal(),
     headers: { Authorization: `Bearer ${at}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ role: 'reader', type: 'anyone' }),
   });
   if (!perm.ok) {
     const e: any = await perm.json().catch(() => ({}));
-    throw new Error(e?.error?.message || `uploaded, but could not share it (${perm.status})`);
+    throw new Error(scrub(String(e?.error?.message || `uploaded, but could not share it (${perm.status})`)));
   }
 
   return { url: file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`, id: file.id, name };
@@ -124,12 +129,13 @@ export async function replaceResume(fileId: string, pdfPath: string): Promise<{ 
   const at = await accessToken(cfg);
   const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media&fields=id,webViewLink`, {
     method: 'PATCH',
+    signal: fetchSignal(),
     headers: { Authorization: `Bearer ${at}`, 'Content-Type': 'application/pdf' },
     body: new Uint8Array(readFileSync(pdfPath)),
   });
   if (res.status === 404) return null;
   const file: any = await res.json();
-  if (!res.ok) throw new Error(file?.error?.message || `update failed (${res.status})`);
+  if (!res.ok) throw new Error(scrub(String(file?.error?.message || `update failed (${res.status})`)));
   return { url: file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`, id: file.id };
 }
 
@@ -161,6 +167,6 @@ export async function shareResume(
     const shared = replaced || (await uploadResume(pdfPath, company, role));
     return { url: shared.url, id: shared.id, reason: null };
   } catch (e) {
-    return { url: null, id: prior.id, reason: `Drive upload failed: ${(e as Error).message}` };
+    return { url: null, id: prior.id, reason: `Drive upload failed: ${scrub((e as Error).message)}` };
   }
 }

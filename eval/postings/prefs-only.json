@@ -1,0 +1,21 @@
+{
+  "id": "prefs-only",
+  "title": "Software Engineer, Backend",
+  "company": "Willow Grid Energy",
+  "location": "Rotterdam",
+  "cc": "NL",
+  "description": "Willow Grid Energy plans and monitors solar farms. The backend team writes Java services and a Python data pipeline.\n\nRequirements\n- 2 to 4 years of backend work in Java or Python.\n- PostgreSQL and REST APIs.\n\nPreferences (none is required)\n- Dutch is a plus; the team speaks English every day.\n- Prior work in the energy sector is a plus.\n- A driving licence is welcome for the odd site visit.\n\nHybrid in Rotterdam. We sponsor the Dutch highly skilled migrant visa.",
+  "notes": "Preferences are not blockers: a check must return no blocker here.",
+  "expected": {
+    "field": "Backend",
+    "level": "Mid",
+    "blockers": [],
+    "noFakeBlockers": true,
+    "legitimacy": [],
+    "injection": false,
+    "mustMet": [
+      "python",
+      "postgresql"
+    ]
+  }
+}

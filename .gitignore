@@ -12,15 +12,19 @@ tmp/
 **/.DS_Store
 .claude/**
 data/resumes
+data/users/
 *.bak-*
 *.snapshot
 GITHUB_REMEDIATION.md
 data/profile/
 
 # Personal CV (base + LaTeX source). Never commit.
-resume/
+/resume/
 *_Resume*.pdf
 *_Resume*.tex
 
 # personal Claude instructions
 CLAUDE.local.md
+data/backups/
+data/*.db-wal
+data/*.db-shm

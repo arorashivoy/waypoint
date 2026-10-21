@@ -1,13 +1,17 @@
 import { createHash } from 'crypto';
-import { execFile } from 'child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
-import { homedir, tmpdir } from 'os';
+import { existsSync, readFileSync, statSync } from 'fs';
+import { homedir } from 'os';
 import { dirname, join, resolve } from 'path';
-import { promisify } from 'util';
 import type { Claim, ClaimsDoc } from './claims';
 import { FIELD_QUERIES } from './countries';
-
-const run = promisify(execFile);
+import { compileLatex, findEngine } from './latex';
+import { DEPTH_WEIGHT } from './resume/depth';
+import { checkOwnTex, hasOwnTex, ownTexPath } from './resume/own-tex';
+import { baseOrder, baseResumePath, escapeLatex, hasResumeContent, renderTemplate, tailorOrder, templateAssetsDir } from './resume/template';
+import { db } from './db';
+import { scrub } from './log';
+import { getSettings } from './settings';
+import { isAdmin } from './user';
 
 /**
  * Per-job CVs.
@@ -34,52 +38,72 @@ const env = (k: string) => {
   return v ? v : null;
 };
 
+/** An own .tex needs pdflatex or xelatex on the server. */
+export class ResumeEngineError extends Error {
+  constructor() {
+    super('Your résumé source needs pdflatex or xelatex on the server. Ask the admin to install one.');
+  }
+}
+
+/** Why a compile failed, for the user: the error text, with no key or token. */
+export function compileReason(e: unknown): string {
+  return `the CV did not compile: ${scrub((e as Error)?.message ?? String(e))}`;
+}
+
 export type ResumeConfig = {
   /** The CV as it stands. Served whenever tailoring is unavailable. */
   pdf: string | null;
   /** LaTeX source. Its absence means "no tailoring", not an error. */
   tex: string | null;
+  /** The folder that LaTeX copies class and image files from. For an own .tex and for the template it holds `resume.cls` only: the folder of the user holds old PDFs, and an own .tex cannot use other files. */
+  assetsDir: string | null;
+  /** True for the .tex that a user uploaded. It never compiles with lualatex. */
+  own: boolean;
+  /** True when the built-in template makes the résumé. `pdf` is then the base résumé, when it is built. It never compiles with lualatex. */
+  template: boolean;
   /** A URL a recruiter can actually open. localhost is not one, which is why
    *  this is separate from `pdf` and why the message only claims a link when it
    *  is set. */
   publicUrl: string | null;
-  outDir: string;
   maxProjects: number | null;
   timeoutMs: number;
 };
 
-export function resumeConfig(): ResumeConfig {
+/**
+ * The résumé files of one user.
+ * - A user with an own .tex (and the mode `own-tex`) gets that file. Its folder holds only that file.
+ * - The admin, who has never chosen a mode (no settings row, or the default mode), gets RESUME_PDF and RESUME_TEX from the environment, as before.
+ * - Any other user, and an admin who removed the own .tex, gets the built-in template. `pdf` is its base résumé when it is built.
+ */
+export async function resumeConfig(userId: string): Promise<ResumeConfig> {
+  const max = Number(env('RESUME_MAX_PROJECTS'));
+  const common = {
+    maxProjects: Number.isFinite(max) && max > 0 ? max : null,
+    timeoutMs: Number(env('RESUME_TIMEOUT_MS')) || 60_000,
+  };
+  if ((await getSettings(userId)).resumeMode === 'own-tex' && hasOwnTex(userId)) {
+    return { pdf: null, tex: ownTexPath(userId), assetsDir: templateAssetsDir(), own: true, template: false, publicUrl: null, ...common };
+  }
   const pdf = env('RESUME_PDF');
   const tex = env('RESUME_TEX');
-  const max = Number(env('RESUME_MAX_PROJECTS'));
-  return {
-    pdf: pdf ? expand(pdf) : null,
-    tex: tex ? expand(tex) : null,
-    publicUrl: env('RESUME_PUBLIC_URL'),
-    outDir: expand(env('RESUME_OUT_DIR') || 'data/resumes'),
-    maxProjects: Number.isFinite(max) && max > 0 ? max : null,
-    timeoutMs: Number(env('RESUME_TIMEOUT_MS')) || 180_000,
-  };
-}
-
-/** Explicit engine wins; otherwise the first one on PATH. Tectonic is tried
- *  first because it fetches its own packages, so a fresh machine compiles
- *  without a full TeX distribution installed. */
-const ENGINES = ['tectonic', 'pdflatex', 'xelatex', 'lualatex'];
-
-async function findEngine(): Promise<string | null> {
-  const forced = env('RESUME_ENGINE');
-  if (forced) return forced;
-  for (const e of ENGINES) {
-    try {
-      const { stdout } = await run('which', [e]);
-      const hit = String(stdout).trim().split('\n')[0];
-      if (hit) return hit;
-    } catch {
-      // not installed; try the next
+  if ((pdf || tex) && (await isAdmin(userId))) {
+    // A row with `template` means that the admin chose it. A row with `own-tex` and no file is the default of the admin.
+    const row = await db.userSettings.findUnique({ where: { userId }, select: { resumeMode: true } });
+    if (!row || row.resumeMode === 'own-tex') {
+      const texPath = tex ? expand(tex) : null;
+      return {
+        pdf: pdf ? expand(pdf) : null,
+        tex: texPath,
+        assetsDir: texPath ? dirname(texPath) : null,
+        own: false,
+        template: false,
+        publicUrl: env('RESUME_PUBLIC_URL'),
+        ...common,
+      };
     }
   }
-  return null;
+  const base = await baseResumePath(userId);
+  return { pdf: existsSync(base) ? base : null, tex: null, assetsDir: templateAssetsDir(), own: false, template: true, publicUrl: null, ...common };
 }
 
 const norm = (s: string) =>
@@ -93,7 +117,6 @@ function mentions(haystack: string, term: string): boolean {
   return new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9])`).test(haystack);
 }
 
-const DEPTH_WEIGHT: Record<string, number> = { mentioned: 0.5, used: 0.8, built: 1 };
 
 export type EvidencePick = {
   target: string;
@@ -176,11 +199,11 @@ export function rankEvidence(doc: ClaimsDoc, postingText: string): EvidencePick[
 /** Skills and languages from claims.yml that a posting names, each with
  *  whether it has evidence behind it. A claim with none is listed on a surface
  *  but unproven, so it is shown as a gap rather than credited. */
-export function claimsInPosting(doc: ClaimsDoc, postingText: string): { t: string; ok: boolean }[] {
+export function claimsInPosting(doc: ClaimsDoc, postingText: string): { slug: string; t: string; ok: boolean }[] {
   const text = norm(postingText);
   return doc.claims
     .filter((c) => (c.kind === 'skill' || c.kind === 'language') && [c.label, ...c.aliases].some((t) => mentions(text, t)))
-    .map((c) => ({ t: c.label, ok: c.evidence.some((e) => e.depth !== 'mentioned') }));
+    .map((c) => ({ slug: c.slug, t: c.label, ok: c.evidence.some((e) => e.depth !== 'mentioned') }));
 }
 
 export type ProjectPick = { role: string; lead: string; then: string };
@@ -341,8 +364,10 @@ export function tailorTex(tex: string, doc: ClaimsDoc, ranked: EvidencePick[], m
   // zero-score stranger replacing a zero-score entry he chose is churn.
   const onCv = new Set(rows.map((r) => r.id));
   const offCv = doc.targets.projects.filter((p) => !onCv.has(p.id) && score(p.id) > 0);
+  // A `tex` row that the profile saved before the own-tex check existed is checked again: it goes into a compile.
+  const usable = (p: { tex?: string | null }) => !!p.tex && checkOwnTex(p.tex).ok;
   const extras = offCv
-    .filter((p) => p.tex)
+    .filter(usable)
     .map((p) => ({ raw: p.tex!.trim(), id: p.id, title: headingOf(p.tex!) || p.title, score: score(p.id), onCv: false }));
 
   const pool = [...rows, ...extras];
@@ -362,8 +387,8 @@ export function tailorTex(tex: string, doc: ClaimsDoc, ranked: EvidencePick[], m
 
   // The hint that turns a missed swap into a one-time fix in claims.yml.
   const notes = offCv
-    .filter((p) => !p.tex && score(p.id) > floor)
-    .map((p) => `${p.title} fits this posting better than what made the cut, but has no tex in claims.yml to put on the CV`);
+    .filter((p) => !usable(p) && score(p.id) > floor)
+    .map((p) => `${p.title} fits this posting better than what made the cut, but has no usable tex in claims.yml to put on the CV`);
 
   const unchanged = kept.length === rows.length && kept.every((r, i) => r.raw === rows[i].raw);
   if (unchanged) return { tex, order: kept.map((r) => r.title), dropped, added, notes };
@@ -442,6 +467,46 @@ export function tailorExperience(tex: string, doc: ClaimsDoc, ranked: EvidencePi
 
   if (!changed) return { why: 'no experience bullet outranks the order already on the CV for this posting' };
   return { tex: tex.slice(0, m.index!) + m[0].replace(m[1], () => section) + tex.slice(m.index! + m[0].length), order, dropped: [], added: [], notes: [] };
+}
+
+/**
+ * The `\item` block of each bullet of the profile, found in a .tex source with the `match` phrase.
+ * A bullet that no item or more than one item matches is not in the map, and an item that
+ * more than one bullet matches is not in the map. The same rule as `tailorExperience`.
+ */
+export function bulletItems(tex: string, doc: ClaimsDoc): Map<string, string> {
+  const found = new Map<string, string>();
+  const bullets = doc.targets.positions.flatMap((p) => (p.bullets || []).map((b) => ({ id: `${p.id}/${b.id}`, match: norm(b.match) })));
+  for (const block of tex.matchAll(ITEMIZE_BLOCK)) {
+    for (const raw of splitItems(block[2])) {
+      const text = norm(raw);
+      const hits = bullets.filter((b) => b.match && text.includes(b.match));
+      if (hits.length === 1) found.set(hits[0].id, found.has(hits[0].id) ? '' : raw);
+    }
+  }
+  for (const [id, raw] of found) if (!raw) found.delete(id);
+  return found;
+}
+
+/**
+ * Replaces the text of the bullet lines that have an accepted wording. The line is found with the
+ * `match` phrase, and the new text goes through `escapeLatex`, so it cannot hold a macro.
+ * The `\item` and the space before the line stay as they are.
+ */
+export function applyWording(tex: string, doc: ClaimsDoc, wording: Record<string, string> | undefined): string {
+  const ids = Object.keys(wording ?? {});
+  if (!wording || !ids.length) return tex;
+  const items = bulletItems(tex, doc);
+  let out = tex;
+  for (const id of ids) {
+    const raw = items.get(id);
+    const text = escapeLatex(typeof wording[id] === 'string' ? wording[id] : '');
+    if (!raw || !text) continue;
+    const head = raw.match(/^\\item(?:\s*\[[^\]\n]*\])?\s*/)![0];
+    const tail = raw.match(/\s*$/)![0];
+    out = out.replace(raw, () => head + text + tail);
+  }
+  return out;
 }
 
 const SKILLS_SECTION = /\\begin\{rSection\}\{[^}]*SKILL[^}]*\}([\s\S]*?)\\end\{rSection\}/i;
@@ -629,36 +694,6 @@ export function tailorSkills(tex: string, doc: ClaimsDoc, weights: Map<string, n
   };
 }
 
-async function compile(source: string, texPath: string, outPdf: string, engine: string, timeoutMs: number) {
-  // The document is compiled beside copies of its own class file and assets,
-  // because a CV class lives next to the .tex rather than in a TeX tree.
-  const work = join(tmpdir(), `waypoint-cv-${createHash('sha1').update(outPdf).digest('hex').slice(0, 12)}`);
-  mkdirSync(work, { recursive: true });
-  const srcDir = dirname(texPath);
-  for (const f of readdirSync(srcDir)) {
-    if (/\.(cls|sty|bst|png|jpg|jpeg|pdf|eps|ttf|otf)$/i.test(f)) {
-      try { copyFileSync(join(srcDir, f), join(work, f)); } catch { /* unreadable asset, let LaTeX complain */ }
-    }
-  }
-  const name = 'tailored';
-  writeFileSync(join(work, `${name}.tex`), source);
-
-  const isTectonic = /tectonic/.test(engine);
-  const args = isTectonic
-    ? ['-X', 'compile', '--outdir', work, '--keep-logs', `${name}.tex`]
-    : ['-interaction=nonstopmode', '-halt-on-error', `-output-directory=${work}`, `${name}.tex`];
-
-  // pdflatex needs a second pass for its own cross-references; tectonic loops
-  // internally and does not.
-  const passes = isTectonic ? 1 : 2;
-  for (let i = 0; i < passes; i++) await run(engine, args, { cwd: work, timeout: timeoutMs });
-
-  const built = join(work, `${name}.pdf`);
-  if (!existsSync(built)) throw new Error('the engine produced no PDF');
-  mkdirSync(dirname(outPdf), { recursive: true });
-  copyFileSync(built, outPdf);
-}
-
 export type BuiltResume = {
   path: string;
   tailored: boolean;
@@ -690,11 +725,15 @@ export type BuiltResume = {
  * A refinement of one posting's CV, expressed as choices between things he
  * already wrote: claims.yml project ids in the order they should run,
  * `position/bullet` ids in the order they should lead, and skill slugs to put
- * first. A field left out keeps the posting's own ranking. There is no field for
- * free text, so nothing a refinement asks for can put words on the CV that are
+ * first. A field left out keeps the posting's own ranking. The refine chat has no
+ * field for free text, so nothing it asks for can put words on the CV that are
  * not in his LaTeX or claims.yml already.
+ *
+ * `wording` is the one exception. It maps a `position/bullet` ID to a new text for
+ * that bullet. Only an accepted suggestion writes it (see resume/suggest.ts): the
+ * server checked the text against the bullet and the proofs, and the user approved it.
  */
-export type Steer = { projects?: string[]; bullets?: string[]; skills?: string[] };
+export type Steer = { projects?: string[]; bullets?: string[]; skills?: string[]; wording?: Record<string, string> };
 
 /** A steered kind replaces the posting's ranking rather than nudging it: "lead
  *  with X" has to mean X leads, and a blend would let the posting's score
@@ -719,8 +758,18 @@ export type ResumeMenu = {
 
 /** Everything a refinement may choose between, read from the base CV and
  *  claims.yml. Null when there is no LaTeX source to rewrite. */
-export function resumeMenu(doc: ClaimsDoc): ResumeMenu | null {
-  const cfg = resumeConfig();
+export async function resumeMenu(doc: ClaimsDoc, userId: string): Promise<ResumeMenu | null> {
+  const cfg = await resumeConfig(userId);
+  if (cfg.template) {
+    // The template can show any project, bullet and skill. The base résumé shows the best projects.
+    if (!hasResumeContent(doc)) return null;
+    const onCv = new Set(baseOrder(doc).projects);
+    return {
+      projects: doc.targets.projects.map((p) => ({ id: p.id, title: p.title, onCv: onCv.has(p.id), usable: true })),
+      bullets: doc.targets.positions.flatMap((p) => (p.bullets ?? []).map((b) => ({ id: `${p.id}/${b.id}`, position: `${p.title}, ${p.company}`, match: b.match }))),
+      skills: doc.claims.filter((c) => c.kind === 'skill' || c.kind === 'language').map((c) => ({ slug: c.slug, label: c.label, evidenced: c.evidence.some((e) => e.depth !== 'mentioned') })),
+    };
+  }
   if (!cfg.tex || !existsSync(cfg.tex)) return null;
   const cv = mapCvProjects(readFileSync(cfg.tex, 'utf8'), doc);
   const onCv = new Set('why' in cv ? [] : cv.rows.map((r) => r.id));
@@ -731,7 +780,7 @@ export function resumeMenu(doc: ClaimsDoc): ResumeMenu | null {
       onCv: onCv.has(p.id),
       // An unmappable projects section is left alone by `tailorTex`, so no
       // project can be steered into it either.
-      usable: !('why' in cv) && (onCv.has(p.id) || !!p.tex),
+      usable: !('why' in cv) && (onCv.has(p.id) || (!!p.tex && checkOwnTex(p.tex).ok)),
     })),
     bullets: doc.targets.positions.flatMap((p) => (p.bullets || []).map((b) => ({ id: `${p.id}/${b.id}`, position: `${p.title}, ${p.company}`, match: b.match }))),
     skills: doc.claims
@@ -740,17 +789,10 @@ export function resumeMenu(doc: ClaimsDoc): ResumeMenu | null {
   };
 }
 
-/**
- * The CV to send for one posting. Never throws: every failure downgrades to the
- * base PDF with a reason attached, because a missing LaTeX package must not
- * take down the referral flow.
- */
-export async function buildResume(doc: ClaimsDoc | null, postingText: string, key: string, steer: Steer = {}): Promise<BuiltResume | null> {
-  const cfg = resumeConfig();
-  if (!cfg.pdf && !cfg.tex) return null;
-
-  const base: BuiltResume = {
-    path: cfg.pdf || '',
+/** The base CV as a result: not tailored, with the reason when there is one. */
+export function baseResume(path: string, reason: string | null = null, publicUrl: string | null = null): BuiltResume {
+  return {
+    path,
     tailored: false,
     lead: null,
     order: [],
@@ -762,25 +804,47 @@ export async function buildResume(doc: ClaimsDoc | null, postingText: string, ke
     skillsLead: [],
     matched: [],
     skipped: [],
-    publicUrl: cfg.publicUrl,
-    reason: null,
+    publicUrl,
+    reason,
   };
+}
+
+/**
+ * The CV to send for one posting. Never throws: every failure downgrades to the
+ * base PDF with a reason attached, because a missing LaTeX package must not
+ * take down the referral flow.
+ */
+export async function buildResume(
+  userId: string,
+  doc: ClaimsDoc | null,
+  postingText: string,
+  key: string,
+  steer: Steer = {},
+  /** `outDir` is the folder of the user for compiled PDFs. With `compile: false` the build only works out the path and does not start the engine. */
+  opts: { outDir: string; compile?: boolean },
+): Promise<BuiltResume | null> {
+  const cfg = await resumeConfig(userId);
+  if (!cfg.pdf && !cfg.tex && !cfg.template) return null;
+
+  const base = baseResume(cfg.pdf || '', null, cfg.publicUrl);
 
   const bail = (reason: string, skipped: string[] = []) =>
     cfg.pdf && existsSync(cfg.pdf) ? { ...base, reason, skipped } : null;
 
   if (!doc) return bail('no claims.yml, so there is nothing to choose between');
-  if (!cfg.tex) return bail('RESUME_TEX is not set, so there is no source to rewrite');
-  if (!existsSync(cfg.tex)) return bail(`RESUME_TEX points at ${cfg.tex}, which does not exist`);
+  if (cfg.template && !hasResumeContent(doc)) return null;
+  if (!cfg.template && !cfg.tex) return bail('RESUME_TEX is not set, so there is no source to rewrite');
+  if (cfg.tex && !existsSync(cfg.tex)) return bail(`RESUME_TEX points at ${cfg.tex}, which does not exist`);
 
   const posting = rankEvidence(doc, postingText);
   const ranked = steered(posting, steer);
   const weights = steer.skills?.length ? new Map(steer.skills.map((s) => [s, 1])) : claimWeights(doc, postingText);
 
-  // The template on disk is never written to. Every transform is a pure string
+  // The file on disk is never written to. Every transform is a pure string
   // rewrite over a copy, and the build happens in a scratch directory — the
   // CV he maintains by hand stays exactly as he left it.
-  const template = readFileSync(cfg.tex, 'utf8');
+  // With the built-in template, the "file" is the base résumé, and the posting only changes its order.
+  const template = cfg.tex ? readFileSync(cfg.tex, 'utf8') : renderTemplate(doc, {}, baseOrder(doc));
 
   const skipped: string[] = [];
   /** Runs one transform over the document so far, recording why it did not
@@ -794,24 +858,49 @@ export async function buildResume(doc: ClaimsDoc | null, postingText: string, ke
     return t.tex;
   };
 
-  // A steered project list is also the count: "drop the hackathon" means one
-  // entry fewer, not the next-best project taking its slot.
-  const projects = tailorTex(template, doc, ranked, steer.projects?.length || cfg.maxProjects);
-  const afterProjects = step('projects', template, projects);
-  const experience = tailorExperience(afterProjects, doc, ranked);
-  const afterExperience = step('experience', afterProjects, experience);
-  const skills = tailorSkills(afterExperience, doc, weights);
-  const source = step('skills', afterExperience, skills);
+  let source: string;
+  let projects: Tailoring;
+  let experience: Tailoring;
+  let skills: Tailoring;
+  if (cfg.template) {
+    const was = baseOrder(doc);
+    const now = tailorOrder(doc, ranked, weights, steer, cfg.maxProjects);
+    source = renderTemplate(doc, steer, now);
+    const title = (id: string) => doc.targets.projects.find((p) => p.id === id)?.title ?? id;
+    const label = (slug: string) => doc.claims.find((c) => c.slug === slug)?.label ?? slug;
+    projects = { tex: source, order: now.projects.map(title), dropped: was.projects.filter((id) => !now.projects.includes(id)).map(title), added: now.projects.filter((id) => !was.projects.includes(id)).map(title), notes: [] };
+    // The bullets of the first job whose top bullet scored for this posting.
+    const lead = doc.targets.positions.find((p) => (p.bullets ?? []).some((b) => (ranked.find((r) => r.target === `position:${p.id}/${b.id}`)?.score ?? 0) > 0));
+    const mine = new Set((lead?.bullets ?? []).map((b) => `${lead!.id}/${b.id}`));
+    experience = { tex: source, order: now.bullets.filter((id) => mine.has(id)).map((id) => lead!.bullets!.find((b) => `${lead!.id}/${b.id}` === id)!.match), dropped: [], added: [], notes: [] };
+    skills = { tex: source, order: now.skills.filter((slug) => (weights.get(slug) || 0) > 0).map(label), dropped: [], added: [], notes: [] };
+  } else {
+    // A steered project list is also the count: "drop the hackathon" means one
+    // entry fewer, not the next-best project taking its slot.
+    projects = tailorTex(template, doc, ranked, steer.projects?.length || cfg.maxProjects);
+    const afterProjects = step('projects', template, projects);
+    experience = tailorExperience(afterProjects, doc, ranked);
+    const afterExperience = step('experience', afterProjects, experience);
+    skills = tailorSkills(afterExperience, doc, weights);
+    source = step('skills', afterExperience, skills);
+    // An accepted wording changes the line after the reorder, because the reorder finds the line by its old text.
+    source = applyWording(source, doc, steer.wording);
+  }
 
-  if (source === template) return bail('the CV already leads with the most relevant work for this posting', skipped);
+  // Without a base PDF (an own .tex), an unchanged source is still compiled: it is the only CV there is.
+  if (source === template && cfg.pdf) return bail('the CV already leads with the most relevant work for this posting', skipped);
 
-  const engine = await findEngine();
-  if (!engine) return bail('no LaTeX engine found — install tectonic, or set RESUME_ENGINE');
+  // The file of a user never compiles with lualatex, even when RESUME_ENGINE names it: Lua code can read any file.
+  // The template follows the same rule.
+  const restricted = cfg.own || cfg.template;
+  const engine = restricted ? findEngine('pdflatex') ?? findEngine('xelatex') : findEngine(env('RESUME_ENGINE'));
+  if (restricted && !engine) throw new ResumeEngineError();
+  if (!engine) return bail('no LaTeX engine found. Install pdflatex (texlive), or set RESUME_ENGINE to an engine on the list');
 
   // Keyed on the rendered source, so two postings that select the same order
   // share one PDF and an unchanged CV is never rebuilt.
-  const hash = createHash('sha1').update(source).update(engine).digest('hex').slice(0, 16);
-  const out = join(cfg.outDir, `${key}-${hash}.pdf`);
+  const hash = createHash('sha1').update(source).update(engine.program).digest('hex').slice(0, 16);
+  const out = join(opts.outDir, `${key}-${hash}.pdf`);
 
   const order = 'why' in projects ? [] : projects.order;
   const bullets = 'why' in experience ? [] : experience.order;
@@ -819,7 +908,7 @@ export async function buildResume(doc: ClaimsDoc | null, postingText: string, ke
   const result: BuiltResume = {
     ...base,
     path: out,
-    tailored: true,
+    tailored: source !== template,
     lead: order[0] || bullets[0] || null,
     order,
     experience: bullets,
@@ -833,12 +922,13 @@ export async function buildResume(doc: ClaimsDoc | null, postingText: string, ke
   };
 
   if (existsSync(out) && statSync(out).size > 0) return result;
+  if (opts.compile === false) return result;
 
   try {
-    await compile(source, cfg.tex, out, engine, cfg.timeoutMs);
+    await compileLatex({ source, assetsDir: cfg.assetsDir, outPdf: out, engine, timeoutMs: cfg.timeoutMs });
     return result;
   } catch (e) {
-    return bail(`the CV did not compile: ${(e as Error).message.split('\n')[0]}`, skipped);
+    return bail(compileReason(e), skipped);
   }
 }
 

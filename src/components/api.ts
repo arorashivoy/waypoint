@@ -1,10 +1,32 @@
 export type Json = Record<string, any>;
 
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public data: Json = {}) {
+    super(message);
+  }
+}
+
+/** Pages that work without a session: a 401 there must not send the user away. */
+const SIGNED_OUT_PAGES = /^\/(login$|invite\/|reset\/)/;
+
+/** Set after the first 401, so the page goes to /login one time only. */
+let redirecting = false;
+
 export async function api<T = Json>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { cache: 'no-store', ...init });
+  // A GET revalidates with the ETag (304 when nothing changed). Other methods never use the cache.
+  const res = await fetch(url, { cache: !init?.method || init.method === 'GET' ? 'no-cache' : 'no-store', ...init });
   const text = await res.text();
-  const data = text ? JSON.parse(text) : {};
-  if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
+  let data: Json = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = {};
+  }
+  if (res.status === 401 && typeof window !== 'undefined' && !redirecting && !SIGNED_OUT_PAGES.test(window.location.pathname)) {
+    redirecting = true;
+    window.location.assign('/login?next=' + encodeURIComponent(window.location.pathname + window.location.search));
+  }
+  if (!res.ok) throw new ApiError(data.error || `${res.status} ${res.statusText}`, res.status, data);
   return data as T;
 }
 
@@ -14,7 +36,36 @@ export const post = <T = Json>(url: string, body?: unknown) =>
 export const patch = <T = Json>(url: string, body: unknown) =>
   api<T>(url, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
+export const put = <T = Json>(url: string, body: unknown) => api<T>(url, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+/** A file upload as the form field "file". The browser sets the multipart header and the length. */
+export const upload = <T = Json>(url: string, file: File) => {
+  const form = new FormData();
+  form.append('file', file);
+  return api<T>(url, { method: 'POST', body: form });
+};
+
 export const del = <T = Json>(url: string) => api<T>(url, { method: 'DELETE' });
+
+/**
+ * Sign-out from Settings. On success the page goes to /login at once. It
+ * does not reload the screen data first: the session is gone, so that
+ * request gets a 401 and shows a stray message. On a failure it shows the
+ * error and stays on the page.
+ */
+export async function leaveSession(
+  request: () => Promise<unknown>,
+  toast: (message: string) => void,
+  go: (url: string) => void = (url) => window.location.assign(url),
+): Promise<void> {
+  try {
+    await request();
+  } catch (e) {
+    toast((e as Error).message);
+    return;
+  }
+  go('/login');
+}
 
 /** False when the clipboard is unavailable — it needs a secure context, which
  *  plain http over the LAN is not. The text is on screen either way. */

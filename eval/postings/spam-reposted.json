@@ -1,0 +1,18 @@
+{
+  "id": "spam-reposted",
+  "title": "Backend Engineer (Reposted)",
+  "company": "Cinderlane Apps",
+  "location": "Remote, EU",
+  "cc": "DE",
+  "description": "Repost: this role was posted before and we still have not found the right person, so we post it again with the same text.\n\nCinderlane Apps builds a recipe app. We need a backend engineer with 3 years of Python experience and strong REST API design. You will work with Postgres and Docker.\n\nFully remote inside the EU.",
+  "expected": {
+    "field": "Backend",
+    "level": "Mid",
+    "blockers": [],
+    "noFakeBlockers": true,
+    "legitimacy": [
+      "reposted"
+    ],
+    "injection": false
+  }
+}
