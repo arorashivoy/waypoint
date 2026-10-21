@@ -75,7 +75,27 @@ use `scripts/deploy.sh` for each update (step 10).
    passes before the next deploy. A newer Ghostscript can write ligatures and accents in another
    form, and then the PDF import drops those words.
 
-   The migrations include `6_pasted_by`, which adds the column that keeps a pasted job with the user
+   Part 6 (the new screens) changes these things for a deploy:
+
+   - **Fonts.** The 2 fonts, Syne and Onest, are files in `src/app/fonts`. `npm run build` needs
+     no network for them, so a Google Fonts outage cannot stop a deploy.
+   - **The onboarding migration, `7_onboarding`.** It adds the column `onboardedAt`. Every user who
+     exists when it runs is marked as onboarded, so nobody sees the setup wizard again. Only users
+     who sign up later see it. The admin keeps `RESUME_TEX`: the migration gives the admin the
+     setting "own .tex", so the CV of the admin still builds from the `.tex` in `.env`.
+   - **The pdf.js worker.** `npm ci` runs the `postinstall` script, which copies the worker to
+     `public/pdfjs/`. Do not run `npm ci --ignore-scripts`. If you do, the CV preview has no worker.
+   - **`lmodern`.** The template CV needs it (see the `apt install` line above). Without it, the
+     letters fi, ff and fl are lost in the text of the PDF.
+   - **The CLI canary.** When the worker starts, it runs a short Claude CLI check with a 30 s limit.
+     On a slow start of the Pi, the check can time out. A time-out counts as a fail, and CLI mode
+     stays off until the next start. This is safe. If the CLI is still off after a start, restart the
+     worker again (`systemctl --user restart waypoint-worker`).
+   - **Device checks.** After a deploy that changes the screens, run `npm run test:e2e` on the Pi.
+     The iPhone and iPad profiles run in WebKit there. Then do the manual checklist on a real
+     iPhone and iPad. Both are in `docs/devices.md`.
+
+   The migrations also include `6_pasted_by`, which adds the column that keeps a pasted job with the user
    who pasted it. `npx prisma migrate deploy` applies it. Old jobs stay shared.
 
    ```bash

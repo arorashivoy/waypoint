@@ -241,7 +241,7 @@ missing, run the token check from step 8 first.
 ## 6. LinkedIn data **[USER]**
 
 In LinkedIn, the user opens **Settings → Data privacy → Get a copy of your data**, chooses
-the full archive, and uploads the zip on the Profile or Resume screen. `Connections.csv`
+the full archive, and uploads the zip on the Profile screen, on the Imports tab. `Connections.csv`
 inside it is the only source of 1st-degree contacts. Without it, every job uses the alumni
 fallback.
 
@@ -259,12 +259,19 @@ npm run build && npm start       # production. Stop the dev server first: build 
 ./scripts/start.sh               # same, but builds and runs the production server
 ```
 
+A build needs no network: the fonts are files in `src/app/fonts`. `npm install` copies the pdf.js
+worker to `public/pdfjs/` (the `postinstall` script), so do not use `--ignore-scripts`. The
+`7_onboarding` migration marks every existing user as onboarded and keeps `RESUME_TEX` for the
+admin. When the worker starts, a Claude CLI check runs with a 30 s limit. If it times out on a slow
+start, CLI mode stays off until the next start: restart the worker. For the phone and tablet checks,
+run `npm run test:e2e` (WebKit on the Pi) and follow `docs/devices.md`.
+
 Dev mode needs the worker. Without it, every task (refresh, CV build, import, analysis) stays
 in the queue, and the screen waits. `remote.sh` and `start.sh` start the worker for you.
 
 Checklist with the user:
 1. Sign in works.
-2. **Refresh feeds** adds jobs. The refresh logs `[refresh] <source> failed: …` for any
+2. **Refresh** (on the Jobs screen) adds jobs. The refresh logs `[refresh] <source> failed: …` for any
    dead job board; fix or remove those entries in `config/watchlist.json`.
 3. On a job's detail screen:
    - **Generate résumé** builds a CV and shows a Drive link (section 5).

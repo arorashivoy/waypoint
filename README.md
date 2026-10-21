@@ -55,6 +55,10 @@ Claude calls go to Sonnet only. The `claude` CLI runs with no tools, no settings
 empty folder, so text in a posting cannot make it read files. For the credential order, see the
 `ANTHROPIC_API_KEY` row in the settings table.
 
+Syne and Onest, the two fonts, are files in `src/app/fonts`, so `npm run build` needs no network.
+`npm install` also copies the pdf.js worker to `public/pdfjs/` (the `postinstall` script). Do not run
+`npm ci --ignore-scripts`, or the CV preview has no worker.
+
 ## Running it again
 
 Local only, on this machine:
@@ -91,13 +95,13 @@ The app is empty until you do these three things, in order.
 **2. Import your LinkedIn data export.** This is the step that matters. In LinkedIn go to
 **Settings → Data privacy → Get a copy of your data**, pick the full archive, and request it.
 LinkedIn emails a `.zip` — usually about ten minutes, sometimes up to 24 hours. Upload it on the
-**Profile** or **Resume** screen.
+**Profile** screen, on the **Imports** tab.
 
 `Connections.csv` inside that archive is the only place your 1st-degree connections exist, and it is
 what turns "No 1st-degree contact at Stripe" into an actual named referral route. Re-upload any time
 to refresh; a new import replaces the profile wholesale and re-grades every cached analysis.
 
-**3. Press "Refresh feeds"** on the Jobs screen. This pulls live openings from the company boards in
+**3. Press "Refresh"** on the Jobs screen. This pulls live openings from the company boards in
 `config/watchlist.json` plus the aggregators, then queues the most promising unread ones for Claude
 to read in the background.
 
@@ -191,17 +195,16 @@ or a question your profile answers outright. Anything touching a preference, sal
 commitment, or a country off your list goes to Needs you. With Claude unreachable nothing is ever
 certain — it fails toward asking you.
 
-### Resume
-The lines every CV you send must carry, which project to lead with per role type, and your imported
-profile.
-
-### Places (Countries and boards)
-Your eight countries in rank order with settlement timelines, salary thresholds and the boards
-searched for each. Toggle a country to **Paused** to drop it from the Jobs list and from fetching.
-
 ### Profile
 Your identity, where the data came from, full experience/education/projects/skills, your connections
-with a breakdown of which companies you know people at, and your inferred level.
+with a breakdown of which companies you know people at, and your inferred level. The **Imports** tab
+takes the LinkedIn export, a résumé and GitHub. The **Résumé** tab holds the lines every CV you send
+must carry, which project to lead with per role type, and the CV source.
+
+### Settings
+**Job search** holds your countries in rank order with settlement timelines, salary thresholds and the
+boards searched for each. Pause a country to drop it from the Jobs list and from fetching. The other
+sections are Account, Claude (your key), Integrations, Data and, for the admin, Admin.
 
 ---
 
@@ -515,7 +518,7 @@ These constraints shape half the app, so they are worth stating plainly.
 - **Waypoint does not use LinkedIn sign-in.** LinkedIn sign-in gives no experience, education,
   projects, connections or messages, so accounts use an email and a password.
 - **Everything else comes from your data export.** LinkedIn → Settings → Data privacy → Get a copy
-  of your data → full archive. Upload the `.zip` on the Resume screen. `Connections.csv` — name,
+  of your data → full archive. Upload the `.zip` on the Profile screen, on the Imports tab. `Connections.csv` — name,
   company, position, connection date — is what makes referral routing possible at all. Re-upload any
   time to refresh; a fresh import replaces the profile wholesale and invalidates cached analyses.
   When `claims.yml` is in force, or you upload a bare `Connections.csv` instead of the `.zip`, only
@@ -541,7 +544,7 @@ source, because the description and posting date come from the employer.
 | `workday` | The search API behind the company's Workday careers site; token is `tenant\|host\|site` | NVIDIA, Intel, Boston Dynamics, and India-heavy employers: Salesforce, Adobe, Analog Devices, Cadence, Morgan Stanley, Citi, Deutsche Bank, State Street, Wells Fargo, Target |
 | `google` | Google's published jobs feed (`/about/careers/applications/jobs/feed.xml`, every open role, DeepMind and YouTube included). Its `robots.txt` blocks the results pages, not the feed | Google |
 | `microsoft`, `amazon`, `apple` | The search endpoint the company's own careers page calls, permitted by its `robots.txt` | Microsoft, Amazon, Apple |
-| `link` | **Never fetched** — shown as a link on the Countries screen | Meta: its terms forbid automated collection and metacareers.com rejects non-browser clients. The Muse's Meta listings stopped updating in January 2026, so there is no current feed to use |
+| `link` | **Never fetched** — shown as a link in Settings → Job search | Meta: its terms forbid automated collection and metacareers.com rejects non-browser clients. The Muse's Meta listings stopped updating in January 2026, so there is no current feed to use |
 
 The big employers list warehouse, retail and sales roles alongside engineering ones — Amazon has ~700
 openings in Germany alone. So the careers-site fetchers keep only technical titles *before* making
@@ -556,7 +559,7 @@ per country. A job-board API returns a company's openings worldwide in one respo
 optional `countries` list lets a refresh skip that board when none of its countries is on.
 
 **India.** Naukri, foundit, Instahyre, Cutshort and Wellfound forbid automated access, so they stay
-links on the Countries screen. Indian coverage comes from the Indian companies and India-heavy employers
+links in Settings → Job search. Indian coverage comes from the Indian companies and India-heavy employers
 in the watchlist, plus Adzuna's India feed once `ADZUNA_APP_ID` and `ADZUNA_APP_KEY` are set.
 
 **Aggregators**
@@ -565,7 +568,7 @@ in the watchlist, plus Adzuna's India feed once `ADZUNA_APP_ID` and `ADZUNA_APP_
 - **The Muse** — public jobs API, software roles in the main cities of each active country.
 - **Adzuna** — optional, needs a free `ADZUNA_APP_ID` / `ADZUNA_APP_KEY`. Coverage varies by country.
 
-**Not fetched:** LinkedIn Jobs, Indeed, StepStone, Glassdoor, Meta. The Countries screen links
+**Not fetched:** LinkedIn Jobs, Indeed, StepStone, Glassdoor, Meta. Settings → Job search links
 out to them for searching by hand.
 
 ### Priority companies
@@ -634,6 +637,7 @@ Copy `.env.example` to `.env`. Everything has a working default except the optio
 | `npm run db:migrate` | Make a new migration after a change to `prisma/schema.prisma` |
 | `npm run db:seed` | Re-run the seed (placeholder data only with `WAYPOINT_SEED_SAMPLES=1`) |
 | `npm run gdrive:auth` | One-time Google consent; prints the `GDRIVE_REFRESH_TOKEN` for `.env` |
+| `npm run test:e2e` | Device smoke tests (6 phone, tablet and desktop profiles) on port 3150 with a scratch database. On the Pi the iPhone and iPad profiles run in WebKit. See [docs/devices.md](docs/devices.md) |
 | `npm run check:claims` | Validate `data/profile/claims.yml` and report coverage gaps |
 | `./scripts/remote.sh [start\|stop\|restart\|status\|logs]` | Server plus a public HTTPS tunnel, in the background |
 | `./scripts/start.sh [start\|stop\|restart\|status\|logs]` | Same, but builds and serves in production mode — use on the Pi |
@@ -651,7 +655,7 @@ the app and run `npm run gdrive:auth` again. If you deleted a CV from Drive by h
 **`EADDRINUSE` on 3117.** Something already holds the port:
 `lsof -nP -iTCP:3117 -sTCP:LISTEN`, then kill it.
 
-**A source shows an error after "Refresh feeds".** Boards move; a company that changed ATS shows up
+**A source shows an error after "Refresh".** Boards move; a company that changed ATS shows up
 by name in the toast rather than failing the whole fetch. Fix or remove its entry in
 `config/watchlist.json`.
 
