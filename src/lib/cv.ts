@@ -1,8 +1,7 @@
 import type { Application, Job } from '@prisma/client';
 import { db } from './db';
-import { claudeStatus, NoCredentialError } from './claude';
+import { claudeStatus } from './claude';
 import { askJsonCached } from './cache';
-import { HttpError } from './auth/http';
 import { RefineReply } from './schemas';
 import { shareResume } from './gdrive';
 import { checkForInjection } from './injection';
@@ -30,17 +29,6 @@ export type ChatTurn = { role: 'you' | 'claude'; text: string; at: string; task?
 
 /** A refusal meant for the user, as opposed to a fault. */
 export class CvError extends Error {}
-
-/**
- * For `.catch()` in a route: a CvError becomes 400 and a missing Claude
- * credential becomes 409, each with its own message. Any other error goes on
- * to `handle`, which logs it and sends a fixed 500 message.
- */
-export function rethrowForUser(e: unknown): never {
-  if (e instanceof CvError) throw new HttpError(400, e.message);
-  if (e instanceof NoCredentialError) throw new HttpError(409, e.message);
-  throw e;
-}
 
 const parse = <T>(s: string | null, fallback: T): T => {
   try {
