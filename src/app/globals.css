@@ -398,6 +398,10 @@ button { cursor: pointer; }
 .pf-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; padding: var(--s3) 0; border-top: 1px solid var(--edge); }
 .pf-rows > .pf-row:first-child, .pf-rows > .pf-draft:first-child { border-top: 0; }
 .pf-section > .pf-rows { padding: 0 var(--s4); border: 1px solid var(--edge); border-radius: var(--r-row); background: var(--glass); }
+/* One rule for Profile and Settings: the head of a section is on the ground, and its form sits in one glass box under it, as its rows do. */
+.pf-box { display: flex; flex-direction: column; gap: var(--s3); min-width: 0; padding: var(--s5); border: 1px solid var(--edge); border-radius: var(--r-row); background: var(--glass); }
+.ui-fold-body .pf-box { padding: 0; border: 0; background: transparent; }
+@media (max-width: 639px) { .pf-box { padding: var(--s4); } }
 .pf-row-tight { padding: var(--s2) 0; }
 .pf-row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 220px; }
 .pf-row-title { font-weight: 600; overflow-wrap: anywhere; }
@@ -1087,6 +1091,18 @@ button { cursor: pointer; }
 }
 
 .jd-bar .ui-error { flex-basis: 100%; }
+/* A phone on its side (844 × 390) gets the tablet panel, but has little height. The panel head is short, the job and its
+   apply bar scroll as one, and the score ring is the phone size, so the job has the screen. */
+@media (min-width: 640px) and (max-height: 500px) {
+  .jd-sheet .ui-sheet-head { padding: var(--s2) var(--s5); align-items: center; }
+  .jd-sheet .ui-sheet-body { overflow-y: auto; }
+  .jd-sheet .jd { height: auto; overflow: visible; }
+  .jd-sheet .jd-scroll { flex: none; overflow: visible; }
+  .jd-sheet .jd-header { padding-top: var(--s3); }
+  .jd-sheet .jd-ring .ui-ring { --size: 84px; }
+  .jd-sheet .jd-ring .ui-ring::before { inset: 7px; }
+  .jd-sheet .jd-ring .ui-ring b { font-size: var(--t-20); }
+}
 .jd .jd-back h2:focus-visible { outline: 3px solid var(--lav); outline-offset: 4px; border-radius: var(--r-ctl); }
 
 /* Onboarding wizard: one calm card on the night ground. The left side is the route of the steps. */

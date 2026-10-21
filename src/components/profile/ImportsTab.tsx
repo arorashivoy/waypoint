@@ -30,9 +30,11 @@ export default function ImportsTab({ doc, state, changed, setToast, onCount, dra
           </div>
         </Fold>
       ) : (
-        <section className="glass ui-panel" aria-labelledby="pf-import-h">
-          <h2 id="pf-import-h" className="ui-panel-title">Import</h2>
-          <ImportSources imported={imported} setToast={setToast} />
+        <section className="pf-section" aria-labelledby="pf-import-h">
+          <div className="pf-head"><h2 id="pf-import-h">Import</h2></div>
+          <div className="pf-box">
+            <ImportSources imported={imported} setToast={setToast} />
+          </div>
         </section>
       )}
 

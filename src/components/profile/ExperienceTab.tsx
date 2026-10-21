@@ -51,18 +51,20 @@ export default function ExperienceTab({ doc, levels, onSaved, setToast, onGoto }
   };
   return (
     <div className="pf-stack">
-      <section className="glass ui-panel pf-meta" aria-labelledby="pf-meta-h">
-        <h2 id="pf-meta-h" className="ui-panel-title">Name and headline</h2>
-        <div className="pf-fields">
-          <Field label="Name">{(c) => <input {...c} type="text" value={name} onChange={(e) => { begin(); setName(e.target.value); }} />}</Field>
-          <Field label="Headline" hint="For example: Backend engineer, Java and Kafka">
-            {(c) => <input {...c} type="text" value={headline} onChange={(e) => { begin(); setHeadline(e.target.value); }} />}
-          </Field>
-        </div>
-        <Problems live list={errors} />
-        <div className="pf-actions">
-          <Button onClick={saveMeta} disabled={!name.trim()}>Save</Button>
-          {errors.includes(STALE_PROFILE_MESSAGE) && <Button onClick={loadNew}>Load the new version</Button>}
+      <section className="pf-section pf-meta" aria-labelledby="pf-meta-h">
+        <div className="pf-head"><h2 id="pf-meta-h">Name and headline</h2></div>
+        <div className="pf-box">
+          <div className="pf-fields">
+            <Field label="Name">{(c) => <input {...c} type="text" value={name} onChange={(e) => { begin(); setName(e.target.value); }} />}</Field>
+            <Field label="Headline" hint="For example: Backend engineer, Java and Kafka">
+              {(c) => <input {...c} type="text" value={headline} onChange={(e) => { begin(); setHeadline(e.target.value); }} />}
+            </Field>
+          </div>
+          <Problems live list={errors} />
+          <div className="pf-actions">
+            <Button onClick={saveMeta} disabled={!name.trim()}>Save</Button>
+            {errors.includes(STALE_PROFILE_MESSAGE) && <Button onClick={loadNew}>Load the new version</Button>}
+          </div>
         </div>
       </section>
       <ItemList

@@ -60,43 +60,45 @@ export default function ResumeTab({ state, version, changed, setToast }: Props) 
 
   return (
     <div className="pf-stack">
-      <section className="glass ui-panel" aria-labelledby="pf-src-h">
-        <h2 id="pf-src-h" className="ui-panel-title">Résumé source</h2>
-        {error && !source ? (
-          <ErrorNote what="Waypoint could not load your résumé source." fix={`${error.replace(/\.?$/, '.')} Check your connection, then try again.`} onRetry={() => { load().catch((e) => setError((e as Error).message)); }} />
-        ) : (
-          <div className="pf-source">
-            <div className="pf-source-text">
-              {source && (
-                <ul className="pf-choice" aria-label="Résumé source in use">
-                  <li data-on={source.mode === 'template'}>Classic template</li>
-                  <li data-on={source.mode === 'own-tex'}>Your own .tex file</li>
-                </ul>
-              )}
-              {text ? (
-                <>
-                  <strong>{text.title}</strong>
-                  <span className="pf-note">{text.detail}</span>
-                </>
-              ) : (
-                <Skeleton rows={1} />
-              )}
+      <section className="pf-section" aria-labelledby="pf-src-h">
+        <div className="pf-head"><h2 id="pf-src-h">Résumé source</h2></div>
+        <div className="pf-box">
+          {error && !source ? (
+            <ErrorNote what="Waypoint could not load your résumé source." fix={`${error.replace(/\.?$/, '.')} Check your connection, then try again.`} onRetry={() => { load().catch((e) => setError((e as Error).message)); }} />
+          ) : (
+            <div className="pf-source">
+              <div className="pf-source-text">
+                {source && (
+                  <ul className="pf-choice" aria-label="Résumé source in use">
+                    <li data-on={source.mode === 'template'}>Classic template</li>
+                    <li data-on={source.mode === 'own-tex'}>Your own .tex file</li>
+                  </ul>
+                )}
+                {text ? (
+                  <>
+                    <strong>{text.title}</strong>
+                    <span className="pf-note">{text.detail}</span>
+                  </>
+                ) : (
+                  <Skeleton rows={1} />
+                )}
+              </div>
+              <div className="pf-actions">
+                <FileButton label={source?.hasOwnTex ? 'Replace the .tex file' : 'Upload a .tex file'} accept={FILE_ACCEPT.ownTex} run={sendFile} />
+                {source?.hasOwnTex && (removing ? (
+                  <>
+                    <Button aria-label="Yes, remove my .tex file" onClick={remove}>Yes, remove it</Button>
+                    <Button onClick={() => setRemoving(false)}>Keep it</Button>
+                  </>
+                ) : (
+                  <Button onClick={() => setRemoving(true)}>Remove my .tex file</Button>
+                ))}
+              </div>
             </div>
-            <div className="pf-actions">
-              <FileButton label={source?.hasOwnTex ? 'Replace the .tex file' : 'Upload a .tex file'} accept={FILE_ACCEPT.ownTex} run={sendFile} />
-              {source?.hasOwnTex && (removing ? (
-                <>
-                  <Button aria-label="Yes, remove my .tex file" onClick={remove}>Yes, remove it</Button>
-                  <Button onClick={() => setRemoving(false)}>Keep it</Button>
-                </>
-              ) : (
-                <Button onClick={() => setRemoving(true)}>Remove my .tex file</Button>
-              ))}
-            </div>
-          </div>
-        )}
-        <p className="pf-note">A .tex file must be 1 MB or less. Waypoint refuses a file that can read files or run commands.</p>
-        <Problems live list={problems} />
+          )}
+          <p className="pf-note">A .tex file must be 1 MB or less. Waypoint refuses a file that can read files or run commands.</p>
+          <Problems live list={problems} />
+        </div>
       </section>
 
       <Fold title="Which project leads, by role" status={picks.length ? countOf(picks.length, 'role') : 'No roles yet'}>
@@ -117,10 +119,12 @@ export default function ResumeTab({ state, version, changed, setToast }: Props) 
         )}
       </Fold>
 
-      <section id="pf-history" className="glass ui-panel" aria-labelledby="pf-hist-h">
-        <h2 id="pf-hist-h" className="ui-panel-title">{HISTORY_TITLE}</h2>
-        <p className="pf-note">Every change to your profile. Restore puts back the profile from before a change, so you can undo an accepted draft or a save.</p>
-        <HistoryPanel version={version} changed={changed} setToast={setToast} />
+      <section id="pf-history" className="pf-section" aria-labelledby="pf-hist-h">
+        <div className="pf-head"><h2 id="pf-hist-h">{HISTORY_TITLE}</h2></div>
+        <div className="pf-box">
+          <p className="pf-note">Every change to your profile. Restore puts back the profile from before a change, so you can undo an accepted draft or a save.</p>
+          <HistoryPanel version={version} changed={changed} setToast={setToast} />
+        </div>
       </section>
     </div>
   );

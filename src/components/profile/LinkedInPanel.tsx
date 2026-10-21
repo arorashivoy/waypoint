@@ -53,37 +53,39 @@ export default function LinkedInPanel({ state, refresh, setToast, folded }: { st
 
   const body = (
     <div className="pf-stack">
-      <section className="glass ui-panel" aria-labelledby="pf-li-h">
-        <h2 id="pf-li-h" className="ui-panel-title">LinkedIn</h2>
-        <div className="pf-source">
-          <div className="pf-source-text">
-            {lastImport ? (
-              <>
-                <strong>{lastImport.filename}</strong>
-                <span className="pf-note">Imported on {importedAt}. Sign-in gives only your name, email and photo. The rest came from the archive.</span>
-              </>
-            ) : (
-              <>
-                <strong>No LinkedIn export yet</strong>
-                <span className="pf-note">
-                  In LinkedIn, open <em>Settings, Data privacy, Get a copy of your data</em>. Pick the full archive and upload the .zip here.
-                  Your experience, projects and connections exist only in that archive.
-                </span>
-              </>
-            )}
+      <section className="pf-section" aria-labelledby="pf-li-h">
+        <div className="pf-head"><h2 id="pf-li-h">LinkedIn</h2></div>
+        <div className="pf-box">
+          <div className="pf-source">
+            <div className="pf-source-text">
+              {lastImport ? (
+                <>
+                  <strong>{lastImport.filename}</strong>
+                  <span className="pf-note">Imported on {importedAt}. Sign-in gives only your name, email and photo. The rest came from the archive.</span>
+                </>
+              ) : (
+                <>
+                  <strong>No LinkedIn export yet</strong>
+                  <span className="pf-note">
+                    In LinkedIn, open <em>Settings, Data privacy, Get a copy of your data</em>. Pick the full archive and upload the .zip here.
+                    Your experience, projects and connections exist only in that archive.
+                  </span>
+                </>
+              )}
+            </div>
+            <FileButton label={lastImport ? 'Import again' : 'Import an export'} accept={FILE_ACCEPT.linkedin} run={upload} />
           </div>
-          <FileButton label={lastImport ? 'Import again' : 'Import an export'} accept={FILE_ACCEPT.linkedin} run={upload} />
+          {lastImport && (
+            <dl className="pf-counts">
+              {counts.map(([label, n]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{n}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
         </div>
-        {lastImport && (
-          <dl className="pf-counts">
-            {counts.map(([label, n]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{n}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
       </section>
 
       <Fold quiet title="Connections" status={contactCount === 0 ? 'None imported' : `${contactCount} first-degree`}>
