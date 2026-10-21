@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { api, post } from './api';
 
 type Info = { kind: 'invite' | 'reset'; email: string | null; name: string | null };
-const input = { width: '100%' };
 
 /** The page for an invite link or a reset link. On success the server signs the user in. */
 export default function TokenForm({ token }: { token: string }) {
@@ -42,7 +41,7 @@ export default function TokenForm({ token }: { token: string }) {
   return (
     <div className="login">
       <div className="login-left">
-        <div className="display wordmark" style={{ padding: 0 }}>Waypoint</div>
+        <div className="login-brand"><span className="sh-mark" aria-hidden="true" />Waypoint</div>
         <h1 className="display">{info ? title : 'Waypoint'}</h1>
         {info?.kind === 'reset' && <p className="login-lede">For {info.email}. A new password signs you out on all other devices.</p>}
       </div>
@@ -50,34 +49,34 @@ export default function TokenForm({ token }: { token: string }) {
         {!info && !error && <p>Checking the link…</p>}
         {info?.kind === 'invite' && (
           <>
-            <label className="stack" style={{ gap: 8 }}>
-              <span style={{ fontSize: 15, color: 'var(--soft)' }}>Name</span>
-              <input className="field" autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} style={input} />
+            <label className="login-field">
+              <span>Name</span>
+              <input className="field" autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} />
             </label>
-            <label className="stack" style={{ gap: 8 }}>
-              <span style={{ fontSize: 15, color: 'var(--soft)' }}>Email</span>
+            <label className="login-field">
+              <span>Email</span>
               {info.email ? (
-                <input className="field" value={info.email} readOnly style={input} />
+                <input className="field" value={info.email} readOnly />
               ) : (
-                <input className="field" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} style={input} />
+                <input className="field" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
               )}
             </label>
           </>
         )}
         {info && (
           <>
-            <label className="stack" style={{ gap: 8 }}>
-              <span style={{ fontSize: 15, color: 'var(--soft)' }}>Password (12 characters or more)</span>
-              <input className="field" type="password" autoComplete="new-password" minLength={12} required value={password} onChange={(e) => setPassword(e.target.value)} style={input} />
+            <label className="login-field">
+              <span>Password (12 characters or more)</span>
+              <input className="field" type="password" autoComplete="new-password" minLength={12} required value={password} onChange={(e) => setPassword(e.target.value)} />
             </label>
-            <label className="stack" style={{ gap: 8 }}>
-              <span style={{ fontSize: 15, color: 'var(--soft)' }}>Type the password again</span>
-              <input className="field" type="password" autoComplete="new-password" minLength={12} required value={again} onChange={(e) => setAgain(e.target.value)} style={input} />
+            <label className="login-field">
+              <span>Type the password again</span>
+              <input className="field" type="password" autoComplete="new-password" minLength={12} required value={again} onChange={(e) => setAgain(e.target.value)} />
             </label>
             <button className="login-cta" type="submit" disabled={busy}>{busy ? 'Saving…' : info.kind === 'reset' ? 'Set the password' : 'Make the account'}</button>
           </>
         )}
-        {error && <p role="alert" style={{ color: 'var(--coral)', fontSize: 15, margin: 0 }}>{error}</p>}
+        {error && <p role="alert" className="login-error">{error}</p>}
       </form>
     </div>
   );

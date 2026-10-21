@@ -169,13 +169,12 @@ export default function DraftList({ doc, changed, setToast, onCount, onAccepted 
                   <li key={d.id} className="pf-draft">
                     <div className="pf-draft-head">
                       <span className="pf-draft-id">
-                        <span className="tag">{TYPE[d.type] ?? d.type}</span>
+                        <span className="pf-kind">{TYPE[d.type] ?? d.type}</span>
                         <strong>{titleOf(d)}</strong>
                         {d.warnings.length > 0 && <span className={`pf-dot${held ? '' : ' pf-dot-ok'}`} role="img" aria-label={held ? 'Has a warning' : 'Warning checked'} />}
                       </span>
                       <span className="pf-actions">
                         <Button
-                          className="btn-dark"
                           aria-label={actionName(d.type === 'profile' ? 'Replace my profile with' : 'Accept', title)}
                           aria-disabled={held || undefined}
                           aria-describedby={held ? noteId : undefined}
@@ -184,8 +183,8 @@ export default function DraftList({ doc, changed, setToast, onCount, onAccepted 
                         >
                           {d.type === 'profile' ? 'Replace my profile' : 'Accept'}
                         </Button>
-                        {isItem(d.type) && <Button aria-label={actionName('Edit', title)} onClick={() => setEditing(d.id)}>Edit</Button>}
-                        <Button aria-label={actionName('Reject', title)} disabled={busy} onClick={() => act(() => post('/api/profile/drafts/reject', { ids: [d.id] }), 'Rejected.')}>Reject</Button>
+                        {isItem(d.type) && <Button variant="link" aria-label={actionName('Edit', title)} onClick={() => setEditing(d.id)}>Edit</Button>}
+                        <Button variant="link" aria-label={actionName('Reject', title)} disabled={busy} onClick={() => act(() => post('/api/profile/drafts/reject', { ids: [d.id] }), 'Rejected.')}>Reject</Button>
                       </span>
                     </div>
                     {d.warnings.length > 0 && (
@@ -201,7 +200,7 @@ export default function DraftList({ doc, changed, setToast, onCount, onAccepted 
                       </div>
                     )}
                     {d.matches && <p className="pf-note">It matches “{d.matches}”.</p>}
-                    <Fold title="Details" status={status} defaultOpen={d.warnings.length > 0}>
+                    <Fold quiet title="Details" status={status} defaultOpen={d.warnings.length > 0}>
                       {d.diff ? (
                         <ul className="pf-plain">
                           {d.diff.slice(0, 40).map((x, n) => <li key={`${x.kind}:${x.key}:${n}`}>{x.change} {x.kind}: {x.label}</li>)}

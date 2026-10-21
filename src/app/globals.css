@@ -88,10 +88,11 @@ body::before {
   backdrop-filter: blur(18px) saturate(1.2);
 }
 @supports not (backdrop-filter: blur(1px)) {
-  .glass, .sh-sidebar, .sh-rail, .sh-tabbar, .sh-topbar, .field, .card, .panel, .sheet-body { background: #1A1724; }
+  .glass, .sh-sidebar, .sh-rail, .sh-tabbar, .sh-topbar, .field { background: #1A1724; }
 }
 
-h1, h2, h3 { font-family: var(--f-head); }
+h1, h2 { font-family: var(--f-head); }
+h3 { font-family: var(--f-body); }
 
 a { color: var(--lav); }
 @media (hover: hover) { a:hover { color: var(--text); } }
@@ -106,8 +107,6 @@ button { cursor: pointer; }
   0%, 100% { box-shadow: 0 0 0 0 rgba(166, 228, 196, 0.55); }
   60% { box-shadow: 0 0 0 10px rgba(166, 228, 196, 0); }
 }
-.flash { animation: wpflash 1.6s ease-out infinite; }
-@media (prefers-reduced-motion: reduce) { .flash { animation: none; border-color: var(--accent); } }
 
 .mono { font-family: var(--f-body); }
 .display { font-family: var(--f-head); }
@@ -123,12 +122,6 @@ button { cursor: pointer; }
 
 /* ---------- shell: the old classes that screens still use ---------- */
 
-.badge {
-  min-width: 24px; height: 24px; border-radius: 12px;
-  background: var(--coral); color: var(--ink-on); font-size: 13px; font-weight: 600;
-  display: flex; align-items: center; justify-content: center; padding: 0 6px;
-}
-
 .avatar {
   width: 40px; height: 40px; border-radius: 20px;
   background: var(--lav); color: var(--ink-on);
@@ -139,7 +132,6 @@ button { cursor: pointer; }
 .avatar-sm { width: 36px; height: 36px; border-radius: 18px; font-size: 13px; }
 
 .main { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; }
-.wordmark { font-family: var(--f-head); font-size: var(--t-25); font-weight: 700; letter-spacing: -0.02em; padding: 0 10px; }
 
 /* Desktop matches the design's fixed-height frame: the page itself never
    scrolls, the job list and the detail pane each scroll on their own. On phone
@@ -150,9 +142,9 @@ button { cursor: pointer; }
   .screen-head { flex-shrink: 0; }
 }
 
-.screen-head { padding: 24px 36px 20px; border-bottom: 1px solid var(--line); }
+.screen-head { padding: 24px 36px 20px; }
 .screen-head h1 { margin: 0; font-size: var(--t-31); font-weight: 700; letter-spacing: -0.02em; }
-.screen-head .sub { font-size: var(--t-13); color: var(--muted-2); }
+.screen-head .sub { font-size: var(--t-13); color: var(--muted-2); max-width: 70ch; }
 
 /* ---------- controls ---------- */
 
@@ -173,18 +165,15 @@ button { cursor: pointer; }
   text-decoration: none; white-space: nowrap;
 }
 @media (hover: hover) { .btn:hover { background: var(--glass-hi); color: var(--text); } }
-.btn:disabled, .btn-accent:disabled, .chip:disabled, .btn.go:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn.go, .btn-accent {
+.btn:disabled, .chip:disabled, .btn.go:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.go {
   border: 0; color: var(--ink-on);
   background: linear-gradient(135deg, var(--mint), #BFE9D4 55%, var(--lav));
   box-shadow: 0 8px 24px -10px rgba(166, 228, 196, 0.55);
 }
-@media (hover: hover) { .btn.go:hover, .btn-accent:hover { color: var(--ink-on); background: linear-gradient(135deg, var(--mint), #BFE9D4 55%, var(--lav)); } }
+@media (hover: hover) { .btn.go:hover { color: var(--ink-on); background: linear-gradient(135deg, var(--mint), #BFE9D4 55%, var(--lav)); } }
 .btn.link { border-color: transparent; background: transparent; color: var(--lav); padding: 0 6px; }
 @media (hover: hover) { .btn.link:hover { color: var(--text); } }
-.btn-dark { border: 0; background: var(--text); color: var(--ink-on); }
-@media (hover: hover) { .btn-dark:hover { background: var(--text); color: var(--ink-on); } }
-.btn-accent { height: 48px; font-size: 16px; width: 100%; }
 
 .chip {
   height: 34px; padding: 0 12px; border-radius: 17px; font-size: var(--t-13);
@@ -192,16 +181,7 @@ button { cursor: pointer; }
 }
 .chip[data-on='true'] { border-color: transparent; background: var(--lav); color: var(--ink-on); font-weight: 600; }
 
-.tag { font-size: var(--t-13); padding: 3px 8px; border-radius: 6px; background: var(--chip); color: var(--text); }
-.tag-dark { background: var(--lav); color: var(--ink-on); }
-.tag-green { background: var(--mint); color: var(--ink-on); }
-.tag-outline { background: transparent; border: 1px solid var(--line); }
-
-.card { background: var(--glass); border: 1px solid var(--line); border-radius: var(--r-row); }
-.panel { background: var(--glass); border: 1px solid var(--line); border-radius: var(--r-panel); padding: 32px; }
-
 .stack { display: flex; flex-direction: column; }
-.row { display: flex; align-items: center; }
 .grow { flex-grow: 1; }
 
 /* ---------- jobs ---------- */
@@ -263,13 +243,6 @@ button { cursor: pointer; }
 
 .empty { padding: 28px; border: 1px dashed var(--lav); border-radius: var(--r-row); font-size: 15px; color: var(--soft); line-height: 1.5; }
 
-.req { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--r-ctl); font-size: 15px; }
-.req[data-ok='true'] { background: var(--positive-wash); }
-.req[data-ok='false'] { background: var(--warn-wash); }
-.req .mark { font-size: 12px; }
-.req[data-ok='true'] .mark { color: var(--positive); }
-.req[data-ok='false'] .mark { color: var(--warn-ink); }
-
 .contact { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: var(--r-ctl); border: 1px solid var(--line); background: var(--glass); }
 .contact[data-best='true'] { border-color: var(--lav); }
 
@@ -280,11 +253,6 @@ button { cursor: pointer; }
 }
 
 .must { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--r-ctl); background: var(--accent-wash); }
-.must .dash { color: var(--accent-ink); }
-
-.two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
-.two-col-tight { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.three-col { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 
 /* ---------- pending ---------- */
 
@@ -356,7 +324,7 @@ button { cursor: pointer; }
 .st-error { margin: 0; font-size: var(--t-13); color: var(--coral); }
 @media (max-width: 639px) {
   /* A soft fade on the edge of the tab strip that has more tabs behind it. */
-  .st .ui-tablist { -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade-l, 0px), #000 calc(100% - var(--fade-r, 0px)), transparent); mask-image: linear-gradient(to right, transparent, #000 var(--fade-l, 0px), #000 calc(100% - var(--fade-r, 0px)), transparent); }
+  .pf .ui-tablist { -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade-l, 0px), #000 calc(100% - var(--fade-r, 0px)), transparent); mask-image: linear-gradient(to right, transparent, #000 var(--fade-l, 0px), #000 calc(100% - var(--fade-r, 0px)), transparent); }
 }
 .btn.st-danger { border-color: color-mix(in srgb, var(--coral) 60%, transparent); color: var(--coral); }
 .st-link { font-size: var(--t-13); overflow-wrap: anywhere; min-width: 0; flex: 1 1 240px; }
@@ -364,7 +332,6 @@ button { cursor: pointer; }
 
 /* ---------- profile ---------- */
 
-.hint { font-size: var(--t-13); color: var(--soft); }
 .err { margin: 0; padding-left: 18px; font-size: 14px; color: var(--coral); }
 
 /* The screen: sections on the left from 640 px, tabs across the top under 640 px. */
@@ -410,6 +377,9 @@ button { cursor: pointer; }
 .pf-empty .ui-empty-route { max-width: 140px; }
 .pf-empty .ui-empty-cause { font-size: var(--t-16); font-weight: 600; }
 .pf-empty .btn.link { margin-left: calc(var(--s2) * -1); }
+/* An empty list is not the main action of the tab: its button is quiet. */
+.pf-empty .ui-empty .btn.go { border: 1px solid var(--edge); background: var(--glass); color: var(--text); box-shadow: none; }
+@media (hover: hover) { .pf-empty .ui-empty .btn.go:hover { background: var(--glass-hi); color: var(--text); } }
 .pf-group { display: flex; flex-direction: column; gap: var(--s3); border: 0; padding: 0; margin: 0; min-width: 0; }
 .pf-group-title { font-size: var(--t-13); font-weight: 500; color: var(--soft); padding: 0; }
 .pf-ask { font-size: var(--t-13); color: var(--soft); }
@@ -473,8 +443,8 @@ button { cursor: pointer; }
 .pf-draft-id strong { overflow-wrap: anywhere; min-width: 0; }
 .pf-dot { flex-shrink: 0; width: 10px; height: 10px; border-radius: 50%; background: var(--butter); box-shadow: 0 0 10px color-mix(in srgb, var(--butter) 55%, transparent); }
 .pf-dot-ok { background: transparent; border: 2px solid var(--mint); box-shadow: none; box-sizing: border-box; }
-.pf-draft .ui-fold { background: transparent; border: 0; border-radius: var(--r-ctl); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .pf-draft .ui-fold-head { padding: var(--s1) var(--s3); }
+.pf-kind { flex-shrink: 0; font-size: var(--t-13); color: var(--soft); }
 .pf-draft .ui-fold-text { flex-direction: row; align-items: baseline; gap: var(--s3); flex-wrap: wrap; }
 .pf-draft .ui-fold-body { padding: 0 var(--s3) var(--s3); }
 .pf-change { display: flex; flex-direction: column; gap: 2px; }
@@ -489,6 +459,8 @@ button { cursor: pointer; }
 @media (pointer: coarse) {
   /* A link inside a sentence keeps its line. Padding and an equal negative margin grow the target to 44 px. */
   .pf-undo .btn.link, .pf-note .btn.link { padding-block: 13px; margin-block: -13px; }
+  /* A plain text link that is an action (open the CV, a career page): the padding of an inline box grows its target, not its line. */
+  .jd-drive > a, .pn-when > a, .pf-note a { padding-block: 13px; }
 }
 .pf-warn {
   display: flex; flex-direction: column; align-items: flex-start; gap: var(--s2); padding: var(--s3) var(--s4); border-radius: var(--r-row);
@@ -500,22 +472,17 @@ button { cursor: pointer; }
 .pf-facts div { display: grid; grid-template-columns: minmax(0, 9rem) minmax(0, 1fr); gap: var(--s3); }
 .pf-facts dt { color: var(--soft); }
 .pf-facts dd { margin: 0; overflow-wrap: anywhere; }
-.pf-merge { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
-.pf-merge .pf-facts div { grid-template-columns: minmax(0, 1fr); gap: 0; }
 @media (max-width: 639px) {
   .pf-facts div { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .pf-merge { grid-template-columns: minmax(0, 1fr); }
   .pf-pick > .pf-row-title { flex-basis: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .pf * { transition: none !important; animation: none !important; } }
 
 /* ---------- phone ---------- */
 
-.sheet { display: none; }
 /* Each utility only ever *hides*, scoped to its own breakpoint. Nothing forces a
    display value back on, so an element keeps whatever layout its own class or
    inline style gives it. */
-@media (min-width: 1024px) { .mobile-only { display: none !important; } }
 
 @media (max-width: 1023px) {
   .desktop-only { display: none !important; }
@@ -523,38 +490,15 @@ button { cursor: pointer; }
   /* The shell section sets the padding of .main for each device. */
   .main { --gutter: 20px; }
 
-  .screen-head { padding: 20px var(--gutter) 12px; border-bottom: 0; }
-  .screen-head h1 { font-size: 28px; }
-
+  .screen-head { padding: 20px var(--gutter) 12px; }
 
   .jl { width: 100%; padding: var(--s4) var(--gutter) var(--s5); overflow: visible; }
   .jl > * { max-width: 720px; }
-  .jl-head h1 { font-size: 28px; }
   /* No job is open, so no row is selected. On a wide screen the first job shows by default. */
   .sh[data-job='none'] .jr[data-on='true'] { background: transparent; border-color: transparent; box-shadow: none; }
   .jobs-detail { padding: 0 var(--gutter) 28px; overflow: visible; }
 
-  .panel { padding: 0; border: 0; background: transparent; border-radius: 0; }
-  .two-col, .two-col-tight, .three-col { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-
   .pn-grid { padding-top: var(--s2); }
-
-  .sheet {
-    position: fixed; inset: 0; z-index: 30;
-    background: rgba(8, 6, 14, 0.6);
-    display: flex; flex-direction: column; justify-content: flex-end;
-  }
-  .sheet-body {
-    background: var(--surface); border: 1px solid var(--edge); border-radius: var(--r-sheet) var(--r-sheet) 0 0;
-    padding: 20px 16px calc(24px + env(safe-area-inset-bottom));
-    display: flex; flex-direction: column; gap: 16px;
-    max-height: 86dvh; overflow-y: auto;
-  }
-  .sheet .chip { height: 40px; padding: 0 14px; border-radius: 20px; }
-
-  /* Phone design leads with the CV rules; the import panel drops below them. */
-  .resume-rules { order: 1; }
-  .resume-import { order: 2; }
 
   .note-area { min-height: 150px; }
 }
@@ -563,6 +507,12 @@ button { cursor: pointer; }
 
 .login { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 100dvh; }
 .login-left { padding: 72px 88px; display: flex; flex-direction: column; gap: 40px; }
+.login-brand { display: flex; align-items: center; gap: 10px; font-family: var(--f-head); font-weight: 700; font-size: var(--t-25); letter-spacing: -0.01em; }
+.login-title { margin: 0; font-size: var(--t-25); font-weight: 700; letter-spacing: -0.01em; }
+.login-field { display: flex; flex-direction: column; gap: var(--s2); }
+.login-field > span { font-weight: 500; }
+.login-field .field { width: 100%; }
+.login-error { margin: 0; color: var(--coral); }
 .login-left h1 { margin: 0; font-size: var(--t-39); line-height: 1.05; font-weight: 700; letter-spacing: -0.035em; text-wrap: balance; }
 .login-lede { margin: 0; font-size: var(--t-20); line-height: 1.55; color: var(--soft); max-width: 520px; }
 .login-right {
@@ -636,7 +586,7 @@ button { cursor: pointer; }
 .ui-switch:disabled { opacity: 0.45; cursor: not-allowed; }
 
 @media (pointer: coarse) {
-  .btn, .ui-btn, .ui-tab, .ui-fold-head, .ui-switch, .chip, .fs-chip, .sh-nav-item, .sh-tab, .sh-rail-item, .ui-sheet-head .btn, .sheet .chip, .pf-row .btn, .pf-actions .btn { min-height: 44px; }
+  .btn, .ui-btn, .ui-tab, .ui-fold-head, .ui-switch, .chip, .fs-chip, .sh-nav-item, .sh-tab, .sh-rail-item, .ui-sheet-head .btn, .pf-row .btn, .pf-actions .btn { min-height: 44px; }
   .chip, .fs-chip, .sh-collapse, .sh-expand { min-width: 44px; min-height: 44px; }
   .pf-check { min-height: 44px; align-items: center; }
   .pf-check input { margin-top: 0; }
@@ -673,7 +623,12 @@ button { cursor: pointer; }
 }
 @media (hover: hover) { .ui-fold-head:hover { background: var(--glass); } }
 .ui-fold-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ui-fold-title { font-size: var(--t-16); font-weight: 600; } /* Onest: Syne is for 20 px and up */
+.ui-fold-title { font-family: var(--f-head); font-size: var(--t-20); font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; }
+/* A quiet fold sits inside a panel or a row: no glass of its own, an Onest title. */
+.ui-fold-quiet { background: transparent; border: 0; }
+.ui-fold-quiet > .ui-fold-head { padding: var(--s2) var(--s3); border-radius: var(--r-ctl); }
+.ui-fold-quiet .ui-fold-title { font-family: var(--f-body); font-size: var(--t-16); letter-spacing: 0; }
+.ui-fold-quiet > .ui-fold-body { padding: 0 var(--s3) var(--s3); }
 .ui-fold-status { color: var(--soft); font-size: var(--t-13); overflow-wrap: anywhere; }
 .ui-chevron { flex-shrink: 0; color: var(--lav); transition: transform 0.2s ease; }
 .ui-fold[data-open='true'] .ui-chevron { transform: rotate(90deg); }
@@ -868,6 +823,7 @@ button { cursor: pointer; }
 .sh-nav-item[aria-current='page']::after {
   content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 10px var(--mint); flex-shrink: 0;
 }
+.sh-nav-item .ui-badge-coral { margin-left: auto; background: color-mix(in srgb, var(--coral) 16%, transparent); color: var(--coral); }
 .sh-work { padding: 12px 14px; border-radius: var(--r-ctl); background: color-mix(in srgb, var(--mint) 8%, transparent); }
 .sh-user { display: flex; align-items: center; gap: 12px; padding: var(--s3) 12px 0; border-top: 1px solid var(--edge); margin-top: var(--s2); }
 .sh-user-text { min-width: 0; }
@@ -943,9 +899,12 @@ button { cursor: pointer; }
   .main { --gutter: 36px; padding-right: env(safe-area-inset-right); }
 }
 
-/* A narrow desktop: the list gives room to the job */
+/* A narrow desktop (an iPad in landscape): the rail, not the sidebar, so the job keeps room beside the list. */
 @media (min-width: 1024px) and (max-width: 1279px) {
   .jl { width: 340px; }
+  .sh .sh-sidebar { display: none; }
+  .sh .sh-rail { display: flex; }
+  .sh .sh-expand { display: none; }
 }
 
 /* Tablet: the rail */
@@ -1018,6 +977,11 @@ button { cursor: pointer; }
 .jd-note { margin: 0; width: 100%; box-sizing: border-box; padding: var(--s3) var(--s4); border-radius: var(--r-row); line-height: 1.5; overflow-wrap: anywhere; }
 .jd-note-warn { background: color-mix(in srgb, var(--butter) 9%, transparent); border: 1px solid color-mix(in srgb, var(--butter) 30%, transparent); color: var(--butter); }
 .jd-more { align-self: flex-start; padding: 0 var(--s2); }
+/* A posting flag (an old post, a vague pay line) is a quiet butter line, not a box. Blockers keep the box. */
+.jd-flag { margin: 0; display: flex; gap: var(--s2); align-items: baseline; color: var(--butter); line-height: 1.5; overflow-wrap: anywhere; }
+.jd-flag::before { content: ''; flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--butter); transform: translateY(-2px); }
+.jd-struck { text-decoration: line-through; }
+.jd-wait { padding-top: var(--s6); }
 .jd-parts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s2); }
 .jd-parts li { display: flex; justify-content: space-between; gap: var(--s4); overflow-wrap: anywhere; }
 .jd-parts b { font-variant-numeric: tabular-nums; font-weight: 600; }
@@ -1045,8 +1009,6 @@ button { cursor: pointer; }
 .jd-others strong { color: var(--text); font-weight: 500; }
 .jd-guide { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3) var(--s4); border-radius: var(--r-row); background: color-mix(in srgb, var(--lav) 8%, transparent); line-height: 1.5; }
 .jd-guide ol { margin: 0; padding-left: var(--s5); display: flex; flex-direction: column; gap: var(--s1); }
-
-.jd-pdf { display: flex; flex-direction: column; gap: var(--s3); }
 .jd-preview { min-height: 0; max-height: 520px; overflow-y: auto; border-radius: var(--r-row); }
 .jd-preview[data-state='ready'] { border: 1px solid var(--edge); }
 .jd-pages { display: flex; flex-direction: column; gap: var(--s2); }
@@ -1116,6 +1078,12 @@ button { cursor: pointer; }
 }
 @media (min-width: 640px) {
   .jd-bar .jd-bar-open { display: inline-flex; }
+  /* "Mark as applied" is the one primary action beside the list. A button inside a fold (Draft the request, Build CV) is quiet there.
+     On a phone a fold is its own screen with no apply bar, so its button stays primary. */
+  .jd-main .btn.go { align-self: flex-start; border: 1px solid var(--edge); background: var(--glass); color: var(--text); box-shadow: none; }
+}
+@media (hover: hover) {
+  @media (min-width: 640px) { .jd-main .btn.go:hover { background: var(--glass-hi); color: var(--text); } }
 }
 
 .jd-bar .ui-error { flex-basis: 100%; }

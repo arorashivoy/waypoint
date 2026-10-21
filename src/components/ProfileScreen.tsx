@@ -10,22 +10,11 @@ import ProjectsTab from './profile/ProjectsTab';
 import ClaimsTab from './profile/ClaimsTab';
 import ImportsTab from './profile/ImportsTab';
 import ResumeTab from './profile/ResumeTab';
-
-/** True from 640 px: the sections are a list on the left. Under 640 px they are tabs across the top. */
-function useSideList() {
-  const [side, setSide] = useState(false);
-  useEffect(() => {
-    const q = window.matchMedia('(min-width: 640px)');
-    const update = () => setSide(q.matches);
-    update();
-    q.addEventListener('change', update);
-    return () => q.removeEventListener('change', update);
-  }, []);
-  return side;
-}
+import { useSideList, useTabFade } from './shell/sideList';
 
 export default function ProfileScreen({ state: me, refresh, setToast }: { state: any; refresh: () => Promise<any>; setToast: (s: string) => void }) {
-  const [tab, setTab] = useState<ProfileTab>('experience');
+  // The first paint shows the tab in the URL, as Settings does. This screen mounts in the browser only.
+  const [tab, setTab] = useState<ProfileTab>(() => (typeof window === 'undefined' ? 'experience' : readTab(window.location.search)));
   const side = useSideList();
   // After a save or an accept, a quiet line points to the profile history, where the user can undo it.
   const [changedNote, setChangedNote] = useState(false);
@@ -44,6 +33,7 @@ export default function ProfileScreen({ state: me, refresh, setToast }: { state:
   useEffect(() => {
     document.querySelector<HTMLElement>('.pf [role="tab"][aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
   }, [tab, side, data]);
+  useTabFade('.pf-profile [role="tablist"]', [side, tab, data]);
   const choose = useCallback((next: ProfileTab) => {
     setTab(next);
     if (next === 'resume') setChangedNote(false);
@@ -95,7 +85,7 @@ export default function ProfileScreen({ state: me, refresh, setToast }: { state:
         <h1 className="display">Profile</h1>
         <p className="sub">{data ? [data.doc.profile.name, data.doc.profile.headline].filter(Boolean).join(', ') || 'Add your name and headline on the Experience tab.' : 'Loading your profile'}</p>
       </header>
-      <div className="pf">
+      <div className="pf pf-profile">
         {!data ? (
           error ? (
             <ErrorNote live what="Waypoint could not load your profile." fix={`${error.message.replace(/\.?$/, '.')} Check your connection, then try again.`} onRetry={() => { mutate(); }} />
@@ -119,7 +109,7 @@ export default function ProfileScreen({ state: me, refresh, setToast }: { state:
               label:
                 t.id === 'imports' && drafts > 0 ? (
                   <>
-                    {t.label} <Badge tone="coral">{drafts}</Badge>
+                    {t.label} <Badge tone="lav">{drafts}</Badge>
                     <span className="sr-only">{countOfDrafts(drafts)}</span>
                   </>
                 ) : (

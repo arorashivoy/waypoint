@@ -10,7 +10,9 @@ export function postedLine(postedAt: string, now = Date.now()): string {
 
 /** Role, company, place, the score ring and a link to the posting. On a phone the top row holds "‹ Jobs" and "Open posting". */
 export function JobHeader({ job, onBack }: { job: JobView; onBack: () => void }) {
-  const where = [job.company, job.city, job.mode.toLowerCase(), job.visa].filter(Boolean).join(', ');
+  const where = [job.company, job.city, job.mode.toLowerCase()].filter(Boolean).join(', ');
+  // The visa note is a sentence of its own ("Sponsorship not stated"), not a part of the place.
+  const visa = job.visa ? ` ${job.visa.replace(/\.$/, '')}.` : '';
   return (
     <header className="jd-header">
       <div className="jd-top">
@@ -24,7 +26,7 @@ export function JobHeader({ job, onBack }: { job: JobView; onBack: () => void })
       </div>
       <div className="jd-title">
         <h2>{job.role}</h2>
-        <p className="jd-where">{where}. {postedLine(job.postedAt)}.</p>
+        <p className="jd-where">{where}.{visa} {postedLine(job.postedAt)}.</p>
       </div>
       <div className="jd-ring" key={job.id}>
         <ScoreRing score={job.match} />

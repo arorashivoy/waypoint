@@ -33,11 +33,10 @@ export default function JobDetail({ id, claude, refresh, setToast, onClose }: Pr
               <ErrorNote live what="Waypoint could not open this job." fix={`${error} Check your connection, then try again.`} onRetry={retry} />
             ) : (
               <>
-                <p className="jd-hint" role="status">Reading the description and checking it against your profile…</p>
+                <p className="jd-hint" role="status">Opening the job…</p>
                 <Skeleton rows={3} />
               </>
             )}
-            <Button variant="link" onClick={onClose}>Back to the jobs</Button>
           </div>
         </div>
       </div>

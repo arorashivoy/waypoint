@@ -9,9 +9,9 @@ import { latexLogExcerpt } from '@/lib/latex-log';
 import { cleanLog, compileLatex, findEngine } from '@/lib/latex';
 import { BLOCKER_LABEL, LEGITIMACY_LABEL } from '@/lib/jobcheck-text';
 import { topRequirements, type Requirement } from '@/components/job/requirements';
-import { builtAgo } from '@/components/job/time';
+import { longAgo as builtAgo } from '@/lib/time-ago';
 import { JobBody } from '@/components/job/JobBody';
-import { cliOffNote, suggestBlockedNote } from '@/components/job/CvSection';
+import { cliOffNote, errorParts, suggestBlockedNote } from '@/components/job/CvSection';
 import type { JobDetailState, JobView } from '@/components/job/types';
 
 describe('latexLogExcerpt', () => {
@@ -220,6 +220,12 @@ describe('the job detail', () => {
     expect(render(view())).not.toContain('Try again');
   });
 
+  it('opens the fold of the part in the URL, so a turn to landscape keeps the place', () => {
+    const html = render(view(), {}, { part: 'cv' });
+    expect(html).toMatch(/<section class="jd-cv">[\s\S]*?data-open="true"/);
+    expect(html).toMatch(/<section class="jd-wayin">[\s\S]*?data-open="false"/);
+  });
+
   it('marks the open part for the phone screen', () => {
     expect(render(view(), {}, { part: 'wayin' })).toContain('data-part="wayin"');
     expect(render(view())).not.toContain('data-part');
@@ -233,6 +239,55 @@ describe('Suggest wording without Claude', () => {
     expect(suggestBlockedNote({ mode: 'none', cliOff: true })).toBe(cliOffNote(true));
     expect(suggestBlockedNote({ mode: 'none' })).toBe(cliOffNote(false));
     expect(suggestBlockedNote({ mode: 'own' })).toBeNull();
+  });
+});
+
+describe('the polish of the job detail', () => {
+  const cv = { pdfUrl: '/api/resume/a', driveUrl: null, lead: 'x', chat: [] };
+
+  it('hides the refine field when Claude cannot run, and says why', () => {
+    const off = render(view({ cv }), { claudeNote: 'Add an API key in Settings to use Claude.' });
+    expect(off).not.toContain('What to change');
+    expect(off).toContain('Add an API key in Settings to use Claude.');
+    expect(render(view({ cv }))).toContain('What to change');
+  });
+
+  it('tells the user what to do after a LaTeX failure', () => {
+    const p = errorParts('pdflatex failed:\n! Undefined control sequence.\nl.42 \\x');
+    expect(p.what).toBe('The CV did not build (pdflatex failed).');
+    expect(p.fix).toBe('Correct the line below in your .tex file, then press Rebuild CV.');
+    expect(p.detail).toBe('! Undefined control sequence.\nl.42 \\x');
+    expect(errorParts('The server is not reachable.').fix).toBe('The server is not reachable.');
+  });
+
+  it('uses the reason of the server when the shared key is at its cap', () => {
+    expect(suggestBlockedNote({ mode: 'none', detail: 'You used this month\'s limit of $5.00 on the shared key. It resets on 1 Nov.' })).toContain('It resets on 1 Nov.');
+    expect(suggestBlockedNote({ mode: 'none', cliOff: true, detail: 'x' })).toBe(cliOffNote(true));
+  });
+
+  it('writes the visa note as its own sentence', () => {
+    expect(render(view({ visa: 'Sponsorship not stated' }))).toContain('Kestrel Pay, Berlin, hybrid. Sponsorship not stated. Posted');
+  });
+
+  it('shows a legitimacy flag as a quiet line, not a box', () => {
+    const html = render(view({ legitimacy: ['reposted'] }));
+    expect(html).toMatch(/class="jd-flag"[^>]*>[^<]*old post/);
+  });
+
+  it('keeps the score parts in a quiet fold', () => {
+    expect(render(view())).toMatch(/class="ui-fold ui-fold-quiet"[\s\S]*How this score was made/);
+  });
+
+  it('names the referral action by what it does', () => {
+    expect(render(view())).toContain('Draft the request');
+    expect(render(view())).not.toContain('Send request');
+  });
+
+  it('shows the PDF page note when a CV has more pages than the preview', async () => {
+    const { pageNote } = await import('@/components/job/PdfPreview');
+    expect(pageNote(3)).toBeNull();
+    expect(pageNote(4)).toBeNull();
+    expect(pageNote(7)).toBe('Page 1 to 4 of 7. Use Open to see all.');
   });
 });
 
@@ -260,6 +315,11 @@ describe('the LaTeX error the server sends', () => {
     expect(out.split('\n')).toHaveLength(20);
     expect(out).not.toMatch(/\/home|\/tmp/);
     expect(out).toContain('a.tex');
+  });
+
+  it('cleanLog keeps the line number after each error and the error lines of tectonic', () => {
+    const log = ['This is pdfTeX', '! Undefined control sequence.', '<argument> \\resumeItemm', 'l.42 \\resumeItemm{x}', 'l.50 not this one', 'error: tailored.tex:7: Missing $ inserted', 'warning: ignored'].join('\n');
+    expect(cleanLog(log, '/tmp/w').split('\n')).toEqual(['! Undefined control sequence.', 'l.42 \\resumeItemm{x}', 'error: tailored.tex:7: Missing $ inserted']);
   });
 
   it.skipIf(!findEngine())('a failed compile throws only the excerpt', async () => {

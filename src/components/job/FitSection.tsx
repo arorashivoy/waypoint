@@ -34,7 +34,7 @@ export function FitSection({ job }: { job: JobView }) {
         </div>
       )}
       {job.warning && <p className="jd-note jd-note-warn">{job.warning}</p>}
-      {flags && <p className="jd-note jd-note-warn">{flags}</p>}
+      {flags && <p className="jd-flag">{flags}</p>}
 
       {shown.length > 0 && <Route items={shown.map(toItem)} />}
       {rest > 0 && (
@@ -43,7 +43,7 @@ export function FitSection({ job }: { job: JobView }) {
         </Button>
       )}
 
-      <Fold title="How this score was made" status={job.by === 'claude' ? `${job.match} points from ${job.parts.length} parts` : 'Estimated without Claude'}>
+      <Fold quiet title="How this score was made" status={job.by === 'claude' ? `${job.match} points from ${job.parts.length} parts` : 'Estimated without Claude'}>
         <ul className="jd-parts">
           {job.parts.map((p, i) => (
             <li key={`${i}-${p.label}`}>

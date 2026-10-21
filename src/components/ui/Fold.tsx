@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 
 export interface FoldProps {
   title: string;
@@ -12,10 +12,15 @@ export interface FoldProps {
   onOpen?: () => void;
   /** Called with the new state when the panel unfolds or folds. */
   onToggle?: (open: boolean) => void;
+  /** A fold inside a panel or a row: no glass of its own and a smaller title. */
+  quiet?: boolean;
+  /** Opens the fold when it turns true, for example when a phone with an open part turns to landscape. */
+  forceOpen?: boolean;
 }
 
-export function Fold({ title, status, children, defaultOpen = false, onOpen, onToggle }: FoldProps) {
-  const [open, setOpen] = useState(defaultOpen);
+export function Fold({ title, status, children, defaultOpen = false, onOpen, onToggle, quiet = false, forceOpen = false }: FoldProps) {
+  const [open, setOpen] = useState(defaultOpen || forceOpen);
+  useEffect(() => { if (forceOpen) setOpen(true); }, [forceOpen]);
   const bodyId = useId();
 
   const root = useRef<HTMLDivElement>(null);
@@ -32,7 +37,7 @@ export function Fold({ title, status, children, defaultOpen = false, onOpen, onT
   }
 
   return (
-    <div ref={root} className="glass ui-fold" data-open={open} data-onopen={onOpen ? true : undefined}>
+    <div ref={root} className={quiet ? 'ui-fold ui-fold-quiet' : 'glass ui-fold'} data-open={open} data-onopen={onOpen ? true : undefined}>
       <button type="button" className="ui-fold-head" aria-expanded={open} aria-controls={bodyId} onClick={toggle}>
         <span className="ui-fold-text">
           <span className="ui-fold-title">{title}</span>

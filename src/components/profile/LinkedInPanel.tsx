@@ -86,7 +86,7 @@ export default function LinkedInPanel({ state, refresh, setToast, folded }: { st
         )}
       </section>
 
-      <Fold title="Connections" status={contactCount === 0 ? 'None imported' : `${contactCount} first-degree`}>
+      <Fold quiet title="Connections" status={contactCount === 0 ? 'None imported' : `${contactCount} first-degree`}>
         <div className="pf-stack-tight">
           <p className="pf-note">
             Referral routing runs on these connections. A job at one of these companies gets a named contact. A company that is not here gets an honest empty list.

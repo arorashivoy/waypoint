@@ -5,12 +5,18 @@ import { ErrorNote } from '../ui';
 
 const MAX_PAGES = 4;
 
+/** A line under a preview that shows only some of the pages. Null when it shows all. */
+export function pageNote(pages: number): string | null {
+  return pages > MAX_PAGES ? `Page 1 to ${MAX_PAGES} of ${pages}. Use Open to see all.` : null;
+}
+
 /** The pages of the PDF as canvases, loaded when the preview comes into view. pdf.js loads on the client only. */
 export function PdfPreview({ url, rev }: { url: string; rev: number }) {
   const root = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [attempt, setAttempt] = useState(0);
+  const [pages, setPages] = useState(0);
 
   // The preview sits in a closed fold or on a hidden screen at first. It loads when it can be seen.
   useEffect(() => {
@@ -40,6 +46,7 @@ export function PdfPreview({ url, rev }: { url: string; rev: number }) {
         const pdf = await task.promise;
         doc = pdf;
         if (!live) return;
+        setPages(pdf.numPages);
         const width = el.clientWidth || 600;
         const ratio = Math.min(window.devicePixelRatio || 1, 2);
         for (let n = 1; n <= Math.min(pdf.numPages, MAX_PAGES); n++) {
@@ -75,6 +82,7 @@ export function PdfPreview({ url, rev }: { url: string; rev: number }) {
         <ErrorNote what="The preview did not load." fix="Use Open to see the PDF in a new tab." onRetry={() => setAttempt((a) => a + 1)} />
       )}
       <div className="jd-pages" />
+      {state === 'ready' && pageNote(pages) && <p className="jd-hint">{pageNote(pages)}</p>}
     </div>
   );
 }

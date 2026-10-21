@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sheet } from './ui';
+import { Sheet, Skeleton } from './ui';
 import type { JobCard, Me } from './data';
 import JobDetail from './job/JobDetail';
 import JobList from './jobs/JobList';
@@ -50,6 +50,12 @@ export default function JobsScreen({ me, jobs, error, onRetry, refresh, setToast
         <Sheet open onClose={closeJob} title="Job" className="jd-sheet">
           {detail(selected)}
         </Sheet>
+      )}
+      {/* While the list loads, a desktop keeps the shape of the job pane, so nothing jumps when the first job opens. */}
+      {!tablet && !activeId && !jobs && !error && (
+        <section className="jobs-detail desktop-only" aria-hidden="true">
+          <div className="jd"><div className="jd-main jd-wait"><Skeleton rows={3} /></div></div>
+        </section>
       )}
       {!tablet && activeId && (
         <section className="jobs-detail" aria-label="Job">

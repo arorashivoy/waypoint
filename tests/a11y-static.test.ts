@@ -146,6 +146,53 @@ describe('static accessibility checks', () => {
     expect(hits).toEqual([]);
   });
 
+  // The class names that the .tsx files give to an input, a select or a textarea.
+  const fieldClasses = new Set<string>();
+  for (const f of tsx) {
+    scan(f, (n, { source }) => {
+      const name = tag(n, source);
+      if (name !== 'input' && name !== 'select' && name !== 'textarea') return null;
+      const c = attr(n, 'className')?.initializer?.getText(source) ?? '';
+      for (const m of c.matchAll(/[a-z][\w-]+/g)) fieldClasses.add(m[0]);
+      return null;
+    });
+  }
+
+  /** The font size of a rule body: font-size, or the size in a font shorthand ("600 14px/1.4 Onest"). */
+  function fontSize(body: string): string | null {
+    const size = /(?:^|;)\s*font-size:\s*([^;]+)/.exec(body)?.[1];
+    if (size) return size;
+    const short = /(?:^|;)\s*font:\s*([^;]+)/.exec(body)?.[1];
+    if (!short) return null;
+    return /(\d+(?:\.\d+)?(?:px|rem)|var\(--t-\d+\))(?:\s*\/|\s)/.exec(`${short} `)?.[1] ?? null;
+  }
+
+  it('reads the size in a font shorthand', () => {
+    expect(fontSize('font: 600 14px/1.4 var(--f-body)')).toBe('14px');
+    expect(fontSize('color: red; font: var(--t-13) Onest')).toBe('var(--t-13)');
+    expect(fontSize('font: inherit')).toBeNull();
+    expect(fontSize('font-size: 0.875rem')).toBe('0.875rem');
+  });
+
+  it('finds the class names of the fields in the .tsx files', () => {
+    for (const c of ['field', 'note-area', 'jl-search']) expect(fieldClasses.has(c)).toBe(true);
+  });
+
+  it('sets no font size under 16 px on a class that a field uses', () => {
+    const small: string[] = [];
+    for (const f of cssFiles) {
+      for (const [s, b] of rules(readFileSync(f, 'utf8'))) {
+        // The last compound of each selector: the element the rule styles.
+        const targets = s.split(',').map((x) => x.trim().split(/[\s>+~]+/).pop() ?? '');
+        if (!targets.some((t) => [...t.matchAll(/\.([\w-]+)/g)].some((m) => fieldClasses.has(m[1])))) continue;
+        const v = fontSize(b);
+        const size = v === null ? null : px(v);
+        if (size !== null && size < 16) small.push(`${f}: ${s} { ${v} }`);
+      }
+    }
+    expect(small).toEqual([]);
+  });
+
   it('sets a font size of at least 16 px on fields', () => {
     // The base rule sets the size on its own, not "inherit", so a small parent cannot shrink a field.
     const base = rules(globals).find(([sel]) => /^input, select, textarea$/.test(sel));
@@ -154,10 +201,10 @@ describe('static accessibility checks', () => {
     for (const f of cssFiles) {
       for (const [s, b] of rules(readFileSync(f, 'utf8'))) {
         if (!/(^|[\s,.>])(input|select|textarea|field|note-area)\b|\.field\b|\.note-area\b/.test(s)) continue;
-        const m = /(?:^|;)\s*font-size:\s*([^;]+)/.exec(b);
-        if (!m) continue;
-        const size = px(m[1]);
-        if (size !== null && size < 16) small.push(`${f}: ${s} { font-size: ${m[1].trim()} }`);
+        const v = fontSize(b);
+        if (!v) continue;
+        const size = px(v);
+        if (size !== null && size < 16) small.push(`${f}: ${s} { font-size: ${v.trim()} }`);
       }
     }
     expect(small).toEqual([]);
@@ -168,8 +215,28 @@ describe('static accessibility checks', () => {
     expect(hits).toEqual([]);
   });
 
-  it('gives every img an alt', () => {
-    const hits = tsx.flatMap((f) => scan(f, (n, { source }) => (tag(n, source) === 'img' && !attr(n, 'alt') && !hasSpread(n) ? '<img> has no alt' : null)));
+  it('gives every img and next/image an alt', () => {
+    const hits = tsx.flatMap((f) => scan(f, (n, { source }) => ((tag(n, source) === 'img' || tag(n, source) === 'Image') && !attr(n, 'alt') && !hasSpread(n) ? `<${tag(n, source)}> has no alt` : null)));
+    expect(hits).toEqual([]);
+  });
+
+  it('gives every link text or an aria-label', () => {
+    const hits = tsx.flatMap((f) =>
+      scan(f, (n, { source }) => {
+        if (tag(n, source) !== 'a' && tag(n, source) !== 'Link') return null;
+        if (attr(n, 'aria-label') || attr(n, 'aria-labelledby') || hasSpread(n)) return null;
+        if (ts.isJsxSelfClosingElement(n)) return `<${tag(n, source)}> has no name`;
+        const el = n.parent as ts.JsxElement;
+        let named = false;
+        const look = (c: ts.Node) => {
+          if (ts.isJsxText(c) && c.text.trim() !== '') named = true;
+          if (ts.isJsxExpression(c) && c.expression && !ts.isJsxElement(c.expression) && !ts.isJsxSelfClosingElement(c.expression)) named = true;
+          ts.forEachChild(c, look);
+        };
+        el.children.forEach(look);
+        return named ? null : `<${tag(n, source)}> has no name`;
+      }),
+    );
     expect(hits).toEqual([]);
   });
 
@@ -242,6 +309,17 @@ describe('iOS and touch rules in globals.css', () => {
     const tall = ['.btn', '.ui-btn', '.ui-tab', '.ui-fold-head', '.ui-switch', '.chip', '.fs-chip', '.sh-nav-item', '.sh-tab', '.sh-rail-item', '.sh-collapse', '.sh-expand', '.ui-sheet-head .btn', '.pf-row .btn', '.pf-actions .btn', '.pf-check', '.ob .btn.link'];
     const low = tall.filter((sel) => (coarse.get(sel)?.h ?? 0) < 44);
     expect(low).toEqual([]);
+  });
+
+  it('grows each plain text link that is an action to 44 px on a coarse pointer', () => {
+    const pads = new Map<string, number>();
+    for (const [sel, body] of rules(coarseBlocks(css))) {
+      const p = px(/(?:^|;)\s*padding-block:\s*([^;]+)/.exec(body)?.[1] ?? '') ?? 0;
+      for (const one of sel.split(',').map((x) => x.trim())) pads.set(one, Math.max(pads.get(one) ?? 0, p));
+    }
+    // A line of 16 px text is about 18 px tall; 13 px above and below makes 44 px.
+    const links = ['.jd-drive > a', '.pn-when > a', '.pf-note a', '.pf-undo .btn.link', '.pf-note .btn.link'];
+    expect(links.filter((sel) => (pads.get(sel) ?? 0) < 13)).toEqual([]);
   });
 
   it('gives each icon button and chip a min-width of 44 px on a coarse pointer', () => {

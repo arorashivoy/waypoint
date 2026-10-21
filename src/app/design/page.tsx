@@ -15,9 +15,9 @@ async function requireAdminPage() {
 
 const COLOURS = [
   ['--night', '#121019', 'Ground, under the glows and the dot grid'],
-  ['--glass', 'rgba(255,255,255,0.045)', 'Panels, sidebar, tab bar, fields'],
-  ['--glass-hi', 'rgba(255,255,255,0.075)', 'Selected row, hover'],
-  ['--edge', 'rgba(236,232,246,0.10)', 'Hairline borders on glass'],
+  ['--glass', 'rgba(255, 255, 255, 0.045)', 'Panels, sidebar, tab bar, fields'],
+  ['--glass-hi', 'rgba(255, 255, 255, 0.075)', 'Selected row, hover'],
+  ['--edge', 'rgba(236, 232, 246, 0.10)', 'Hairline borders on glass'],
   ['--text', '#ECE8F6', 'Text'],
   ['--soft', '#A7A1B8', 'Secondary text'],
   ['--mint', '#A6E4C4', 'Met, score ring, primary action'],

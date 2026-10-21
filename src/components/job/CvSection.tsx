@@ -6,7 +6,7 @@ import { Button, ErrorNote, Field, Fold } from '../ui';
 import { PartBack } from './PartBack';
 import { PdfPreview } from './PdfPreview';
 import { showSection } from './scroll';
-import { builtAgo } from './time';
+import { longAgo } from '@/lib/time-ago';
 import type { Cv, CvBusy, JobDetailState, Part, Wording } from './types';
 
 const EMPTY_WORDING: Wording = { suggestions: { dropped: 0, items: [] }, keywords: { inResume: [], missingWithEvidence: [] } };
@@ -19,22 +19,32 @@ export function cliOffNote(cliOff: boolean): string {
     : 'Add an API key in Settings to use Claude.';
 }
 
-export function suggestBlockedNote(claude: { mode: string; cliOff?: boolean }): string | null {
-  return claude.mode === 'none' ? cliOffNote(!!claude.cliOff) : null;
+/** Why Claude cannot run, or null when it can. The server's own reason (for example the cap of the shared key and its reset day) wins. */
+export function suggestBlockedNote(claude: { mode: string; cliOff?: boolean; detail?: string }): string | null {
+  if (claude.mode !== 'none') return null;
+  return claude.cliOff ? cliOffNote(true) : claude.detail || cliOffNote(false);
 }
 
 /** One line for the fold, so the user sees the state without opening it. */
 export function cvStatus(job: JobDetailState['job'], cv: Cv | null): string {
   if (!cv) return job.projects[0] ? `Not built yet. It will lead with ${job.projects[0].n}.` : 'Not built yet.';
   if (cv.reason?.startsWith(COMPILE_FAILED)) return 'The last build failed. The CV shown is the base CV.';
-  return cv.builtAt ? `Built ${builtAgo(cv.builtAt)}` : 'Built';
+  return cv.builtAt ? `Built ${longAgo(cv.builtAt)}` : 'Built';
 }
 
-/** A server error has a first line and, for a LaTeX failure, the log lines after it. */
-function errorParts(message: string): { what: string; fix: string; detail?: string } {
+/** A server error has a first line and, for a LaTeX failure, the log lines after it. The fix tells the user what to do. */
+export function errorParts(message: string): { what: string; fix: string; detail?: string } {
   const [first, ...rest] = message.split('\n');
-  const latex = /compile|latex|pdftex/i.test(message);
-  return { what: latex ? 'The CV did not build.' : 'Waypoint could not finish this.', fix: first, detail: rest.join('\n').trim() || undefined };
+  const log = rest.join('\n').trim();
+  if (/compile|latex|pdftex|tectonic/i.test(message)) {
+    const engine = first.replace(/:\s*$/, '');
+    return {
+      what: `The CV did not build (${engine}).`,
+      fix: log ? 'Correct the line below in your .tex file, then press Rebuild CV.' : 'Check your .tex file, then press Rebuild CV.',
+      detail: log || undefined,
+    };
+  }
+  return { what: 'Waypoint could not finish this.', fix: first, detail: log || undefined };
 }
 
 function CvError({ message }: { message: string }) {
@@ -101,31 +111,38 @@ function RefineCv({ d, cv }: { d: JobDetailState; cv: Cv }) {
   return (
     <div className="jd-block">
       <h3>Refine with Claude{turns ? `, ${turns} ${turns === 1 ? 'change' : 'changes'}` : ''}</h3>
-      <p className="jd-hint">Claude only reorders and chooses between entries that are already in your CV and claims. It never writes new lines. Each change builds the PDF again.</p>
+      {/* With no Claude, the field cannot do anything: one line says why. */}
+      <p className="jd-hint">{d.claudeNote ?? 'Claude only reorders and chooses between entries that are already in your CV and claims. It never writes new lines. Each change builds the PDF again.'}</p>
       {cv.chat.map((t, i) => (
         <p key={i} className={`jd-turn jd-turn-${t.role}`}>{t.text}</p>
       ))}
-      <Field label="What to change">
-        {(c) => (
-          <textarea
-            {...c}
-            value={draft}
-            placeholder="For example: lead with the ROS 2 work and drop the hackathon"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }}
-          />
-        )}
-      </Field>
-      <div className="jd-actions">
-        <Button busy={d.cvBusy === 'refine'} disabled={!!d.cvBusy || !draft.trim()} onClick={send}>
-          {d.cvBusy === 'refine' ? 'Refining…' : 'Send'}
-        </Button>
-        {turns > 0 && (
-          <Button variant="link" busy={d.cvBusy === 'reset'} disabled={!!d.cvBusy} onClick={d.reset}>
-            Start over from the posting
-          </Button>
-        )}
-      </div>
+      {!d.claudeNote && (
+        <Field label="What to change">
+          {(c) => (
+            <textarea
+              {...c}
+              value={draft}
+              placeholder="For example: lead with the ROS 2 work and drop the hackathon"
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }}
+            />
+          )}
+        </Field>
+      )}
+      {(!d.claudeNote || turns > 0) && (
+        <div className="jd-actions">
+          {!d.claudeNote && (
+            <Button busy={d.cvBusy === 'refine'} disabled={!!d.cvBusy || !draft.trim()} onClick={send}>
+              {d.cvBusy === 'refine' ? 'Refining…' : 'Send'}
+            </Button>
+          )}
+          {turns > 0 && (
+            <Button variant="link" busy={d.cvBusy === 'reset'} disabled={!!d.cvBusy} onClick={d.reset}>
+              Start over from the posting
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -158,7 +175,7 @@ function SuggestWording({ d }: { d: JobDetailState }) {
       )}
       {items.map((s) => (
         <div key={s.bulletId} className="jd-suggestion">
-          <p className="jd-hint" style={s.status === 'accepted' ? { textDecoration: 'line-through' } : undefined}>Old: {s.old}</p>
+          <p className={`jd-hint${s.status === 'accepted' ? ' jd-struck' : ''}`}>Old: {s.old}</p>
           <p className="jd-line">New: {s.text}</p>
           {s.labels.length > 0 && <p className="jd-hint">Backed by: {s.labels.join(', ')}</p>}
           {s.status === 'pending' ? (
@@ -176,14 +193,14 @@ function SuggestWording({ d }: { d: JobDetailState }) {
 }
 
 /** "Your CV for this role": build it, see it, refine it. */
-export function CvSection({ d, onPart, onBack }: { d: JobDetailState; onPart: (p: Part) => void; onBack: () => void }) {
+export function CvSection({ d, open = false, onPart, onBack }: { d: JobDetailState; open?: boolean; onPart: (p: Part) => void; onBack: () => void }) {
   const { job, cv } = d;
   const compileFailed = !!cv?.reason?.startsWith(COMPILE_FAILED);
   const root = useRef<HTMLElement>(null);
   return (
     <section className="jd-cv" ref={root}>
       <PartBack label="Your CV for this role" onBack={onBack} />
-      <Fold title="Your CV for this role" status={cvStatus(job, cv)} onOpen={() => onPart('cv')} onToggle={(open) => open && showSection(root.current)}>
+      <Fold title="Your CV for this role" status={cvStatus(job, cv)} forceOpen={open} onOpen={() => onPart('cv')} onToggle={(open) => open && showSection(root.current)}>
         <div className="jd-stack">
           <div className="jd-actions">
             <Button variant={cv ? 'plain' : 'go'} busy={d.cvBusy === 'generate'} disabled={!!d.cvBusy} onClick={d.generate}>

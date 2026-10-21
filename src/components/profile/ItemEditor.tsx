@@ -104,7 +104,7 @@ export default function ItemEditor({ kind, doc, itemKey: key, item, mode, onDone
       {kind === 'claim' && (
         <>
           <div className="pf-wide pf-group">
-            <Fold title="Evidence" status={countOf(evidence.length, 'proof', 'proofs')} defaultOpen={evidence.length === 0}>
+            <Fold quiet title="Evidence" status={countOf(evidence.length, 'proof', 'proofs')} defaultOpen={evidence.length === 0}>
             <div className="pf-group">
             {evidence.map((e, i) => (
               <div key={i} className="pf-evidence">

@@ -34,8 +34,8 @@ export function JobBody({ d, part, onPart, onClose }: { d: JobDetailState; part:
         <JobHeader job={d.job} onBack={onClose} />
         <div className="jd-main">
           <FitSection job={d.job} />
-          <WayInSection d={d} onPart={onPart} onBack={back} />
-          <CvSection d={d} onPart={onPart} onBack={back} />
+          <WayInSection d={d} open={part === 'wayin'} onPart={onPart} onBack={back} />
+          <CvSection d={d} open={part === 'cv'} onPart={onPart} onBack={back} />
         </div>
       </div>
       <ApplyBar url={d.job.url} applied={d.job.isApplied} error={d.applyError} onApply={d.markApplied} />

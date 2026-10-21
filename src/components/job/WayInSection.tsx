@@ -80,7 +80,7 @@ function Draft({ d }: { d: JobDetailState }) {
 }
 
 /** "Your way in": who can refer the user, and the message to send. */
-export function WayInSection({ d, onPart, onBack }: { d: JobDetailState; onPart: (p: Part) => void; onBack: () => void }) {
+export function WayInSection({ d, open = false, onPart, onBack }: { d: JobDetailState; open?: boolean; onPart: (p: Part) => void; onBack: () => void }) {
   const { job } = d;
   const best = job.routes.find((r) => r.best) ?? job.routes[0] ?? null;
   const others = job.routes.filter((r) => r !== best);
@@ -88,7 +88,7 @@ export function WayInSection({ d, onPart, onBack }: { d: JobDetailState; onPart:
   return (
     <section className="jd-wayin" ref={root}>
       <PartBack label="Your way in" onBack={onBack} />
-      <Fold title="Your way in" status={wayInStatus(job)} onOpen={() => onPart('wayin')} onToggle={(open) => open && showSection(root.current)}>
+      <Fold title="Your way in" status={wayInStatus(job)} forceOpen={open} onOpen={() => onPart('wayin')} onToggle={(open) => open && showSection(root.current)}>
         <div className="jd-stack">
           {best && <WayIn contact={best.name} company={job.company} />}
           {job.routes.length === 0 && (
@@ -122,7 +122,7 @@ export function WayInSection({ d, onPart, onBack }: { d: JobDetailState; onPart:
           ) : best ? (
             <div className="jd-stack">
               <Button variant="go" busy={d.busy === 'send'} onClick={d.findContact}>
-                {d.busy === 'send' ? 'Drafting the referral and your CV…' : 'Send request'}
+                {d.busy === 'send' ? 'Drafting the referral and your CV…' : 'Draft the request'}
               </Button>
               <p className="jd-hint">This drafts a message to {best.name} and builds your CV. It copies the message and opens their profile. You send it there.</p>
             </div>
