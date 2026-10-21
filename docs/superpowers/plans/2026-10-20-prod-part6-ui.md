@@ -67,7 +67,8 @@ Phone < 640 px                 Tablet 640–1023 px                 Desktop ≥ 
 │ ╭──────────╮ │               │  │                 │   │  │over│ │ working│           │      [Open][Applied]│
 │ │Jobs Pend…│ │               └──┴─────────────────┴───┘  └────┘ └────────┴───────────┴─────────────────────┘
 └─╰──────────╯─┘
-Floating glass tab bar.        Icon rail; the job opens as a       Glass sidebar (can collapse to the rail),
+Floating glass tab bar.        Icon rail; the job opens as a       Rail from 1024 to 1279 px; glass sidebar
+                                                                   from 1280 px (can collapse to the rail),
 The job: own screen, Back,     glass side panel over the list.     the list, and the job beside it.
 sticky "Mark as applied".
 ```

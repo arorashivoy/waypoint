@@ -590,7 +590,9 @@ layout does not change after the page loads.
 |---|---|---|---|---|
 | Phone | < 640 px | iPhone, Android phones | Bottom tab bar | List, then detail on a full screen with Back |
 | Tablet | 640–1023 px | iPad portrait (768–834 px), small laptops | Icon rail on the left | List, with detail as a side panel over it |
-| Desktop | ≥ 1024 px | iPad landscape (1024–1366 px), laptops, monitors | Full sidebar, can collapse | Split view: list left, detail right |
+| Desktop | ≥ 1024 px | iPad landscape (1024–1366 px), laptops, monitors | Icon rail from 1024 to 1279 px; full sidebar, can collapse, from 1280 px | Split view: list left, detail right |
+
+The rail stays from 1024 to 1279 px, because at 1024 px the full sidebar broke the job title inside a word (part 6, Task 14). Pending shows 4 columns from 1280 px.
 
 | Screen | Phone | Tablet | Desktop |
 |---|---|---|---|
