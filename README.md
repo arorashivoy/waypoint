@@ -84,6 +84,96 @@ For sustained use, production mode is faster. Stop the dev server first, since t
 npm run build && npm start
 ```
 
+## Always on: a server with systemd
+
+Use this on a machine that stays on, for example a Raspberry Pi with Debian or Raspberry Pi OS. Four
+systemd user units run Waypoint: `waypoint-web` (the app), `waypoint-worker` (the task queue),
+`waypoint-tunnel` (the zrok share) and `waypoint-backup.timer` (a backup each night at 03:00). The
+units start again after a failure and after a reboot.
+
+Install the units for one copy of Waypoint only on each machine. The unit names are fixed, so a
+second install replaces the first. Do not run `./scripts/start.sh` or `./scripts/remote.sh` while
+the units run: they use the same port and the same zrok name.
+
+**1. Install the tools.** You need Node 22, and these packages. `pdftotext`, `gs` and LaTeX read
+and build the CVs.
+
+```bash
+sudo apt install poppler-utils ghostscript texlive-latex-base texlive-latex-recommended lmodern
+```
+
+Install the [Claude Code CLI](https://claude.com/claude-code) and run `claude login` as the same
+user. Install `zrok2`, then run `zrok2 enable <your token>` and `zrok2 create name waypoint` one time.
+
+**2. Get the code and make `.env`.**
+
+```bash
+git clone https://github.com/arorashivoy/waypoint.git ~/waypoint && cd ~/waypoint
+npm ci
+cp .env.example .env
+npm run -s secret:new >> .env
+```
+
+Then add these lines to `.env`, one key on each line:
+
+| Key | Value |
+|---|---|
+| `WAYPOINT_PUBLIC_URL` | The public URL, for example `https://waypoint.shares.zrok.io`. Invite links and the sign-in redirect use it. |
+| `PORT` | Optional. The default is 3117. |
+| `WAYPOINT_CLAUDE_BIN` | The full path of `claude` (run `command -v claude`). The units have a short `PATH` (the folder of node, `/usr/local/bin`, `/usr/bin`, `/bin`), so a CLI in `~/.local/bin` needs this key. |
+| `WAYPOINT_ZROK_NAME` | Optional. The zrok name, if it is not `waypoint`. |
+
+systemd reads `.env` as plain `KEY=VALUE` lines. It does not expand `$`, and it does not allow a
+comment after a value. Only `RESUME_PDF` and `RESUME_TEX` may start with `~/`, because Waypoint
+expands those 2 itself.
+
+**Keep a copy of `.env` in a safe place.** Waypoint encrypts the keys that users save with
+`WAYPOINT_SECRET_KEY`. If you lose it, each user must save their keys again.
+
+**3. Make the database, the admin and the build.**
+
+```bash
+npx prisma migrate deploy
+npm run user:create-admin          # asks for the email, the name and the password
+npm run build
+```
+
+To move a database from another machine, see [docs/deploy.md](docs/deploy.md). It also covers a
+database from before the migrations existed.
+
+**4. Install and start the units.**
+
+```bash
+./scripts/install-units.sh "$PWD"
+systemctl --user enable --now waypoint-web waypoint-worker waypoint-tunnel waypoint-backup.timer
+loginctl enable-linger "$USER"
+```
+
+`install-units.sh` needs the absolute path of the checkout, and it refuses a folder with no `.env`.
+`enable-linger` keeps the units running when you sign out and starts them after a reboot.
+
+**5. Check the app.**
+
+```bash
+curl -s localhost:$(node scripts/port.mjs)/api/health
+```
+
+All 4 checks (`db`, `worker`, `claude`, `disk`) must be `ok`. Then open the public URL and sign in.
+
+**Each day:**
+
+| To | Run |
+|---|---|
+| Start | `systemctl --user start waypoint-web waypoint-worker waypoint-tunnel` |
+| Stop | `systemctl --user stop waypoint-tunnel waypoint-worker waypoint-web` |
+| Restart (for example after a change to `.env`) | `systemctl --user restart waypoint-web waypoint-worker waypoint-tunnel` |
+| See the state | `systemctl --user status waypoint-web waypoint-worker waypoint-tunnel` |
+| Read the logs | `journalctl --user -u waypoint-web -u waypoint-worker -n 100` (add `-f` to follow) |
+| Update to new code | `./scripts/deploy.sh` (a backup, `git pull`, `npm ci`, the migrations, the build, a restart) |
+| Stop the start after a reboot | `systemctl --user disable waypoint-web waypoint-worker waypoint-tunnel waypoint-backup.timer` |
+
+The backups go to `data/backups`. To restore one, see step 11 of [docs/deploy.md](docs/deploy.md).
+
 ---
 
 ## First run: getting your real data in
