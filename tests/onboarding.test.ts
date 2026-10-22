@@ -34,8 +34,9 @@ const get = (cookie: string) => onboarding.GET(request('/api/onboarding', { cook
 const patch = (cookie: string, body: unknown) => onboarding.PATCH(request('/api/onboarding', { method: 'PATCH', cookie, body }), ctx());
 
 describe('migration 7_onboarding', () => {
-  it('is the last migration', () => {
-    expect(migrationNames().slice(-1)).toEqual(['7_onboarding']);
+  it('comes right after 6_pasted_by', () => {
+    const names = migrationNames();
+    expect(names.indexOf('7_onboarding')).toBe(names.indexOf('6_pasted_by') + 1);
   });
 
   it('marks each existing user as set up and keeps the settings that exist', async () => {
