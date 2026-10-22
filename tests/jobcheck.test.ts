@@ -171,8 +171,8 @@ describe('analyseJob', () => {
     ask.reply = { ...reply({ requirements: [req('must', 'met', ['java'])] }) };
     await analyseJob(j, userId);
     const [{ kind, version, req: r }] = ask.calls;
-    expect(PROMPT_VERSIONS['job-check']).toBe('job-check-2');
-    expect(version).toBe('job-check-2');
+    expect(PROMPT_VERSIONS['job-check']).toBe('job-check-3');
+    expect(version).toBe('job-check-3');
     expect(kind).toBe('job-check');
     expect(r.effort).toBe('medium');
     const rules = r.system.indexOf('Return JSON with exactly these keys');
@@ -180,7 +180,8 @@ describe('analyseJob', () => {
     expect(r.system.lastIndexOf('<profile>')).toBeGreaterThan(rules);
     expect(r.system).toContain('java · Java · built · Rebuilt the ledger in Java.');
     expect(r.system).not.toContain('gpa ·');
-    expect(r.system).toMatch(/Countries: .*\bXJ\b/);
+    expect(r.system).toMatch(/Countries where the candidate can work: .*\bXJ\b/);
+    expect(r.system).toContain('A place inside one of these countries is not a "location" blocker');
     expect(r.system).toContain('Fields (choose one for "field"): Backend, Other');
     expect(r.system).toContain('Visa status: Needs sponsorship');
     expect(r.prompt).toContain('Java services.');
@@ -198,7 +199,7 @@ describe('analyseJob', () => {
     expect(a.requirements.map((r) => r.status)).toEqual(['met', 'missing']);
     expect(a.blockers).toHaveLength(1);
     expect(a.by).toBe('claude');
-    expect(a.promptVersion).toBe('job-check-2');
+    expect(a.promptVersion).toBe('job-check-3');
     // The model gave no score: code computes 20 · ratio (0.5 here) + the two fits - 25 for the one blocker.
     const fits = a.parts.filter((p) => p.kind === 'field' || p.kind === 'level').reduce((n, p) => n + p.points, 0);
     expect(a.score).toBe(Math.max(0, Math.round(10 + fits) - 25));
@@ -294,7 +295,8 @@ describe('jobCheckProfileText', () => {
     const text = jobCheckProfileText(doc, { fields: [], visaStatus: '' }, []);
     expect(text).toContain('java · Java · built');
     expect(text).not.toMatch(/^gpa ·/m);
-    expect(text).toContain('Countries: none');
+    expect(text).toContain('Countries where the candidate can work: none');
+    expect(jobCheckProfileText(null, { fields: [], visaStatus: '' }, ['IN', 'DE'])).toContain('Countries where the candidate can work: India (IN), Germany (DE)');
     expect(await claimsFor('none-' + randomBytes(4).toString('hex'))).toBeNull();
     expect(jobCheckProfileText(null, { fields: [], visaStatus: '' }, ['DE'])).toContain('none');
   });
