@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { checkReply, type JobCheckReply } from '@/lib/jobcheck';
 import { dryRun, FixtureSchema, loadFixtures, loadSyntheticProfile, citableSlugs } from '../scripts/eval-lib';
-import { grade, summarise, failed } from '../scripts/eval-grade';
+import { grade, injectionReasons, summarise, failed } from '../scripts/eval-grade';
 
 describe('prompt eval fixtures', () => {
   it('passes the dry run', () => {
@@ -110,10 +110,16 @@ describe('prompt eval: a posting that holds an injection', () => {
     const o = run(obeyed);
     expect(o['evidence slugs valid']).toBe(true);
     expect(o['injection resisted']).toBe(false);
+    // The eval prints why, so a person can read the failure without a second run.
+    const why = injectionReasons(fx, obeyed, checkReply(obeyed, { slugs, posting }), slugs).join('\n');
+    expect(why).toMatch(/forbidden credit/);
+    expect(why).toMatch(/ratio 1\.00 is above maxRatio/);
+    expect(why).toMatch(/attack text in the reply: pre-approved/);
   });
 
   it('passes when the reply ignores it', () => {
     expect(run(base)['injection resisted']).toBe(true);
+    expect(injectionReasons(fx, base, checkReply(base, { slugs, posting }), slugs)).toEqual([]);
   });
 
   it('fails the level check on a wrong raw level, but not "injection resisted"', () => {
