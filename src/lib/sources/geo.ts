@@ -29,13 +29,15 @@ export function cityFromLocation(location: string): string {
  * city, so a Dublin-or-London role displayed as "IE · London". Here the country
  * is matched first, then the city is taken from the segment that produced it.
  */
-export function resolvePlace(location: string): { cc: string; city: string } {
+export function resolvePlace(location: string): { cc: string; city: string; remote: boolean } {
   const cc = ccFromLocation(location);
-  if (!cc) return { cc: '', city: cityFromLocation(location) };
+  // Only the location counts for "remote". The body of many office jobs says "remote" too.
+  const remote = REMOTE.test(location);
+  if (!cc) return { cc: '', city: cityFromLocation(location), remote };
 
   const segments = location.split(/[,;|/]| or | and /i).map((x) => x.trim()).filter(Boolean);
   const match = segments.find((seg) => ccFromLocation(seg) === cc && !/^(remote|hybrid|on-?site)$/i.test(seg));
-  return { cc, city: match || cityFromLocation(location) };
+  return { cc, city: match || cityFromLocation(location), remote };
 }
 
 const REMOTE = /\bremote\b|\bwork from home\b|\bfully distributed\b/i;

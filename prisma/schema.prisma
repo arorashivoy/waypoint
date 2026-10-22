@@ -297,10 +297,15 @@ model Job {
   // A refresh of the same job sets it to null, and then the job is a normal feed job.
   pastedBy String?
 
+  // True when the location of the posting says remote ("Remote", "Remote - EU", "Berlin; Remote"). The job list shows a remote
+  // job in every country. The text of the body does not count: many office jobs say "remote" in it.
+  remote Boolean @default(false)
+
   applications Application[]
   analyses     JobAnalysis[]
 
   @@index([cc, postedAt])
+  @@index([remote])
   @@index([pastedBy])
 }
 

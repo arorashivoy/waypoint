@@ -147,7 +147,9 @@ export async function pasteJob(userId: string, p: Parsed): Promise<PasteResult> 
   const scan = checkForInjection(`${job.role}\n${job.description}`);
   const on = (await db.countryPref.findMany({ where: { userId, on: true }, select: { cc: true } })).map((c) => c.cc);
   let note: string | null = null;
-  if (!row.cc) note = 'Waypoint could not find the country of this job. It does not show in your list, but you can open it from here.';
+  // A remote job shows in the list whatever its country, so it needs no note.
+  if (row.remote) note = null;
+  else if (!row.cc) note = 'Waypoint could not find the country of this job. It does not show in your list, but you can open it from here.';
   else if (!on.includes(row.cc)) {
     note = `This job is in ${countryByCc(row.cc)?.name ?? row.cc}, which is off in your settings. Turn it on in Settings to see the job in your list.`;
   }

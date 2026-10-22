@@ -20,6 +20,8 @@ export interface ListJob {
   /** How many contacts can refer the user, and the name of the best one. */
   referrers: number;
   referrer: string | null;
+  /** The location says remote. The list shows the job whatever its country. */
+  remote?: boolean;
 }
 
 export type Sort = 'match' | 'date';
@@ -90,7 +92,7 @@ const matchesQuery = (j: ListJob, query: string) => {
 /** The jobs that the list shows. "match" keeps the order from the server, which ranks by fit. */
 export function filterJobs<T extends ListJob>(jobs: readonly T[], f: Filters, ctx: ListContext): T[] {
   const on = new Set(ctx.onCcs);
-  const out = jobs.filter((j) => on.has(j.cc) && KEYS.every((k) => TESTS[k](j, f, ctx.levels)) && matchesQuery(j, ctx.query));
+  const out = jobs.filter((j) => (on.has(j.cc) || j.remote) && KEYS.every((k) => TESTS[k](j, f, ctx.levels)) && matchesQuery(j, ctx.query));
   return f.sort === 'date' ? out.sort((a, b) => Date.parse(b.postedAt) - Date.parse(a.postedAt)) : out;
 }
 

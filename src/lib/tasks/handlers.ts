@@ -6,7 +6,7 @@ import { draftsFromResume } from '@/lib/profile/resume-import';
 import { draftsFromRepo } from '@/lib/profile/github-import';
 import { userDir } from '@/lib/user-files';
 import { db } from '@/lib/db';
-import { visibleTo } from '@/lib/job-scope';
+import { inCountries, visibleTo } from '@/lib/job-scope';
 import { analyseJob } from '@/lib/analysis';
 import { pruneCacheBySize } from '@/lib/cache';
 import { getState, setState } from '@/lib/app-state';
@@ -102,7 +102,7 @@ registerHandler('refresh', z.object({ force: z.boolean() }), async ({ force }, t
       // An undated listing keeps the date it was first seen rather than being
       // re-stamped today on every refresh.
       // A board job is a feed job now, also when a user pasted it first.
-      update: { pastedBy: null, fetchedAt: new Date(), ...(j.postedAt && { postedAt: j.postedAt }), description: j.description, url: j.url, priority: j.priority },
+      update: { pastedBy: null, fetchedAt: new Date(), ...(j.postedAt && { postedAt: j.postedAt }), description: j.description, url: j.url, priority: j.priority, remote: j.remote },
       create: { ...j, postedAt: j.postedAt ?? new Date() },
     });
   }
@@ -116,7 +116,7 @@ registerHandler('refresh', z.object({ force: z.boolean() }), async ({ force }, t
   // "Live" counts the stored jobs in the countries of this user, as the job list does. A board that was
   // fetched less than 6 hours ago is skipped, so the jobs of this run alone can be 0.
   const mine = (await db.countryPref.findMany({ where: { userId, on: true }, select: { cc: true } })).map((p) => p.cc);
-  const total = await db.job.count({ where: { cc: { in: mine }, ...visibleTo(userId) } });
+  const total = await db.job.count({ where: { AND: [inCountries(mine), visibleTo(userId)] } });
 
   return { added, total, report, analysing };
 });

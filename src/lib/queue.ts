@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { db } from './db';
-import { visibleTo } from './job-scope';
+import { inCountries, visibleTo } from './job-scope';
 import { makeJobViewer, MAX_ANALYSIS_TRIES } from './analysis';
 import { credentialFor } from './claude';
 import { enqueue } from './tasks/queue';
@@ -60,8 +60,7 @@ export async function queueAnalysis(userId: string, limit = 25) {
   // after one bad minute. The try counter is what stops the retry being endless.
   const candidates = await db.job.findMany({
     where: {
-      cc: { in: onCcs },
-      ...visibleTo(userId),
+      AND: [inCountries(onCcs), visibleTo(userId)],
       analyses: { none: { userId, OR: [{ analysedAt: { not: null } }, { tries: { gte: MAX_ANALYSIS_TRIES } }] } },
     },
     orderBy: { postedAt: 'desc' },

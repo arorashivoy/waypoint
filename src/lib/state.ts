@@ -1,5 +1,5 @@
 import { getOnboarding } from './onboarding';
-import { visibleTo } from './job-scope';
+import { inCountries, visibleTo } from './job-scope';
 import { db } from './db';
 import { COUNTRIES, GLOBAL_SITES } from './countries';
 import { makeJobViewer } from './analysis';
@@ -68,7 +68,7 @@ export async function buildJobs(userId: string) {
   const [jobs, apps, view] = await Promise.all([
     // Paused countries are dropped here rather than in the browser, so the cap
     // is spent on listings the user can actually see.
-    db.job.findMany({ where: { cc: { in: onCcs }, ...visibleTo(userId) }, orderBy: { postedAt: 'desc' }, take: 400 }),
+    db.job.findMany({ where: { AND: [inCountries(onCcs), visibleTo(userId)] }, orderBy: { postedAt: 'desc' }, take: 400 }),
     db.application.findMany({ where: { userId }, select: { jobId: true, status: true } }),
     makeJobViewer(userId),
   ]);
@@ -83,7 +83,8 @@ export async function buildJobs(userId: string) {
       company: j.company,
       city: j.city,
       cc: j.cc,
-      place: `${j.cc} · ${j.city}`,
+      place: j.cc ? `${j.cc} · ${j.city}` : j.city,
+      remote: j.remote,
       mode: analysis.mode,
       field: analysis.field,
       level: analysis.level,
