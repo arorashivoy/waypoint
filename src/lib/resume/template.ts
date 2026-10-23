@@ -4,6 +4,7 @@ import { profileVersion } from '../profile/store';
 import { userDir } from '../user-files';
 import type { EvidencePick, Steer } from '../resume';
 import { DEPTH_WEIGHT } from './depth';
+import type { Written } from './written';
 
 /**
  * The built-in résumé template (spec 6.5).
@@ -160,7 +161,7 @@ const section = (title: string, body: string[]) => (body.length ? [`\\begin{rSec
  * profile does not have is left out. The steer is already part of `order`, except `wording`: the text
  * of an accepted suggestion replaces the text of its bullet.
  */
-export function renderTemplate(doc: ClaimsDoc, steer: Steer, order: Order): string {
+export function renderTemplate(doc: ClaimsDoc, steer: Steer, order: Order, written?: Written): string {
   const picked = new Map<string, string[]>();
   for (const id of order.bullets) {
     const [pos, bullet] = id.split('/');
@@ -192,10 +193,13 @@ export function renderTemplate(doc: ClaimsDoc, steer: Steer, order: Order): stri
   const projects = order.projects.flatMap((id) => {
     const p = doc.targets.projects.find((x) => x.id === id);
     if (!p) return [];
-    const bullets = (p.bullets ?? []).filter((b) => b.trim());
+    // Written lines (checked against their sources) take the place of the description and the bullets.
+    const w = written?.projects[id];
+    const bullets = w ? [] : (p.bullets ?? []).filter((b) => b.trim());
+    const text = w ? w.lines.join(' ') : p.description;
     return [
-      `{\\bf ${e(p.title)}}${p.org?.trim() ? ` \\hfill {\\em ${e(p.org)}}` : ''}`,
-      ...(p.description?.trim() ? [`\\par ${e(p.description)}`] : []),
+      `{\\bf ${e(w?.heading || p.title)}}${p.org?.trim() ? ` \\hfill {\\em ${e(p.org)}}` : ''}`,
+      ...(text?.trim() ? [`\\par ${e(text)}`] : []),
       ...(bullets.length ? ['\\begin{itemize}\\itemsep 0pt \\topsep 0pt', ...bullets.map((b) => `\\item ${e(b)}`), '\\end{itemize}'] : []),
       '\\par\\smallskip',
       '',

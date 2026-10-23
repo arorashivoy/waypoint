@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ClaimsDoc } from '../claims';
-import { checkSuggestion } from './suggest';
+import { checkSuggestion } from './check';
 
 /**
  * The lines that Claude writes for one tailored CV (design 2026-10-23).
