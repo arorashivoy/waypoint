@@ -94,7 +94,7 @@ describe('prompt builder', () => {
   });
 
   it('has a version for every prompt', () => {
-    expect(Object.keys(PROMPT_VERSIONS).sort()).toEqual(['github-import', 'job-check', 'note', 'referral', 'refine', 'reply', 'resume-import', 'resume-suggest']);
+    expect(Object.keys(PROMPT_VERSIONS).sort()).toEqual(['cv-write', 'github-import', 'job-check', 'note', 'referral', 'refine', 'reply', 'resume-import', 'resume-suggest']);
   });
 });
 
