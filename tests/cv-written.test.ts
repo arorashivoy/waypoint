@@ -139,3 +139,26 @@ describe('effectiveWritten', () => {
     expect(effectiveWritten(undefined, doc, [])).toEqual({ bullets: {}, projects: {}, dropped: [] });
   });
 });
+
+describe('the line check and language names', () => {
+  const cpp: ClaimsDoc = {
+    ...doc,
+    targets: { ...doc.targets, projects: [{ id: 'tick', title: 'Tick engine', description: 'Order book engine in C++ and a C# client.' }] },
+  };
+  const line = (lines: string[]) =>
+    checkWritten({ projects: [{ id: 'tick', heading: 'Tick engine', tech: 'C++, C#', year: '', lines, sources: ['project:tick'] }], bullets: [], reply: '' }, cpp);
+
+  it('keeps a line that names C++ or C# when the sources do', () => {
+    const w = line(['Order book engine in C++ with a C# client.']);
+    expect(w.dropped).toEqual([]);
+    expect(w.projects.tick.tech).toBe('C++, C#');
+  });
+
+  it('keeps a line that starts with the verb Used', () => {
+    expect(line(['Used C++ for an order book engine.']).dropped).toEqual([]);
+  });
+
+  it('still refuses C when the sources have only C++', () => {
+    expect(line(['Order book engine in C.']).dropped[0]?.why).toMatch(/"C"/);
+  });
+});

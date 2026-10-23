@@ -44,7 +44,8 @@ const canon = (n: string, suffix?: string) => n.replace(/,(?=\d{3}(?!\d))/g, '')
 const numbersOf = (text: string) => [...fold(text).matchAll(NUMBER)].map((m) => ({ run: canon(m[1]), form: canon(m[1], m[2]), shown: m[0].trim() }));
 
 /** A word with a capital letter anywhere: a name, an acronym (GKE, SOC2) or a mixed form (iOS). */
-const CAPITAL_WORD = /(?<![\p{L}\p{N}])[\p{L}\p{N}]*\p{Lu}[\p{L}\p{N}]*/gu;
+// A trailing + or # is part of the name (C++, C#), so the name is looked up whole.
+const CAPITAL_WORD = /(?<![\p{L}\p{N}])[\p{L}\p{N}]*\p{Lu}[\p{L}\p{N}]*[+#]*/gu;
 
 /** Common résumé verbs. Only the first word of a suggestion may be a capitalised word outside the evidence, and only if it is here. */
 export const RESUME_VERBS = new Set(
@@ -52,7 +53,7 @@ export const RESUME_VERBS = new Set(
   cut debugged delivered deployed designed developed drove enabled engineered established evaluated extended fixed founded generated
   handled implemented improved increased integrated introduced launched led maintained managed migrated mentored modelled modeled
   monitored optimised optimized organised organized owned planned prototyped reduced refactored released replaced researched resolved
-  reviewed scaled shipped simplified solved streamlined supported tested trained wrote ran parsed`.split(/\s+/),
+  reviewed scaled shipped simplified solved streamlined supported tested trained wrote ran parsed used applied worked`.split(/\s+/),
 );
 
 /** Number words. Each one in a suggestion must be in the bullet or the proofs, as a digit run must. */
