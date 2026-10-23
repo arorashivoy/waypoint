@@ -193,7 +193,9 @@ export async function writeCv(app: Application, job: Job, request?: string): Pro
     { perUser: true },
   );
   const written = checkWritten(out, doc, lines ? { bulletText: lines } : {});
-  await db.application.update({ where: { id: app.id }, data: { cvSteer: JSON.stringify({ ...steer, written }) } });
+  // A new request that rewords a line he kept as original asks again for that line, so the keep ends.
+  const keep = request ? (steer.keep ?? []).filter((id) => !written.bullets[id] && !written.projects[id]) : steer.keep;
+  await db.application.update({ where: { id: app.id }, data: { cvSteer: JSON.stringify({ ...steer, written, keep: keep?.length ? keep : undefined }) } });
   return written;
 }
 

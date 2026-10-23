@@ -125,6 +125,19 @@ describe('Use my original', () => {
   });
 });
 
+describe('a refine after Use my original', () => {
+  it('ends the keep of a line that the new request rewords', async () => {
+    const { job, app } = await setup();
+    await db.application.update({ where: { id: app.id }, data: { cvSteer: JSON.stringify({ keep: ['goldman/validator'] }) } });
+    vi.mocked(askJsonCached).mockImplementation((async (kind: string) =>
+      kind === 'refine' ? { projects: null, bullets: null, skills: null, reply: 'Kept the order.' } : writeReply([good])) as never);
+    await refineCv(await fresh(app.id), job, 'reword the validator bullet');
+    const saved = await fresh(app.id);
+    expect(readSteer(saved).keep ?? []).not.toContain('goldman/validator');
+    expect(cvView(saved, { resume: null, driveUrl: null, driveReason: null }).changes.map((c) => c.id)).toEqual(['goldman/validator']);
+  });
+});
+
 describe('reset', () => {
   it('drops the written lines and the kept ids', async () => {
     const { job, app } = await setup();
