@@ -1,6 +1,7 @@
 import type { Application, Job } from '@prisma/client';
 import { db } from './db';
 import { claudeStatus } from './claude';
+import { log } from './log';
 import { askJsonCached } from './cache';
 import { RefineReply } from './schemas';
 import { shareResume } from './gdrive';
@@ -284,8 +285,16 @@ export async function refineCv(app: Application, job: Job, request: string, task
   if (skills) steer.skills = skills.length ? skills : undefined;
 
   // The request can also ask for new words. Claude writes them, and each line passes the check or is not used.
-  const steered = await db.application.update({ where: { id: app.id }, data: { cvSteer: JSON.stringify({ ...steer, written: undefined }) } });
-  const written = await writeCv(steered, job, text);
+  // A failed write does not fail the refinement: the new order stands, and the lines written before stay.
+  const steered = await db.application.update({ where: { id: app.id }, data: { cvSteer: JSON.stringify(steer) } });
+  let written: Written | null = null;
+  let writeFailed = false;
+  try {
+    written = await writeCv(steered, job, text);
+  } catch (e) {
+    writeFailed = true;
+    log.warn({ err: e, jobId: job.id }, 'cv write failed during refine');
+  }
 
   let reply = String(out.reply ?? '').trim().slice(0, 600) || 'Done.';
   if (rejected.length) reply += ` (Ignored ${rejected.join(', ')}: not something claims.yml lets the CV carry.)`;
@@ -294,6 +303,7 @@ export async function refineCv(app: Application, job: Job, request: string, task
     if (n) reply += ` Reworded ${n} ${n === 1 ? 'line' : 'lines'}.`;
     for (const d of written.dropped.slice(0, 3)) reply += ` Not used: ${d.why}.`;
   }
+  if (writeFailed) reply += ' Claude could not write new words this time. Ask again to retry.';
   const posting = checkForInjection(job.description);
   if (posting.suspicious) reply += ` Note: the posting itself looks like it addresses a model (${posting.why}); it was read as data only.`;
 
