@@ -1,5 +1,6 @@
 import { BLOCKER_TYPES, LEGITIMACY_FLAGS, type JobCheckReplyT } from './schemas';
 import { FIELD_CHOICES } from './settings';
+import { countryByCc } from './countries';
 import { matchScore } from './match';
 import { sanitise } from './prompts';
 import type { Claim, ClaimsDoc, Depth } from './claims';
@@ -60,7 +61,8 @@ export function jobCheckProfileText(doc: ClaimsDoc | null, settings: { fields: r
   return [
     'Claims (slug · label · depth · proof):',
     ...(lines.length ? lines : ['none']),
-    `Countries: ${countries.join(', ') || 'none'}`,
+    // Names, not only codes, so that the model can tell that a city is in one of these countries.
+    `Countries where the candidate can work: ${countries.map((cc) => { const name = countryByCc(cc)?.name; return name ? `${name} (${cc})` : cc; }).join(', ') || 'none'}`,
     `Fields (choose one for "field"): ${settings.fields.join(', ') || 'none'}`,
     `Visa status: ${settings.visaStatus || 'not stated'}`,
   ].join('\n');

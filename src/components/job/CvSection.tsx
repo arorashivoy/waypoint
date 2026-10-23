@@ -86,6 +86,40 @@ function DriveLink({ cv, setToast }: { cv: Cv; setToast: (s: string) => void }) 
   );
 }
 
+/**
+ * The lines that Claude wrote for this job, old and new, so that nothing on the CV changes in secret.
+ * "Use my original" puts back the user's own text for one line. A refused line shows why it is not on the CV.
+ */
+function WrittenChanges({ d, cv }: { d: JobDetailState; cv: Cv }) {
+  const changes = cv.changes ?? [];
+  const dropped = cv.droppedLines ?? [];
+  if (!changes.length && !dropped.length) return null;
+  return (
+    <div className="jd-block">
+      <h3>What changed</h3>
+      <p className="jd-hint">
+        {changes.length ? `Claude rewrote ${changes.length} ${changes.length === 1 ? 'line' : 'lines'} for this job from your profile. Each line says only what your profile proves.` : 'Claude rewrote no line for this job.'}
+      </p>
+      {changes.map((c) => (
+        <div key={c.id} className="jd-suggestion">
+          <p className="jd-hint jd-struck">{c.old}</p>
+          <p className="jd-line">{c.now}</p>
+          <div className="jd-actions">
+            <Button variant="link" disabled={!!d.cvBusy} onClick={() => d.original(c.id)}>Use my original</Button>
+          </div>
+        </div>
+      ))}
+      {dropped.length > 0 && (
+        <ul className="jd-dropped">
+          {dropped.map((x, i) => (
+            <li key={`${x.id}-${i}`} className="jd-hint">Not used: {x.why}.</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** Says what the build did, because an untailored CV looks the same as a tailored one until someone reads it. */
 function CvSummary({ cv }: { cv: Cv }) {
   if (cv.tailored === undefined) return cv.lead ? <p className="jd-line">Leads with {cv.lead}.</p> : null;
@@ -223,6 +257,7 @@ export function CvSection({ d, open = false, onPart, onBack }: { d: JobDetailSta
               <PdfPreview url={cv.pdfUrl} rev={d.cvRev} />
               <DriveLink cv={cv} setToast={d.setToast} />
               <CvSummary cv={cv} />
+              <WrittenChanges d={d} cv={cv} />
             </>
           )}
           {(cv || d.wording) && d.claudeNote && <p className="jd-hint" id={CLAUDE_NOTE_ID}>{d.claudeNote}</p>}

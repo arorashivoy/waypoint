@@ -5,7 +5,7 @@
   "location": "Oslo",
   "cc": "NO",
   "description": "Cobalt Forge builds storage engines in Rust.\n\nRequirements\n- 6+ years of systems programming in Rust.\n- Experience with file systems, io_uring and NVMe.\n- Strong knowledge of lock-free data structures.\n\nOn-site in Oslo.",
-  "notes": "Source: posting title (the role field).",
+  "notes": "Source: posting title (the role field). maxRatio 0.3: an honest reply credits \"lock-free data structures\" with the multithreading claim, which gives 1 of 4 musts = 0.25. The Pi run of 2026-10-20 showed this in 3 of 3 runs.",
   "expected": {
     "level": "Senior",
     "blockers": [],

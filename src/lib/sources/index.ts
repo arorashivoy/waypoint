@@ -22,6 +22,8 @@ export type RawJob = {
   description: string;
   postedAt: Date | null;
   priority: boolean;
+  /** The location of the posting says remote. The job list shows a remote job in every country. */
+  remote: boolean;
 };
 
 export type FetchReport = { source: string; company?: string; got: number; kept: number; error?: string; status?: 'skipped' | 'not-modified' };
@@ -75,21 +77,25 @@ function posted(v: unknown, scale = 1): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-export function shape(partial: Omit<RawJob, 'field' | 'level' | 'mode' | 'sponsor' | 'visa' | 'priority'> & { field?: string }): RawJob {
+export function shape(partial: Omit<RawJob, 'field' | 'level' | 'mode' | 'sponsor' | 'visa' | 'priority' | 'remote'> & { field?: string; remote?: boolean }): RawJob {
   const text = `${partial.role}\n${partial.description}`;
+  const remote = partial.remote ?? false;
+  const mode = modeFromText(`${partial.city} ${text}`);
   return {
     ...partial,
+    remote,
     priority: false,
     field: partial.field || fieldFromText(text),
     level: levelFromPosting(partial.role, partial.description),
-    mode: modeFromText(`${partial.city} ${text}`),
+    mode: remote && mode === 'On-site' ? 'Remote' : mode,
     sponsor: sponsorFromText(text),
     visa: sponsorFromText(text) ? VISA_ROUTE[partial.cc] || 'Sponsorship stated' : 'Sponsorship not stated',
   };
 }
 
-function keepInCountries(jobs: RawJob[], ccs: string[]): RawJob[] {
-  return jobs.filter((j) => ccs.includes(j.cc));
+/** The jobs in the countries that are on, and every remote job, also one with no known country. */
+export function keepInCountries(jobs: RawJob[], ccs: string[]): RawJob[] {
+  return jobs.filter((j) => ccs.includes(j.cc) || j.remote);
 }
 
 // --- Public ATS board APIs. All four publish a documented, unauthenticated

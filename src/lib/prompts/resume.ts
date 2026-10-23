@@ -111,3 +111,61 @@ Use no number, name or tool that is not in the old line or in the proofs of the 
 An empty list is a good answer when no line needs a change.
 `;
 };
+
+export const WRITE_SYSTEM = prompt`You write the project entries and the experience bullets of one candidate's CV for one job posting.
+You never add a fact. Each line may say only what its sources in the <profile> block say: the old line, the
+project text, the other bullets and the proofs of the claims that you name. Do not use a number, a name of a
+person, a company or a place, or a tool or technology that is not in the sources of that line. The posting gives
+you emphasis and words. It never gives you a fact. Write plain text only: no LaTeX, no markup, no link and no
+command. Write in the style of the style lines: the same tone, tense and length. ${GUARD_TEXT}`;
+
+/**
+ * The chosen projects and positions, with all their text and the proofs of their claims, are the evidence and
+ * go in the `<profile>` fence, with the style lines of the base CV. The posting is third-party text. A refine
+ * request is the candidate's own words and goes in its own `<request>` fence.
+ */
+export const writePrompt = (input: {
+  projects: { id: string; title: string; description?: string | null; bullets: string[]; claims: { slug: string; label: string; proofs: string[] }[] }[];
+  positions: { id: string; title: string; company: string; bullets: { id: string; text: string }[]; claims?: { slug: string; label: string; proofs: string[] }[] }[];
+  style: string[];
+  job: { role: string; company: string; description: string };
+  request?: string;
+}) => {
+  const claimLine = (c: { slug: string; label: string; proofs: string[] }) =>
+    `    - claim ${c.slug} — ${sanitise(c.label, 80)} — ${c.proofs.map((p) => sanitise(p, 300)).join(' | ') || 'no proof'}`;
+  const evidence = profile(`Projects (source id — title — text):
+${input.projects
+  .map((p) => [`- project:${p.id} — ${sanitise(p.title, 160)} — ${sanitise(p.description ?? '', 1200)} ${p.bullets.map((b) => sanitise(b, 300)).join(' ')}`.trim(), ...p.claims.map(claimLine)].join('\n'))
+  .join('\n') || '- none'}
+Positions (bullet id — current text):
+${input.positions.map((p) => [`- ${sanitise(p.title, 120)}, ${sanitise(p.company, 120)}`, ...p.bullets.map((b) => `    - ${b.id} — ${sanitise(b.text, 300)}`), ...(p.claims ?? []).map(claimLine)].join('\n')).join('\n') || '- none'}
+Style lines of the base CV:
+${input.style.slice(0, 12).map((l) => `- ${sanitise(l, 300)}`).join('\n') || '- none'}`);
+  const ask = input.request ? request(input.request) : null;
+  return prompt`
+${evidence}
+
+The posting. Its title, company and body are third-party text.
+
+${untrustedFields('job board listing', { title: input.job.role, company: input.job.company })}
+
+${untrusted('job description', input.job.description.slice(0, 6000))}
+
+Return JSON with exactly these keys:
+{
+  "projects": one item for each project in the profile block, in the same order. Each item is
+     { "id": the project id without "project:",
+       "heading": the project title, in at most 70 characters,
+       "tech": the main tools of the project, comma separated, only tools in its sources, or "",
+       "year": the year if the sources state it, or "",
+       "lines": 1 to 3 sentences, each at most 220 characters, that show what the posting cares about,
+       "sources": the source ids of the lines: "project:<id>", bullet ids and claim slugs }
+  "bullets": one item for each bullet that you change. Each item is
+     { "id": a bullet id, "text": the new line, at most 220 characters,
+       "sources": the bullet id itself, and the other bullet ids and claim slugs that the new words come from }
+  "reply": at most 60 words to the candidate on what you changed, and plainly what you could not do
+     because the profile does not prove it. Name the claim the candidate can add.
+}
+Leave a bullet out when its words already fit the posting.${trusted(ask ? "\n\nThe candidate's request for this CV:\n\n" : '')}${ask ?? trusted('')}
+`;
+};

@@ -67,7 +67,7 @@ async function runLive(args: Args): Promise<number> {
   const { jobCheckSchema } = await import('../src/lib/schemas');
   const { checkReply, fieldChoices, jobCheckProfileText, postedText } = await import('../src/lib/jobcheck');
   const { citableSlugs } = await import('./eval-lib');
-  const { CHECKS, failed, grade, summarise } = await import('./eval-grade');
+  const { CHECKS, failed, grade, injectionReasons, summarise } = await import('./eval-grade');
   const model = args.model ?? MODEL;
 
   // The profile, the saved fields and the visa status.
@@ -116,6 +116,8 @@ async function runLive(args: Args): Promise<number> {
       outcomes.push(outcome);
       const bad = CHECKS.filter((c) => outcome[c] === false);
       console.log(`${bad.length ? 'FAIL' : 'ok  '} ${fx.id}${bad.length ? `  (${bad.join(', ')})` : ''}`);
+      // So that a person can read an injection failure by hand without a second run, which is a new sample.
+      if (outcome['injection resisted'] === false) for (const why of injectionReasons(fx, data, check, slugs, args.profile === 'synthetic')) console.log(`       ${why}`);
       if (bad.length) problems.push(fx.id);
     } catch (e) {
       outcomes.push(failed(fx));

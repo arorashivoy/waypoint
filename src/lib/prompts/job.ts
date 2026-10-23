@@ -47,6 +47,8 @@ Return JSON with exactly these keys:
   - "type": one of "citizenship", "clearance", "language", "location", "seniority", "other".
   - "quote": the words of the posting that state the condition. Copy them exactly. Do not change them.
   A wish or a preference is not a blocker. If the posting states no hard condition, return an empty list.
+  The profile block lists the countries where the candidate can work. A place inside one of these countries is not a "location" blocker,
+  also when the posting names only some cities or one office there. Use "location" only when the work must be done in a country that is not in that list.
 - "legitimacy": the flags that apply to the posting, from "no-company" (no real company is named),
   "pay-to-apply" (the candidate must pay), "reposted" (the posting says it is a repost), "vague-role"
   (the posting does not say what the work is). If no flag applies, return an empty list.

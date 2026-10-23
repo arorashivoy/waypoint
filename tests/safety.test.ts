@@ -234,10 +234,12 @@ describe('refine request', () => {
       await runOnce(undefined, { userId: user.id });
       const task = await showTask(taskId);
       expect(task.status).toBe('done');
-      expect(probe.prompts.length).toBe(1);
-      // The request is inside the fence, the model reply is cut to the menu.
+      // Refine asks for the order, then for new words (cv-write). In each prompt the request is inside its fence.
+      expect(probe.prompts.length).toBeGreaterThanOrEqual(1);
       expect(probe.prompts[0]).toContain('<request');
-      expect(probe.prompts[0].indexOf(ATTACKS[name].slice(0, 20))).toBeGreaterThan(probe.prompts[0].indexOf('<request'));
+      for (const p of probe.prompts.filter((x) => x.includes(ATTACKS[name].slice(0, 20)))) {
+        expect(p.indexOf(ATTACKS[name].slice(0, 20))).toBeGreaterThan(p.indexOf('<request'));
+      }
       const app = await db.application.findUniqueOrThrow({ where: { userId_jobId: { userId: user.id, jobId: job.id } } });
       const steer = JSON.parse(app.cvSteer!);
       expect(steer).toEqual({ projects: ['parser'], skills: ['java'] });

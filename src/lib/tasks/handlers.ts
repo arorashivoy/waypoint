@@ -6,7 +6,7 @@ import { draftsFromResume } from '@/lib/profile/resume-import';
 import { draftsFromRepo } from '@/lib/profile/github-import';
 import { userDir } from '@/lib/user-files';
 import { db } from '@/lib/db';
-import { visibleTo } from '@/lib/job-scope';
+import { inCountries, visibleTo } from '@/lib/job-scope';
 import { analyseJob } from '@/lib/analysis';
 import { pruneCacheBySize } from '@/lib/cache';
 import { getState, setState } from '@/lib/app-state';
@@ -17,7 +17,8 @@ import { queueAnalysis } from '@/lib/queue';
 import { searchQueries } from '@/lib/resume';
 import { ensureBaseResume } from '@/lib/resume/base';
 import { suggestWording, wordingView } from '@/lib/resume/suggest';
-import { CV_MESSAGE_MAX, NO_RESUME, CvError, cvView, publishCv, refineCv, resetCv } from '@/lib/cv';
+import { CV_MESSAGE_MAX, NO_RESUME, CvError, cvView, publishCv, readSteer, refineCv, resetCv, writeCv } from '@/lib/cv';
+import { log } from '@/lib/log';
 import { PasteTaskPayload, PasteUserError, pasteJob } from '@/lib/sources/paste';
 import { runOutreach } from '@/lib/outreach';
 import { INCOMING_MAX } from '@/lib/schemas';
@@ -102,7 +103,7 @@ registerHandler('refresh', z.object({ force: z.boolean() }), async ({ force }, t
       // An undated listing keeps the date it was first seen rather than being
       // re-stamped today on every refresh.
       // A board job is a feed job now, also when a user pasted it first.
-      update: { pastedBy: null, fetchedAt: new Date(), ...(j.postedAt && { postedAt: j.postedAt }), description: j.description, url: j.url, priority: j.priority },
+      update: { pastedBy: null, fetchedAt: new Date(), ...(j.postedAt && { postedAt: j.postedAt }), description: j.description, url: j.url, priority: j.priority, remote: j.remote },
       create: { ...j, postedAt: j.postedAt ?? new Date() },
     });
   }
@@ -116,7 +117,7 @@ registerHandler('refresh', z.object({ force: z.boolean() }), async ({ force }, t
   // "Live" counts the stored jobs in the countries of this user, as the job list does. A board that was
   // fetched less than 6 hours ago is skipped, so the jobs of this run alone can be 0.
   const mine = (await db.countryPref.findMany({ where: { userId, on: true }, select: { cc: true } })).map((p) => p.cc);
-  const total = await db.job.count({ where: { cc: { in: mine }, ...visibleTo(userId) } });
+  const total = await db.job.count({ where: { AND: [inCountries(mine), visibleTo(userId)] } });
 
   return { added, total, report, analysing };
 });
@@ -150,7 +151,17 @@ registerHandler(
       // The wording view (the suggestions and the keyword report) goes with each CV view.
       if (action === 'refine') return { ...(await refineCv(app, job, message ?? '', task.id)), ...(await wordingView(userId, job)) };
       if (action === 'reset') return { ...(await resetCv(app, job)), ...(await wordingView(userId, job)) };
-      const view = { ...cvView(app, await publishCv(app, job)), ...(await wordingView(userId, job)) };
+      // The first build of a job asks Claude to write its lines. A later build (Rebuild, Use my original) keeps them.
+      // A failed write is not a failed CV: the build goes on with his own lines.
+      let current = app;
+      if (!readSteer(app).written) {
+        try {
+          if (await writeCv(app, job)) current = await db.application.findUniqueOrThrow({ where: { id: app.id } });
+        } catch (e) {
+          log.warn({ err: e, jobId }, 'cv write failed; building without written lines');
+        }
+      }
+      const view = { ...cvView(current, await publishCv(current, job)), ...(await wordingView(userId, job)) };
       if (!view.pdfUrl) {
         throw new TaskFatal((await isAdmin(userId)) ? 'No CV configured. Set RESUME_PDF, and RESUME_TEX to tailor it.' : NO_RESUME);
       }

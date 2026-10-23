@@ -143,14 +143,14 @@ Your previous reply did not match the required JSON shape:
 ${untrusted('schema problems', problems.slice(0, 600))}
 Reply again with JSON only, with exactly the keys asked for.`;
 
-export type PromptName = 'job-check' | 'referral' | 'note' | 'refine' | 'reply' | 'resume-import' | 'github-import' | 'resume-suggest';
+export type PromptName = 'job-check' | 'referral' | 'note' | 'refine' | 'reply' | 'resume-import' | 'github-import' | 'resume-suggest' | 'cv-write';
 
 /**
  * The version string of each prompt. It is part of the cache key. Change the
  * string of a prompt whenever the text of that prompt changes.
  */
 export const PROMPT_VERSIONS: Record<PromptName, string> = {
-  'job-check': 'job-check-2',
+  'job-check': 'job-check-3',
   referral: 'v3',
   note: 'v3',
   refine: 'v3',
@@ -158,4 +158,5 @@ export const PROMPT_VERSIONS: Record<PromptName, string> = {
   'resume-import': 'v1',
   'github-import': 'v1',
   'resume-suggest': 'resume-suggest-1',
+  'cv-write': 'cv-write-1',
 };

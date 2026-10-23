@@ -8,6 +8,7 @@ import { compileLatex, findEngine } from './latex';
 import { DEPTH_WEIGHT } from './resume/depth';
 import { checkOwnTex, hasOwnTex, ownTexPath } from './resume/own-tex';
 import { baseOrder, baseResumePath, escapeLatex, hasResumeContent, renderTemplate, tailorOrder, templateAssetsDir } from './resume/template';
+import { effectiveWritten, type Written } from './resume/written';
 import { db } from './db';
 import { scrub } from './log';
 import { getSettings } from './settings';
@@ -285,6 +286,53 @@ function splitSection(inner: string): { prefix: string; body: string; suffix: st
   return { prefix: inner.slice(0, first), body: inner.slice(first), suffix: '' };
 }
 
+/** How the CV writes a project entry, read from its first entry: `\item \textbf{TITLE} --- TECH \hfill YEAR \\`. */
+export type Shape = { tech: boolean; year: boolean; indent: string };
+
+/** The shape of the first project entry of a CV. An entry without `\textbf{...}` gives the plain shape. */
+export function projectShape(tex: string): Shape {
+  const plainShape: Shape = { tech: false, year: false, indent: '      ' };
+  const m = tex.match(PROJECT_SECTION);
+  const parts = m && splitSection(m[1]);
+  const first = parts ? splitItems(parts.body)[0] : undefined;
+  if (!first) return plainShape;
+  const [head, second] = first.split('\n');
+  if (!/^\\item\s*\\textbf\{/.test(head)) return plainShape;
+  return { tech: /\}[^\\]*---/.test(head), year: /\\hfill/.test(head), indent: second?.match(/^\s*/)?.[0] || plainShape.indent };
+}
+
+/**
+ * One project entry in the shape of the CV. Only code writes this LaTeX: each value goes through
+ * `escapeLatex`, so a value from the model or the profile cannot hold a macro.
+ */
+export function renderEntry(shape: Shape, p: { heading: string; tech: string; year: string; body: string }, own: OwnParts = { tech: '', year: '', links: [] }): string {
+  // A written value is escaped. A value from his own entry is his LaTeX already and goes in as it is.
+  const techTex = p.tech.trim() ? escapeLatex(p.tech) : own.tech;
+  const yearTex = p.year.trim() ? escapeLatex(p.year) : own.year;
+  const tech = shape.tech && techTex ? ` --- ${techTex}` : '';
+  const year = shape.year && yearTex ? ` \\hfill ${yearTex}` : '';
+  const links = own.links.map((l) => `\n${shape.indent}${l}`).join('');
+  return `\\item \\textbf{${escapeLatex(p.heading)}}${tech}${year} \\\\\n${shape.indent}${escapeLatex(p.body)}${links}`;
+}
+
+/** The parts of his own entry that a written entry keeps: the tools, the year and the links, as his LaTeX. */
+export type OwnParts = { tech: string; year: string; links: string[] };
+
+/** Reads the tools (after `---`), the year (after `\\hfill`) and the `\\href` links of one of his entries. */
+export function ownParts(raw: string): OwnParts {
+  const head = raw.split('\n')[0];
+  const after = head.replace(/^\\item\s*\\textbf\{[^}]*\}/, '');
+  const tech = after.match(/---\s*(.*?)\s*(?:\\hfill|\\\\|$)/)?.[1]?.trim() ?? '';
+  const year = after.match(/\\hfill\s*(.*?)\s*(?:\\\\|$)/)?.[1]?.trim() ?? '';
+  const links = [...raw.matchAll(/\\href\{[^{}]*\}\{[^{}]*\}/g)].map((m) => m[0]);
+  return { tech, year, links };
+}
+
+/** The text of each bullet: a written line, and an accepted suggestion over it (the user approved that text). */
+export function wordingFor(w: Written, wording: Record<string, string> | undefined): Record<string, string> {
+  return { ...Object.fromEntries(Object.entries(w.bullets).map(([id, b]) => [id, b.text])), ...(wording ?? {}) };
+}
+
 /** Either a rewritten document, or the honest reason there isn't one. "Could
  *  not be mapped" and "nothing in this posting matches any project" are very
  *  different facts about a CV, and collapsing both into null told the user the
@@ -342,23 +390,30 @@ function mapCvProjects(tex: string, doc: ClaimsDoc): { m: RegExpMatchArray; part
  * number of entries the base CV has, so a swap can never push it to a second
  * page.
  *
- * Only ever chooses between entries he wrote. A project with no `tex` that
- * would have earned a place is reported, not drafted — the wording of a CV
- * line is not something to generate behind his back.
+ * Any project of the profile can win a slot (the owner's rule of 2026-10-23).
+ * `written` holds the lines that Claude wrote and that passed the check against
+ * their sources (resume/written.ts); code builds each entry in the shape of the
+ * CV's first entry. Without written lines, an entry is his `tex` or his description.
  *
  * Refuses rather than guesses whenever the section cannot be mapped
  * confidently: an unrecognised entry, an ambiguous title, fewer than two items.
  * A CV is not a place to find out that a heuristic was 80% right, and the caller
  * falls back to the base PDF, which is always correct if not always optimal.
  */
-export function tailorTex(tex: string, doc: ClaimsDoc, ranked: EvidencePick[], maxProjects: number | null): Tailoring {
+export function tailorTex(tex: string, doc: ClaimsDoc, ranked: EvidencePick[], maxProjects: number | null, written: Written = { bullets: {}, projects: {}, dropped: [] }): Tailoring {
   const cv = mapCvProjects(tex, doc);
   if ('why' in cv) return cv;
   const { m, parts } = cv;
+  const shape = projectShape(tex);
 
   const scoreOf = new Map(ranked.filter((r) => r.kind === 'project').map((r) => [r.target, r.score]));
   const score = (id: string) => scoreOf.get(`project:${id}`) || 0;
-  const rows = cv.rows.map((r) => ({ ...r, score: score(r.id), onCv: true }));
+  /** The entry of a project in the shape of this CV, from its written lines. */
+  const writtenRaw = (id: string, own?: string) => {
+    const w = written.projects[id];
+    return w ? renderEntry(shape, { heading: w.heading, tech: w.tech, year: w.year, body: w.lines.join(' ') }, own ? ownParts(own) : undefined) : null;
+  };
+  const rows = cv.rows.map((r) => ({ ...r, raw: writtenRaw(r.id, r.raw) ?? r.raw, score: score(r.id), onCv: true }));
 
   // Off-CV projects only compete when the posting actually asks for them; a
   // zero-score stranger replacing a zero-score entry he chose is churn.
@@ -366,31 +421,36 @@ export function tailorTex(tex: string, doc: ClaimsDoc, ranked: EvidencePick[], m
   const offCv = doc.targets.projects.filter((p) => !onCv.has(p.id) && score(p.id) > 0);
   // A `tex` row that the profile saved before the own-tex check existed is checked again: it goes into a compile.
   const usable = (p: { tex?: string | null }) => !!p.tex && checkOwnTex(p.tex).ok;
-  const extras = offCv
-    .filter(usable)
-    .map((p) => ({ raw: p.tex!.trim(), id: p.id, title: headingOf(p.tex!) || p.title, score: score(p.id), onCv: false }));
+  // The owner's rule (2026-10-23): any project of the profile can go on the CV. Its written lines come first,
+  // then its own `tex`, then its description in the shape of the CV. Code writes that entry and escapes each value.
+  const entryOf = (p: (typeof offCv)[number]) =>
+    writtenRaw(p.id, usable(p) ? p.tex! : undefined) ?? (usable(p) ? p.tex!.trim() : p.description?.trim() ? renderEntry(shape, { heading: p.title, tech: '', year: '', body: p.description }) : null);
+  const extras = offCv.flatMap((p) => {
+    const raw = entryOf(p);
+    return raw ? [{ raw, id: p.id, title: written.projects[p.id]?.heading || (usable(p) && !written.projects[p.id] ? headingOf(p.tex!) : '') || p.title, score: score(p.id), onCv: false }] : [];
+  });
 
   const pool = [...rows, ...extras];
-  if (!pool.some((r) => r.score > 0)) {
+  // With no project that fits the posting, the order stays, but written entries still replace their old text.
+  const scored = pool.some((r) => r.score > 0);
+  // Ties go to what is already on the CV, in the order he put it there.
+  const sorted = scored ? [...pool].sort((a, b) => b.score - a.score || Number(b.onCv) - Number(a.onCv)) : rows;
+  const kept = sorted.slice(0, maxProjects || rows.length);
+  const floor = kept[kept.length - 1].score;
+  const dropped = rows.filter((r) => !kept.includes(r)).map((r) => r.title);
+  const added = kept.filter((r) => !r.onCv).map((r) => r.title);
+
+  const notes = offCv
+    .filter((p) => !entryOf(p) && score(p.id) > floor)
+    .map((p) => `${p.title} fits this posting better than what made the cut, but has no text in the profile to put on the CV`);
+  if (!scored && !rows.some((r, i) => r.raw !== cv.rows[i].raw)) {
     // Common and not a failure: the posting's requirements are evidenced by his
     // jobs rather than his side projects, so no reordering of the projects
     // section would serve it better than the order already there.
     return { why: 'no project in claims.yml matches this posting, so the existing selection stands' };
   }
 
-  // Ties go to what is already on the CV, in the order he put it there.
-  const sorted = [...pool].sort((a, b) => b.score - a.score || Number(b.onCv) - Number(a.onCv));
-  const kept = sorted.slice(0, maxProjects || rows.length);
-  const floor = kept[kept.length - 1].score;
-  const dropped = rows.filter((r) => !kept.includes(r)).map((r) => r.title);
-  const added = kept.filter((r) => !r.onCv).map((r) => r.title);
-
-  // The hint that turns a missed swap into a one-time fix in claims.yml.
-  const notes = offCv
-    .filter((p) => !usable(p) && score(p.id) > floor)
-    .map((p) => `${p.title} fits this posting better than what made the cut, but has no usable tex in claims.yml to put on the CV`);
-
-  const unchanged = kept.length === rows.length && kept.every((r, i) => r.raw === rows[i].raw);
+  const unchanged = kept.length === cv.rows.length && kept.every((r, i) => r.raw === cv.rows[i].raw);
   if (unchanged) return { tex, order: kept.map((r) => r.title), dropped, added, notes };
 
   // Entries are re-emitted with one blank line between them, matching how they
@@ -486,6 +546,11 @@ export function bulletItems(tex: string, doc: ClaimsDoc): Map<string, string> {
   }
   for (const [id, raw] of found) if (!raw) found.delete(id);
   return found;
+}
+
+/** The words of each bullet line of a .tex source, for each bullet id that `bulletItems` finds. */
+export function bulletLines(tex: string, doc: ClaimsDoc): Map<string, string> {
+  return new Map([...bulletItems(tex, doc)].map(([id, raw]) => [id, plain(raw.replace(/^\\item\s*/, ''))]));
 }
 
 /**
@@ -733,7 +798,16 @@ export type BuiltResume = {
  * that bullet. Only an accepted suggestion writes it (see resume/suggest.ts): the
  * server checked the text against the bullet and the proofs, and the user approved it.
  */
-export type Steer = { projects?: string[]; bullets?: string[]; skills?: string[]; wording?: Record<string, string> };
+export type Steer = {
+  projects?: string[];
+  bullets?: string[];
+  skills?: string[];
+  wording?: Record<string, string>;
+  /** The lines that Claude wrote for this job and that passed the check (resume/written.ts). */
+  written?: Written;
+  /** Bullet and project ids that the user keeps as written ("Use my original"). */
+  keep?: string[];
+};
 
 /** A steered kind replaces the posting's ranking rather than nudging it: "lead
  *  with X" has to mean X leads, and a blend would let the posting's score
@@ -845,6 +919,9 @@ export async function buildResume(
   // CV he maintains by hand stays exactly as he left it.
   // With the built-in template, the "file" is the base résumé, and the posting only changes its order.
   const template = cfg.tex ? readFileSync(cfg.tex, 'utf8') : renderTemplate(doc, {}, baseOrder(doc));
+  // The written lines are checked again against the profile of today. The kept ids stay as he wrote them.
+  const written = effectiveWritten(steer.written, doc, steer.keep ?? [], cfg.tex ? { bulletText: bulletLines(template, doc) } : {});
+  const wording = wordingFor(written, steer.wording);
 
   const skipped: string[] = [];
   /** Runs one transform over the document so far, recording why it did not
@@ -865,7 +942,7 @@ export async function buildResume(
   if (cfg.template) {
     const was = baseOrder(doc);
     const now = tailorOrder(doc, ranked, weights, steer, cfg.maxProjects);
-    source = renderTemplate(doc, steer, now);
+    source = renderTemplate(doc, { ...steer, wording }, now, written);
     const title = (id: string) => doc.targets.projects.find((p) => p.id === id)?.title ?? id;
     const label = (slug: string) => doc.claims.find((c) => c.slug === slug)?.label ?? slug;
     projects = { tex: source, order: now.projects.map(title), dropped: was.projects.filter((id) => !now.projects.includes(id)).map(title), added: now.projects.filter((id) => !was.projects.includes(id)).map(title), notes: [] };
@@ -877,14 +954,14 @@ export async function buildResume(
   } else {
     // A steered project list is also the count: "drop the hackathon" means one
     // entry fewer, not the next-best project taking its slot.
-    projects = tailorTex(template, doc, ranked, steer.projects?.length || cfg.maxProjects);
+    projects = tailorTex(template, doc, ranked, steer.projects?.length || cfg.maxProjects, written);
     const afterProjects = step('projects', template, projects);
     experience = tailorExperience(afterProjects, doc, ranked);
     const afterExperience = step('experience', afterProjects, experience);
     skills = tailorSkills(afterExperience, doc, weights);
     source = step('skills', afterExperience, skills);
     // An accepted wording changes the line after the reorder, because the reorder finds the line by its old text.
-    source = applyWording(source, doc, steer.wording);
+    source = applyWording(source, doc, wording);
   }
 
   // Without a base PDF (an own .tex), an unchanged source is still compiled: it is the only CV there is.

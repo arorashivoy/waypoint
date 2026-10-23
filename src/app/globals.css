@@ -985,6 +985,9 @@ button { cursor: pointer; }
 .jd-flag { margin: 0; display: flex; gap: var(--s2); align-items: baseline; color: var(--butter); line-height: 1.5; overflow-wrap: anywhere; }
 .jd-flag::before { content: ''; flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--butter); transform: translateY(-2px); }
 .jd-struck { text-decoration: line-through; }
+/* A link button lines up with the text above it, as in the profile rows. */
+.jd-suggestion .btn.link { margin-left: calc(var(--s2) * -1); }
+.jd-dropped { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s1); }
 .jd-wait { padding-top: var(--s6); }
 .jd-parts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s2); }
 .jd-parts li { display: flex; justify-content: space-between; gap: var(--s4); overflow-wrap: anywhere; }
