@@ -305,10 +305,27 @@ export function projectShape(tex: string): Shape {
  * One project entry in the shape of the CV. Only code writes this LaTeX: each value goes through
  * `escapeLatex`, so a value from the model or the profile cannot hold a macro.
  */
-export function renderEntry(shape: Shape, p: { heading: string; tech: string; year: string; body: string }): string {
-  const tech = shape.tech && p.tech.trim() ? ` --- ${escapeLatex(p.tech)}` : '';
-  const year = shape.year && p.year.trim() ? ` \\hfill ${escapeLatex(p.year)}` : '';
-  return `\\item \\textbf{${escapeLatex(p.heading)}}${tech}${year} \\\\\n${shape.indent}${escapeLatex(p.body)}`;
+export function renderEntry(shape: Shape, p: { heading: string; tech: string; year: string; body: string }, own: OwnParts = { tech: '', year: '', links: [] }): string {
+  // A written value is escaped. A value from his own entry is his LaTeX already and goes in as it is.
+  const techTex = p.tech.trim() ? escapeLatex(p.tech) : own.tech;
+  const yearTex = p.year.trim() ? escapeLatex(p.year) : own.year;
+  const tech = shape.tech && techTex ? ` --- ${techTex}` : '';
+  const year = shape.year && yearTex ? ` \\hfill ${yearTex}` : '';
+  const links = own.links.map((l) => `\n${shape.indent}${l}`).join('');
+  return `\\item \\textbf{${escapeLatex(p.heading)}}${tech}${year} \\\\\n${shape.indent}${escapeLatex(p.body)}${links}`;
+}
+
+/** The parts of his own entry that a written entry keeps: the tools, the year and the links, as his LaTeX. */
+export type OwnParts = { tech: string; year: string; links: string[] };
+
+/** Reads the tools (after `---`), the year (after `\\hfill`) and the `\\href` links of one of his entries. */
+export function ownParts(raw: string): OwnParts {
+  const head = raw.split('\n')[0];
+  const after = head.replace(/^\\item\s*\\textbf\{[^}]*\}/, '');
+  const tech = after.match(/---\s*(.*?)\s*(?:\\hfill|\\\\|$)/)?.[1]?.trim() ?? '';
+  const year = after.match(/\\hfill\s*(.*?)\s*(?:\\\\|$)/)?.[1]?.trim() ?? '';
+  const links = [...raw.matchAll(/\\href\{[^{}]*\}\{[^{}]*\}/g)].map((m) => m[0]);
+  return { tech, year, links };
 }
 
 /** The text of each bullet: a written line, and an accepted suggestion over it (the user approved that text). */
@@ -392,11 +409,11 @@ export function tailorTex(tex: string, doc: ClaimsDoc, ranked: EvidencePick[], m
   const scoreOf = new Map(ranked.filter((r) => r.kind === 'project').map((r) => [r.target, r.score]));
   const score = (id: string) => scoreOf.get(`project:${id}`) || 0;
   /** The entry of a project in the shape of this CV, from its written lines. */
-  const writtenRaw = (id: string) => {
+  const writtenRaw = (id: string, own?: string) => {
     const w = written.projects[id];
-    return w ? renderEntry(shape, { heading: w.heading, tech: w.tech, year: w.year, body: w.lines.join(' ') }) : null;
+    return w ? renderEntry(shape, { heading: w.heading, tech: w.tech, year: w.year, body: w.lines.join(' ') }, own ? ownParts(own) : undefined) : null;
   };
-  const rows = cv.rows.map((r) => ({ ...r, raw: writtenRaw(r.id) ?? r.raw, score: score(r.id), onCv: true }));
+  const rows = cv.rows.map((r) => ({ ...r, raw: writtenRaw(r.id, r.raw) ?? r.raw, score: score(r.id), onCv: true }));
 
   // Off-CV projects only compete when the posting actually asks for them; a
   // zero-score stranger replacing a zero-score entry he chose is churn.
@@ -407,7 +424,7 @@ export function tailorTex(tex: string, doc: ClaimsDoc, ranked: EvidencePick[], m
   // The owner's rule (2026-10-23): any project of the profile can go on the CV. Its written lines come first,
   // then its own `tex`, then its description in the shape of the CV. Code writes that entry and escapes each value.
   const entryOf = (p: (typeof offCv)[number]) =>
-    writtenRaw(p.id) ?? (usable(p) ? p.tex!.trim() : p.description?.trim() ? renderEntry(shape, { heading: p.title, tech: '', year: '', body: p.description }) : null);
+    writtenRaw(p.id, usable(p) ? p.tex! : undefined) ?? (usable(p) ? p.tex!.trim() : p.description?.trim() ? renderEntry(shape, { heading: p.title, tech: '', year: '', body: p.description }) : null);
   const extras = offCv.flatMap((p) => {
     const raw = entryOf(p);
     return raw ? [{ raw, id: p.id, title: written.projects[p.id]?.heading || (usable(p) && !written.projects[p.id] ? headingOf(p.tex!) : '') || p.title, score: score(p.id), onCv: false }] : [];

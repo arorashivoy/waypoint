@@ -11,6 +11,7 @@ const TEX = String.raw`\documentclass{resume}
 
 \item \textbf{Bish, a Linux Shell in C} --- C, Linux \hfill 2022 \\
       Interactive Linux shell built on forks and threads.
+      \href{https://github.com/arorashivoy/Bish}{github.com/arorashivoy/Bish}
 
 \item \textbf{StrikeOut}, iOS task manager --- SwiftUI \hfill 2022 \\
       Shipped to the App Store.
@@ -78,6 +79,14 @@ describe('tailorTex with written lines', () => {
     expect(t.tex).toContain('Linux shell built on forks and threads.');
     expect(t.tex).not.toContain('Interactive Linux shell');
     expect(items(t.tex)).toBe(2);
+  });
+
+  it('keeps the year, the tools and the links of his own entry when the written form has none', () => {
+    const w: Written = { ...none, projects: { bish: { heading: 'Bish, a Linux shell in C', tech: '', year: '', lines: ['Linux shell built on forks and threads.'], old: '', sources: [] } } };
+    const t = tailorTex(TEX, doc, [pick('bish', 1)], null, w);
+    if ('why' in t) throw new Error(t.why);
+    expect(t.tex).toContain('\\textbf{Bish, a Linux shell in C} --- C, Linux \\hfill 2022 \\\\');
+    expect(t.tex).toContain('\\href{https://github.com/arorashivoy/Bish}{github.com/arorashivoy/Bish}');
   });
 
   it('rewrites an on-CV entry also when no project matches the posting', () => {
