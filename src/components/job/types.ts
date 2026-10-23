@@ -23,6 +23,10 @@ export type Cv = {
   skills?: string[];
   reason?: string | null;
   chat: ChatTurn[];
+  /** The lines that Claude wrote for this job: the old text and the new text. */
+  changes?: { id: string; kind: 'bullet' | 'project'; old: string; now: string }[];
+  /** The lines that the check refused, with the reason. */
+  droppedLines?: { id: string; why: string }[];
 };
 
 export type Wording = {
@@ -96,6 +100,8 @@ export interface JobDetailState {
   reset: () => Promise<boolean>;
   suggest: () => Promise<boolean>;
   decide: (bulletId: string, action: 'accept' | 'reject') => Promise<boolean>;
+  /** Keeps the user's own text for one written line, and builds the CV again. */
+  original: (id: string) => Promise<boolean>;
   setToast: (s: string) => void;
 }
 

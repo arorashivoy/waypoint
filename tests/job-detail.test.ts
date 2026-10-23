@@ -138,6 +138,7 @@ const state = (job: JobView, o: Partial<JobDetailState> = {}): JobDetailState =>
   reset: noop,
   suggest: noop,
   decide: noop,
+  original: noop,
   setToast: () => {},
   ...o,
 });
@@ -250,6 +251,21 @@ describe('the polish of the job detail', () => {
     expect(off).not.toContain('What to change');
     expect(off).toContain('Add an API key in Settings to use Claude.');
     expect(render(view({ cv }))).toContain('What to change');
+  });
+
+  it('lists what the written CV changed, with Use my original on each line', () => {
+    const changes = [{ id: 'g/v', kind: 'bullet' as const, old: 'Built a Python validator', now: 'Built a Python validator for test evidence' }];
+    const html = render(view({ cv: { ...cv, changes, droppedLines: [{ id: 'g/v', why: 'the technology "kubernetes" is not in the bullet or the proofs' }] } }));
+    expect(html).toContain('What changed');
+    expect(html).toMatch(/class="[^"]*jd-struck[^"]*"[^>]*>Built a Python validator</);
+    expect(html).toContain('Built a Python validator for test evidence');
+    expect(html).toContain('Use my original');
+    expect(html).toContain('Not used');
+    expect(html).toContain('the technology &quot;kubernetes&quot; is not in the bullet or the proofs');
+  });
+
+  it('shows no change list when nothing changed', () => {
+    expect(render(view({ cv: { ...cv, changes: [], droppedLines: [] } }))).not.toContain('What changed');
   });
 
   it('says one time why Claude cannot run, above the Claude tools', () => {

@@ -154,6 +154,7 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
   const reset = useCallback(() => cvCall('reset', () => del<{ taskId: string }>(`/api/jobs/${id}/resume/refine`)), [cvCall, id]);
   const suggest = useCallback(() => cvCall('suggest', () => post<{ taskId: string }>(`/api/jobs/${id}/resume/suggestions`, { action: 'suggest' })), [cvCall, id]);
   // Accept builds the CV again in the worker. Reject changes only the mark of the suggestion.
+  const original = useCallback((lineId: string) => cvCall('generate', () => post<{ taskId: string }>(`/api/jobs/${id}/resume/suggestions`, { action: 'original', id: lineId })), [cvCall, id]);
   const decide = useCallback(async (bulletId: string, action: 'accept' | 'reject') => {
     if (action === 'accept') return cvCall('generate', () => post<{ taskId: string }>(`/api/jobs/${id}/resume/suggestions`, { bulletId, action }));
     try {
@@ -171,6 +172,6 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
   return {
     error: null,
     retry,
-    state: { job, cv, wording, busy, cvBusy, cvError, blocked, wayError, applyError, cvRev, claudeNote: suggestBlockedNote(claude), findContact, findAlumni, markApplied, generate, refine, reset, suggest, decide, setToast },
+    state: { job, cv, wording, busy, cvBusy, cvError, blocked, wayError, applyError, cvRev, claudeNote: suggestBlockedNote(claude), findContact, findAlumni, markApplied, generate, refine, reset, suggest, decide, original, setToast },
   };
 }
