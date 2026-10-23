@@ -587,8 +587,18 @@ targets:
         Built a 50k msg/s pipeline with exactly-once delivery.
 ```
 
-Nothing is generated: every line on the PDF is one you wrote, either in the base CV or in a `tex:`
-entry, so the CV cannot say anything you have not.
+**Written for each posting.** With Claude on, the first build of a job also asks Claude to write
+the project entries and the experience bullets for that posting, from your whole profile. The base CV is
+the style example. Any project of the profile can go on the CV: a project with no `tex:` entry gets an
+entry that code builds in the shape of the first project entry of your CV (`\item \textbf{Title} ---
+tools \hfill year \\`), with every value escaped. Claude writes plain text only, never LaTeX.
+
+Each line names its sources (bullets, projects, claims), and code checks it against those sources only
+(`src/lib/resume/check.ts`): a number, a name or a tool that the sources do not have stops the line, and
+the original text stays. The posting can choose the words, but it cannot add a fact. The CV panel lists
+each changed line ("What changed"), and "Use my original" keeps your own text for one line. Refine with
+Claude can ask for new words too, under the same check. Without Claude, the build only chooses and
+orders, as above. `scripts/cv-write-check.ts` runs the prompt against attack postings with the CLI.
 
 Producing the PDF is best-effort. It needs a LaTeX engine (tectonic, pdflatex, xelatex or lualatex,
 auto-detected) for the `RESUME_TEX` of the admin. The built-in template and an own `.tex` of a member
