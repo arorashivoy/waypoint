@@ -17,7 +17,8 @@ import { queueAnalysis } from '@/lib/queue';
 import { searchQueries } from '@/lib/resume';
 import { ensureBaseResume } from '@/lib/resume/base';
 import { suggestWording, wordingView } from '@/lib/resume/suggest';
-import { CV_MESSAGE_MAX, NO_RESUME, CvError, cvView, publishCv, refineCv, resetCv } from '@/lib/cv';
+import { CV_MESSAGE_MAX, NO_RESUME, CvError, cvView, publishCv, readSteer, refineCv, resetCv, writeCv } from '@/lib/cv';
+import { log } from '@/lib/log';
 import { PasteTaskPayload, PasteUserError, pasteJob } from '@/lib/sources/paste';
 import { runOutreach } from '@/lib/outreach';
 import { INCOMING_MAX } from '@/lib/schemas';
@@ -150,7 +151,17 @@ registerHandler(
       // The wording view (the suggestions and the keyword report) goes with each CV view.
       if (action === 'refine') return { ...(await refineCv(app, job, message ?? '', task.id)), ...(await wordingView(userId, job)) };
       if (action === 'reset') return { ...(await resetCv(app, job)), ...(await wordingView(userId, job)) };
-      const view = { ...cvView(app, await publishCv(app, job)), ...(await wordingView(userId, job)) };
+      // The first build of a job asks Claude to write its lines. A later build (Rebuild, Use my original) keeps them.
+      // A failed write is not a failed CV: the build goes on with his own lines.
+      let current = app;
+      if (!readSteer(app).written) {
+        try {
+          if (await writeCv(app, job)) current = await db.application.findUniqueOrThrow({ where: { id: app.id } });
+        } catch (e) {
+          log.warn({ err: e, jobId }, 'cv write failed; building without written lines');
+        }
+      }
+      const view = { ...cvView(current, await publishCv(current, job)), ...(await wordingView(userId, job)) };
       if (!view.pdfUrl) {
         throw new TaskFatal((await isAdmin(userId)) ? 'No CV configured. Set RESUME_PDF, and RESUME_TEX to tailor it.' : NO_RESUME);
       }

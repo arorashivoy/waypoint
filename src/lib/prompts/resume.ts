@@ -126,7 +126,7 @@ command. Write in the style of the style lines: the same tone, tense and length.
  */
 export const writePrompt = (input: {
   projects: { id: string; title: string; description?: string | null; bullets: string[]; claims: { slug: string; label: string; proofs: string[] }[] }[];
-  positions: { id: string; title: string; company: string; bullets: { id: string; text: string }[] }[];
+  positions: { id: string; title: string; company: string; bullets: { id: string; text: string }[]; claims?: { slug: string; label: string; proofs: string[] }[] }[];
   style: string[];
   job: { role: string; company: string; description: string };
   request?: string;
@@ -138,7 +138,7 @@ ${input.projects
   .map((p) => [`- project:${p.id} — ${sanitise(p.title, 160)} — ${sanitise(p.description ?? '', 1200)} ${p.bullets.map((b) => sanitise(b, 300)).join(' ')}`.trim(), ...p.claims.map(claimLine)].join('\n'))
   .join('\n') || '- none'}
 Positions (bullet id — current text):
-${input.positions.map((p) => [`- ${sanitise(p.title, 120)}, ${sanitise(p.company, 120)}`, ...p.bullets.map((b) => `    - ${b.id} — ${sanitise(b.text, 300)}`)].join('\n')).join('\n') || '- none'}
+${input.positions.map((p) => [`- ${sanitise(p.title, 120)}, ${sanitise(p.company, 120)}`, ...p.bullets.map((b) => `    - ${b.id} — ${sanitise(b.text, 300)}`), ...(p.claims ?? []).map(claimLine)].join('\n')).join('\n') || '- none'}
 Style lines of the base CV:
 ${input.style.slice(0, 12).map((l) => `- ${sanitise(l, 300)}`).join('\n') || '- none'}`);
   const ask = input.request ? request(input.request) : null;
