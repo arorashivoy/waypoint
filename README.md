@@ -4,6 +4,9 @@ Finds jobs in eight ranked countries, works out who could refer you, and tailors
 posting. Phone-friendly. Runs on your own machine and uses your Claude Pro subscription rather than
 a paid API key.
 
+The author's copy runs on a Raspberry Pi at <https://waypoint.arorashivoy.win>, through a named
+Cloudflare Tunnel. You need an account to sign in. An invite from the admin gives you one.
+
 ---
 
 ## Fresh install
