@@ -525,6 +525,8 @@ button { cursor: pointer; }
 .login-field > span { font-weight: 500; }
 .login-field .field { width: 100%; }
 .login-error { margin: 0; color: var(--coral); }
+/* The Turnstile box is 65px high. The space stays empty until it loads, so the button does not jump. */
+.login-turnstile { min-height: 65px; }
 .login-left h1 { margin: 0; font-size: var(--t-39); line-height: 1.05; font-weight: 700; letter-spacing: -0.035em; text-wrap: balance; }
 .login-lede { margin: 0; font-size: var(--t-20); line-height: 1.55; color: var(--soft); max-width: 520px; }
 .login-right {
@@ -538,6 +540,7 @@ button { cursor: pointer; }
   background: linear-gradient(135deg, var(--mint), #BFE9D4 55%, var(--lav)); color: var(--ink-on); font-size: var(--t-20); font-weight: 600;
   box-shadow: 0 8px 24px -10px rgba(166, 228, 196, 0.55);
 }
+.login-cta:disabled { opacity: 0.6; cursor: progress; }
 .login-note { margin: 0; font-size: 15px; line-height: 1.55; color: var(--soft); border-top: 1px solid var(--edge); padding-top: 24px; }
 
 @media (max-width: 1023px) {

@@ -131,6 +131,7 @@ Then add these lines to `.env`, one key on each line:
 | `PORT` | Optional. The default is 3117. |
 | `WAYPOINT_CLAUDE_BIN` | The full path of `claude` (run `command -v claude`). The units have a short `PATH` (the folder of node, `/usr/local/bin`, `/usr/bin`, `/bin`), so a CLI in `~/.local/bin` needs this key. |
 | `WAYPOINT_CF_TUNNEL` | Optional. The name of the tunnel, if it is not `waypoint`. |
+| `WAYPOINT_TURNSTILE_SITE_KEY`, `WAYPOINT_TURNSTILE_SECRET` | Optional. The keys of a Cloudflare Turnstile widget. With both set, the sign-in, invite and reset forms run a browser check. |
 
 systemd reads `.env` as plain `KEY=VALUE` lines. It does not expand `$`, and it does not allow a
 comment after a value. Only `RESUME_PDF` and `RESUME_TEX` may start with `~/`, because Waypoint

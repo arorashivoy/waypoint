@@ -4,6 +4,7 @@ import { handle, HttpError, readJson } from '@/lib/auth/http';
 import { burnPasswordCheck, verifyPassword } from '@/lib/auth/password';
 import { clearLimit, clientIp, FIFTEEN_MINUTES, hitLimit } from '@/lib/auth/rate-limit';
 import { createSession, setSessionCookie } from '@/lib/auth/session';
+import { requireTurnstile } from '@/lib/auth/turnstile';
 import { normEmail } from '@/lib/auth/users';
 
 const WRONG = 'The email or password is not correct.';
@@ -22,11 +23,13 @@ export const POST = handle(async (req) => {
   // for all clients together stops a flood of new IP addresses and emails.
   // It counts only the tries that pass the IP and email limits. Otherwise one
   // client that is already blocked could fill it and block every sign-in.
-  const byIp = await hitLimit(`login:ip:${clientIp(req.headers)}`, 10, FIFTEEN_MINUTES);
+  const ip = clientIp(req.headers);
+  const byIp = await hitLimit(`login:ip:${ip}`, 10, FIFTEEN_MINUTES);
   const byEmail = await hitLimit(`login:email:${email}`, 10, FIFTEEN_MINUTES);
   if (!byIp.ok || !byEmail.ok) tooMany(byIp.retryAfterSec, byEmail.retryAfterSec);
   const all = await hitLimit('login:all', 100, FIFTEEN_MINUTES);
   if (!all.ok) tooMany(all.retryAfterSec);
+  await requireTurnstile(body.turnstile, ip);
 
   const user = email ? await db.user.findUnique({ where: { email } }) : null;
   let ok = false;

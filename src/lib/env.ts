@@ -28,6 +28,8 @@ const schema = z.object({
   WAYPOINT_SHARED_MONTHLY_USD: z.preprocess(empty, z.coerce.number().nonnegative().default(5)),
   WAYPOINT_BACKUP_REMOTE: z.preprocess(empty, z.string().optional()),
   WAYPOINT_CF_TUNNEL: z.preprocess(empty, z.string().optional()),
+  WAYPOINT_TURNSTILE_SITE_KEY: z.preprocess(empty, z.string().optional()),
+  WAYPOINT_TURNSTILE_SECRET: z.preprocess(empty, z.string().optional()),
   WAYPOINT_USERS_DIR: z.preprocess(empty, z.string().optional()),
   LOG_LEVEL: z.preprocess(empty, z.enum(['fatal', 'error', 'warn', 'info', 'debug'], { error: 'must be one of fatal, error, warn, info, debug' }).default('info')),
 });

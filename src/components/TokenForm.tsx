@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { api, post } from './api';
+import Turnstile from './Turnstile';
 
 type Info = { kind: 'invite' | 'reset'; email: string | null; name: string | null };
 
 /** The page for an invite link or a reset link. On success the server signs the user in. */
-export default function TokenForm({ token }: { token: string }) {
+export default function TokenForm({ token, siteKey }: { token: string; siteKey: string | null }) {
   const [info, setInfo] = useState<Info | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -14,6 +15,9 @@ export default function TokenForm({ token }: { token: string }) {
   const [password, setPassword] = useState('');
   const [again, setAgain] = useState('');
   const [busy, setBusy] = useState(false);
+  const [check, setCheck] = useState<string | null>(null);
+  const [round, setRound] = useState(0);
+  const waiting = !!siteKey && !check;
 
   useEffect(() => {
     api<Info>(`/api/invites/${encodeURIComponent(token)}`).then(setInfo, (e) => setError((e as Error).message));
@@ -28,11 +32,12 @@ export default function TokenForm({ token }: { token: string }) {
     setBusy(true);
     setError(null);
     try {
-      await post(`/api/invites/${encodeURIComponent(token)}`, info?.kind === 'invite' ? { name, email, password } : { password });
+      await post(`/api/invites/${encodeURIComponent(token)}`, { ...(info?.kind === 'invite' ? { name, email, password } : { password }), turnstile: check ?? undefined });
       window.location.assign('/');
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);
+      if (siteKey) setRound((r) => r + 1);
     }
   };
 
@@ -73,7 +78,8 @@ export default function TokenForm({ token }: { token: string }) {
               <span>Type the password again</span>
               <input className="field" type="password" autoComplete="new-password" minLength={12} required value={again} onChange={(e) => setAgain(e.target.value)} />
             </label>
-            <button className="login-cta" type="submit" disabled={busy}>{busy ? 'Saving…' : info.kind === 'reset' ? 'Set the password' : 'Make the account'}</button>
+            {siteKey && <Turnstile siteKey={siteKey} round={round} onToken={setCheck} />}
+            <button className="login-cta" type="submit" disabled={busy || waiting}>{busy ? 'Saving…' : waiting ? 'Checking your browser…' : info.kind === 'reset' ? 'Set the password' : 'Make the account'}</button>
           </>
         )}
         {error && <p role="alert" className="login-error">{error}</p>}

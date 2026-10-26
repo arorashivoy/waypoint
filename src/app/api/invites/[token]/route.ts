@@ -3,6 +3,7 @@ import { handle, HttpError, readJson } from '@/lib/auth/http';
 import { inspectToken, redeemInvite, redeemReset } from '@/lib/auth/invites';
 import { clientIp, FIFTEEN_MINUTES, hitLimit } from '@/lib/auth/rate-limit';
 import { createSession, setSessionCookie } from '@/lib/auth/session';
+import { requireTurnstile } from '@/lib/auth/turnstile';
 
 type Ctx = { params: { token: string } };
 
@@ -24,6 +25,7 @@ export const GET = handle<Ctx>(async (req, { params }) => {
 export const POST = handle<Ctx>(async (req, { params }) => {
   await limit(req);
   const body = await readJson(req);
+  await requireTurnstile(body.turnstile, clientIp(req.headers));
   const info = await inspectToken(params.token);
   if (!info) throw new HttpError(404, GONE);
   const user = info.kind === 'invite' ? await redeemInvite(params.token, body as { email?: unknown; name: unknown; password: unknown }) : await redeemReset(params.token, body.password);
