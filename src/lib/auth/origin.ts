@@ -2,7 +2,7 @@
  * Same-origin checks. Edge-safe (the middleware imports this file), so it
  * reads process.env directly and not through env().
  *
- * Behind zrok, the Host header can be localhost:<port> while the browser
+ * Behind the Cloudflare tunnel, the Host header can be localhost:<port> while the browser
  * sends the public URL as Origin. WAYPOINT_PUBLIC_URL names that URL.
  */
 

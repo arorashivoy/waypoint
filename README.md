@@ -88,12 +88,12 @@ npm run build && npm start
 
 Use this on a machine that stays on, for example a Raspberry Pi with Debian or Raspberry Pi OS. Four
 systemd user units run Waypoint: `waypoint-web` (the app), `waypoint-worker` (the task queue),
-`waypoint-tunnel` (the zrok share) and `waypoint-backup.timer` (a backup each night at 03:00). The
+`waypoint-tunnel` (the named Cloudflare Tunnel) and `waypoint-backup.timer` (a backup each night at 03:00). The
 units start again after a failure and after a reboot.
 
 Install the units for one copy of Waypoint only on each machine. The unit names are fixed, so a
 second install replaces the first. Do not run `./scripts/start.sh` or `./scripts/remote.sh` while
-the units run: they use the same port and the same zrok name.
+the units run: they use the same port and the same tunnel.
 
 **1. Install the tools.** You need Node 22, and these packages. `pdftotext`, `gs` and LaTeX read
 and build the CVs.
@@ -103,7 +103,13 @@ sudo apt install poppler-utils ghostscript texlive-latex-base texlive-latex-reco
 ```
 
 Install the [Claude Code CLI](https://claude.com/claude-code) and run `claude login` as the same
-user. Install `zrok2`, then run `zrok2 enable <your token>` and `zrok2 create name waypoint` one time.
+user. Install `cloudflared`. Your domain must use Cloudflare DNS. Then make the tunnel one time:
+
+```bash
+cloudflared tunnel login                       # open the URL that it prints, and select the domain
+cloudflared tunnel create waypoint
+cloudflared tunnel route dns waypoint waypoint.example.com
+```
 
 **2. Get the code and make `.env`.**
 
@@ -118,10 +124,10 @@ Then add these lines to `.env`, one key on each line:
 
 | Key | Value |
 |---|---|
-| `WAYPOINT_PUBLIC_URL` | The public URL, for example `https://waypoint.shares.zrok.io`. Invite links and the sign-in redirect use it. |
+| `WAYPOINT_PUBLIC_URL` | The public URL, for example `https://waypoint.example.com` (the hostname from `route dns`). Invite links and the sign-in redirect use it. |
 | `PORT` | Optional. The default is 3117. |
 | `WAYPOINT_CLAUDE_BIN` | The full path of `claude` (run `command -v claude`). The units have a short `PATH` (the folder of node, `/usr/local/bin`, `/usr/bin`, `/bin`), so a CLI in `~/.local/bin` needs this key. |
-| `WAYPOINT_ZROK_NAME` | Optional. The zrok name, if it is not `waypoint`. |
+| `WAYPOINT_CF_TUNNEL` | Optional. The name of the tunnel, if it is not `waypoint`. |
 
 systemd reads `.env` as plain `KEY=VALUE` lines. It does not expand `$`, and it does not allow a
 comment after a value. Only `RESUME_PDF` and `RESUME_TEX` may start with `~/`, because Waypoint
@@ -327,13 +333,13 @@ Alternatives, in rough order of safety:
 
 - **Tailscale** (`brew install --cask tailscale`) — a private network between your devices. Nothing
   is public, so there is no URL for anyone to find. Safest option; needs the app running on each device.
-- **Cloudflare Tunnel + Cloudflare Access** — a stable URL with real email login, in front of the
-  Waypoint sign-in. Needs a free Cloudflare account and a domain.
+- **Named Cloudflare Tunnel** (`WAYPOINT_TUNNEL=named` in `.env`) — a fixed URL on your own domain,
+  for example `https://waypoint.example.com`. Needs a free Cloudflare account and a domain on
+  Cloudflare DNS. Make the tunnel one time (see [Always on](#always-on-a-server-with-systemd)), and set
+  `WAYPOINT_PUBLIC_URL` to the URL. Add Cloudflare Access for an email login in front of the
+  Waypoint sign-in.
 - **Quick tunnel** (what `remote.sh` uses) — instant, no account, but the URL is public and changes
   every run. Sign-in with an account is the lock.
-- **zrok** (`WAYPOINT_TUNNEL=zrok` in `.env`) — a fixed `https://<name>.shares.zrok.io` URL, on a
-  free zrok.io account. Install `zrok2`, run `zrok2 enable <token>` and `zrok2 create name waypoint`.
-  The share has no basic auth. The Waypoint sign-in is the lock. Set `WAYPOINT_PUBLIC_URL` to the URL.
 
 `nginx` alone will not do this: your machine sits behind NAT, so you would also need port forwarding,
 dynamic DNS and your own TLS — and none of that works at all if your ISP uses CGNAT.

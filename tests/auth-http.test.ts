@@ -118,10 +118,10 @@ describe('sameOrigin', () => {
   });
 
   it('accepts the public URL', () => {
-    vi.stubEnv('WAYPOINT_PUBLIC_URL', 'https://wp.shares.zrok.io');
+    vi.stubEnv('WAYPOINT_PUBLIC_URL', 'https://waypoint.example.com');
     try {
-      expect(sameOrigin(req({ origin: 'https://wp.shares.zrok.io', host: 'localhost:3118' }))).toBe(true);
-      expect(publicBase(req({ host: 'localhost:3118' }))).toBe('https://wp.shares.zrok.io');
+      expect(sameOrigin(req({ origin: 'https://waypoint.example.com', host: 'localhost:3118' }))).toBe(true);
+      expect(publicBase(req({ host: 'localhost:3118' }))).toBe('https://waypoint.example.com');
     } finally {
       vi.unstubAllEnvs();
     }

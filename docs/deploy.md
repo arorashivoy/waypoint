@@ -40,8 +40,7 @@ use `scripts/deploy.sh` for each update (step 10).
    | `WAYPOINT_SECRET_KEY` | required | Run `npm run secret:new` and add the line it prints. If you lose the key, users must save their secrets again. |
    | `WAYPOINT_PUBLIC_URL` | recommended | The public URL of this copy. Invite and reset links use it. |
    | `WAYPOINT_SHARED_MONTHLY_USD` | optional | The monthly limit for each user on the shared key. The default is 5. |
-   | `WAYPOINT_ZROK_NAME` | optional | The name of the zrok share. The default is `waypoint`. |
-   | `WAYPOINT_ZROK_NAMESPACE` | optional | The namespace of the share. The default is `public`. |
+   | `WAYPOINT_CF_TUNNEL` | optional | The name of the named Cloudflare Tunnel. The default is `waypoint`. |
    | `WAYPOINT_BACKUP_REMOTE` | optional | An rclone remote for the backups, for example `gdrive:waypoint-backups`. |
    | `WAYPOINT_USERS_DIR` | optional | The folder for the files of the users. See step 8. |
    | `WAYPOINT_CLAUDE_BIN` | optional | The full path of the `claude` CLI, for example `/home/<user>/.local/bin/claude`. The units have a short `PATH` (the folder of node, `/usr/local/bin`, `/usr/bin`, `/bin`). If the CLI is in another folder, set this key, or CLI mode stays off. |
@@ -147,7 +146,20 @@ use `scripts/deploy.sh` for each update (step 10).
    npm run build
    ```
 
-7. Install the units, then enable them.
+7. Make the named Cloudflare Tunnel one time, then install the units and enable them.
+
+   The domain must use Cloudflare DNS. The first command prints a URL. Open it in a browser and
+   select the domain. The credentials go to `~/.cloudflared`.
+
+   ```bash
+   cloudflared tunnel login
+   cloudflared tunnel create waypoint
+   cloudflared tunnel route dns waypoint waypoint.<your domain>
+   ```
+
+   If you use a name other than `waypoint`, set `WAYPOINT_CF_TUNNEL` in `.env`. Set
+   `WAYPOINT_PUBLIC_URL` to `https://waypoint.<your domain>`. The second copy on the Pi needs its own
+   tunnel and its own hostname.
 
    ```bash
    ./scripts/install-units.sh <checkout>

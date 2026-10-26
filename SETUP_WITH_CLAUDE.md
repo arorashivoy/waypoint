@@ -73,12 +73,12 @@ run `npm run setup` or re-create `.env`. Instead:
    Append the line that it prints to `.env`. Do not overwrite the file.
    Optional: append `WAYPOINT_SHARED_MONTHLY_USD=5` (the default is 5).
 8. Add the public URL to `.env` (append one line; do not overwrite the file):
-   `WAYPOINT_PUBLIC_URL=https://<name>.shares.zrok.io`
+   `WAYPOINT_PUBLIC_URL=https://waypoint.<your domain>` (the hostname of the named Cloudflare Tunnel)
 9. Set the admin password: `npm run user:create-admin`. The migration made your
    existing account the admin. The script asks for the email, the name and the password.
 10. Remove `WAYPOINT_ACCESS_CODE`, `WAYPOINT_ZROK_AUTH_FILE` and the `LINKEDIN_*` lines
    from `.env`. They do nothing now.
-11. Restart with `./scripts/start.sh restart`. The zrok share now has no basic auth.
+11. Restart with `./scripts/start.sh restart`. Set `WAYPOINT_TUNNEL=named` for the fixed hostname.
     Sign in with the admin email and password.
     Tell the user to hard-reload every open tab.
 12. Run the checklist in section 7.

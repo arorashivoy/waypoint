@@ -83,18 +83,22 @@ describe('scripts', () => {
     expect(t.indexOf('show -p WorkingDirectory')).toBeLessThan(t.indexOf('npm run backup'));
   });
 
-  it('tunnel.sh waits for the health check before the share', () => {
+  it('tunnel.sh waits for the health check before the tunnel', () => {
     const t = read('scripts/tunnel.sh');
     expect(t).toContain('/api/health');
-    expect(t.indexOf('/api/health')).toBeLessThan(t.indexOf('exec zrok2'));
-    expect(t).toContain('stale="$(zrok_holder)" || true');
+    expect(t.indexOf('/api/health')).toBeLessThan(t.indexOf('exec cloudflared'));
   });
 
-  it('tunnel.sh reads the port with port.mjs and runs the share with exec', () => {
+  it('tunnel.sh reads the port with port.mjs and runs the named tunnel with exec', () => {
     const t = read('scripts/tunnel.sh');
     expect(t).toMatch(/^set -euo pipefail$/m);
     expect(t).toContain('node scripts/port.mjs');
-    expect(t).toMatch(/^exec zrok2 share public "localhost:\$PORT" -n "\$ZROK_NS:\$ZROK_NAME" --headless$/m);
+    expect(t).toContain('CF_TUNNEL="${WAYPOINT_CF_TUNNEL:-waypoint}"');
+    expect(t).toMatch(/^exec cloudflared tunnel --no-autoupdate run --url "http:\/\/localhost:\$PORT" "\$CF_TUNNEL"$/m);
+  });
+
+  it('the tunnel unit can find cloudflared in /usr/local/bin', () => {
+    expect(read('deploy/systemd/waypoint-tunnel.service')).toMatch(/^Environment=PATH=.*:\/usr\/local\/bin:/m);
   });
 
   it('tunnel.sh has no basic auth flag', () => {

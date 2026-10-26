@@ -1,28 +1,17 @@
 #!/usr/bin/env bash
-# Opens the public zrok share for Waypoint. The systemd unit waypoint-tunnel runs it.
+# Opens the named Cloudflare Tunnel for Waypoint. The systemd unit waypoint-tunnel runs it.
 # It reads the port with scripts/port.mjs, as `npm run start` does, so the
 # tunnel and the web server use the same port.
-#   WAYPOINT_ZROK_NAME       the name of the share (default waypoint)
-#   WAYPOINT_ZROK_NAMESPACE  the namespace of the name (default public)
+#   WAYPOINT_CF_TUNNEL  the name (or UUID) of the tunnel (default waypoint)
+# Do these steps one time: `cloudflared tunnel login`, `cloudflared tunnel create waypoint`
+# and `cloudflared tunnel route dns waypoint <hostname>`. The credentials stay in ~/.cloudflared.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 PORT="$(node scripts/port.mjs)"
-ZROK_NAME="${WAYPOINT_ZROK_NAME:-waypoint}"
-ZROK_NS="${WAYPOINT_ZROK_NAMESPACE:-public}"
+CF_TUNNEL="${WAYPOINT_CF_TUNNEL:-waypoint}"
 
-# The share token that holds our zrok name, if any. A share that stopped
-# without a clean shutdown keeps the name, and the next start is refused.
-zrok_holder() {
-  zrok2 list names 2>/dev/null | awk -F'│' -v n="$ZROK_NAME" -v ns="$ZROK_NS" '
-    { name=$3; space=$4; tok=$5; gsub(/ /,"",name); gsub(/ /,"",space); gsub(/ /,"",tok) }
-    name==n && space==ns && tok!="" { print tok }'
-}
-
-stale="$(zrok_holder)" || true
-[ -n "$stale" ] && zrok2 delete share "$stale" >/dev/null 2>&1 || true
-
-# Wait until the web server answers, so the share does not open on a closed port.
+# Wait until the web server answers, so the tunnel does not open on a closed port.
 ready=0
 for _ in $(seq 1 60); do
   if curl -sf -o /dev/null -m 5 "http://localhost:$PORT/api/health"; then ready=1; break; fi
@@ -32,4 +21,4 @@ if [ "$ready" != 1 ]; then
   echo "The web server did not answer on port $PORT within 60 seconds." >&2; exit 1
 fi
 
-exec zrok2 share public "localhost:$PORT" -n "$ZROK_NS:$ZROK_NAME" --headless
+exec cloudflared tunnel --no-autoupdate run --url "http://localhost:$PORT" "$CF_TUNNEL"

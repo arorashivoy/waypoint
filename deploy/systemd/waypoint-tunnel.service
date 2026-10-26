@@ -1,7 +1,7 @@
-# The public zrok share. install-units.sh fills in @CHECKOUT@ and @NODE_BIN@.
+# The named Cloudflare Tunnel. install-units.sh fills in @CHECKOUT@ and @NODE_BIN@.
 # tunnel.sh reads the port with scripts/port.mjs, so it needs node on PATH.
 [Unit]
-Description=Waypoint zrok tunnel
+Description=Waypoint Cloudflare tunnel
 After=network-online.target waypoint-web.service
 Wants=network-online.target waypoint-web.service
 

@@ -16,12 +16,13 @@
 # into it. Close the laptop and the door leads nowhere.
 #
 # The tunnel is chosen by WAYPOINT_TUNNEL in .env:
-#   cloudflared  (default) a quick tunnel; a new random URL on every start
-#   zrok         a fixed https://<name>.shares.zrok.io URL. Needs `zrok2 enable`
-#                once and a reserved name (`zrok2 create name <name>`).
-#                WAYPOINT_ZROK_NAME (default waypoint), WAYPOINT_ZROK_NAMESPACE
-#                (default public).
-#   none         the server only, for use on your own network
+#   quick   (default) a Cloudflare quick tunnel; a new random URL on every start.
+#           The old name `cloudflared` also selects it.
+#   named   a named Cloudflare Tunnel on your own domain, at WAYPOINT_PUBLIC_URL.
+#           Needs `cloudflared tunnel login`, `cloudflared tunnel create <name>` and
+#           `cloudflared tunnel route dns <name> <hostname>` once.
+#           WAYPOINT_CF_TUNNEL (default waypoint) is the name of the tunnel.
+#   none    the server only, for use on your own network
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -43,9 +44,10 @@ case "$MODE" in
 esac
 # start.sh execs this script, so name the one the user typed in messages.
 SELF=remote.sh; [ "$MODE" = prod ] && SELF=start.sh
-TUNNEL="$(envv WAYPOINT_TUNNEL)"; TUNNEL="${TUNNEL:-cloudflared}"
-ZROK_NAME="$(envv WAYPOINT_ZROK_NAME)"; ZROK_NAME="${ZROK_NAME:-waypoint}"
-ZROK_NS="$(envv WAYPOINT_ZROK_NAMESPACE)"; ZROK_NS="${ZROK_NS:-public}"
+TUNNEL="$(envv WAYPOINT_TUNNEL)"; TUNNEL="${TUNNEL:-quick}"
+[ "$TUNNEL" = cloudflared ] && TUNNEL=quick
+CF_TUNNEL="$(envv WAYPOINT_CF_TUNNEL)"; CF_TUNNEL="${CF_TUNNEL:-waypoint}"
+PUBLIC_URL="$(envv WAYPOINT_PUBLIC_URL)"; PUBLIC_URL="${PUBLIC_URL%/}"
 
 # Keyed by port so two copies on one machine never share pid files or logs.
 RUN="/tmp/waypoint-$PORT"
@@ -74,29 +76,9 @@ stop_job() {
   rm -f "$RUN/$name.pid"
 }
 
-# The share token currently holding our zrok name, if any. A share killed
-# without a clean shutdown keeps the name, and the next start is refused.
-zrok_holder() {
-  zrok2 list names 2>/dev/null | awk -F'│' -v n="$ZROK_NAME" -v ns="$ZROK_NS" '
-    { name=$3; space=$4; tok=$5; gsub(/ /,"",name); gsub(/ /,"",space); gsub(/ /,"",tok) }
-    name==n && space==ns && tok!="" { print tok }'
-}
-
-zrok_url() {
-  local host
-  host=$(zrok2 list names 2>/dev/null | awk -F'│' -v n="$ZROK_NAME" -v ns="$ZROK_NS" '
-    { url=$2; name=$3; space=$4; gsub(/ /,"",url); gsub(/ /,"",name); gsub(/ /,"",space) }
-    name==n && space==ns { print url; exit }')
-  [ -n "$host" ] && printf 'https://%s' "${host#https://}"
-}
-
 # Fetches a path through the tunnel the way a browser would.
 tunnel_get() {
-  local url=$1 args=(-sf -m 25)
-  if [ "$TUNNEL" = zrok ]; then
-    args+=(-H "skip_zrok_interstitial: 1")
-  fi
-  curl "${args[@]}" "$url"
+  curl -sf -m 25 "$1"
 }
 
 start_server() {
@@ -169,8 +151,8 @@ start_tunnel() {
   rm -f "$RUN/url"
   case "$TUNNEL" in
     none) return ;;
-    cloudflared)
-      echo "Opening Cloudflare tunnel ..."
+    quick)
+      echo "Opening a Cloudflare quick tunnel ..."
       nohup cloudflared tunnel --url "http://localhost:$PORT" --no-autoupdate >"$TUNNEL_LOG" 2>&1 </dev/null &
       echo $! >"$RUN/tunnel.pid"
       local url=""
@@ -183,36 +165,24 @@ start_tunnel() {
       [ -n "$url" ] || { echo "Tunnel did not come up; see $TUNNEL_LOG" >&2; exit 1; }
       echo "$url" >"$RUN/url"
       ;;
-    zrok)
-      echo "Opening zrok share '$ZROK_NAME' ..."
-      local stale
-      stale=$(zrok_holder)
-      [ -n "$stale" ] && zrok2 delete share "$stale" >/dev/null 2>&1 || true
-      nohup zrok2 share public "localhost:$PORT" -n "$ZROK_NS:$ZROK_NAME" --headless \
+    named)
+      echo "Opening the Cloudflare tunnel '$CF_TUNNEL' ..."
+      nohup cloudflared tunnel --no-autoupdate run --url "http://localhost:$PORT" "$CF_TUNNEL" \
         >"$TUNNEL_LOG" 2>&1 </dev/null &
       echo $! >"$RUN/tunnel.pid"
       for _ in $(seq 1 30); do
-        alive tunnel || { echo "zrok exited:" >&2; tail -3 "$TUNNEL_LOG" >&2; exit 1; }
-        grep -q 'access your zrok share' "$TUNNEL_LOG" && break
+        alive tunnel || { echo "cloudflared exited:" >&2; tail -3 "$TUNNEL_LOG" >&2; exit 1; }
+        grep -q 'Registered tunnel connection' "$TUNNEL_LOG" && break
         sleep 1
       done
-      grep -q 'access your zrok share' "$TUNNEL_LOG" || { echo "zrok share did not come up; see $TUNNEL_LOG" >&2; exit 1; }
-      zrok_url >"$RUN/url"
+      grep -q 'Registered tunnel connection' "$TUNNEL_LOG" || { echo "The tunnel did not connect; see $TUNNEL_LOG" >&2; exit 1; }
+      echo "$PUBLIC_URL" >"$RUN/url"
       ;;
   esac
 }
 
 stop_tunnel() {
-  # zrok releases its name on a clean Ctrl-C; anything that survives is deleted
-  # by token so the next start can claim the name.
-  if [ "$TUNNEL" = zrok ]; then
-    stop_job tunnel INT
-    local stale
-    stale=$(zrok_holder)
-    [ -n "$stale" ] && zrok2 delete share "$stale" >/dev/null 2>&1 || true
-  else
-    stop_job tunnel TERM
-  fi
+  stop_job tunnel TERM
   rm -f "$RUN/url"
 }
 
@@ -231,14 +201,15 @@ status() {
 
 preflight() {
   case "$TUNNEL" in
-    cloudflared)
-      command -v cloudflared >/dev/null || { echo "cloudflared not found: brew install cloudflared (macOS) or the arm64 .deb from github.com/cloudflare/cloudflared/releases (Pi)" >&2; exit 1; } ;;
-    zrok)
-      command -v zrok2 >/dev/null || { echo "zrok2 not found: curl -sSf https://get.openziti.io/install.bash | sudo bash -s zrok2" >&2; exit 1; }
-      [ -n "$(zrok_url)" ] || { echo "No zrok name '$ZROK_NAME' in namespace '$ZROK_NS': zrok2 create name -n $ZROK_NS $ZROK_NAME" >&2; exit 1; } ;;
-    none) ;;
-    *) echo "WAYPOINT_TUNNEL must be cloudflared, zrok or none, got '$TUNNEL'" >&2; exit 1 ;;
+    quick|named|none) ;;
+    *) echo "WAYPOINT_TUNNEL must be quick, named or none, got '$TUNNEL'" >&2; exit 1 ;;
   esac
+  [ "$TUNNEL" = none ] && return
+  command -v cloudflared >/dev/null || { echo "cloudflared not found: brew install cloudflared (macOS) or the arm64 .deb from github.com/cloudflare/cloudflared/releases (Pi)" >&2; exit 1; }
+  if [ "$TUNNEL" = named ]; then
+    [ -n "$PUBLIC_URL" ] || { echo "WAYPOINT_TUNNEL=named needs WAYPOINT_PUBLIC_URL, for example https://waypoint.example.com" >&2; exit 1; }
+    cloudflared tunnel info "$CF_TUNNEL" >/dev/null 2>&1 || { echo "No Cloudflare tunnel '$CF_TUNNEL'. Run: cloudflared tunnel login, then cloudflared tunnel create $CF_TUNNEL" >&2; exit 1; }
+  fi
 }
 
 start() {
@@ -255,7 +226,7 @@ start() {
   echo
   status
   case "$TUNNEL" in
-    cloudflared) echo; echo "This URL is new every start." ;;
+    quick) echo; echo "This URL is new every start." ;;
   esac
   echo "  Sign in with your Waypoint account. Make the admin with: npm run user:create-admin"
   echo; echo "Running in the background. Stop with: ./scripts/$SELF stop"

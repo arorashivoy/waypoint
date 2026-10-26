@@ -73,7 +73,7 @@ describe('isHttps', () => {
   });
 
   it('is true when WAYPOINT_PUBLIC_URL is an https URL', () => {
-    vi.stubEnv('WAYPOINT_PUBLIC_URL', 'https://wp.shares.zrok.io');
+    vi.stubEnv('WAYPOINT_PUBLIC_URL', 'https://waypoint.example.com');
     expect(isHttps(plain())).toBe(true);
   });
 

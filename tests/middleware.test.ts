@@ -20,15 +20,15 @@ describe('middleware', () => {
   });
 
   it('redirects to the public host behind a tunnel', () => {
-    const res = middleware(new NextRequest(new URL('/', 'http://localhost:3118'), { headers: { host: 'localhost:3118', 'x-forwarded-host': 'wp.shares.zrok.io', 'x-forwarded-proto': 'https' } }));
-    expect(res.headers.get('location')).toBe('https://wp.shares.zrok.io/login?next=%2F');
+    const res = middleware(new NextRequest(new URL('/', 'http://localhost:3118'), { headers: { host: 'localhost:3118', 'x-forwarded-host': 'waypoint.example.com', 'x-forwarded-proto': 'https' } }));
+    expect(res.headers.get('location')).toBe('https://waypoint.example.com/login?next=%2F');
   });
 
   it('redirects to WAYPOINT_PUBLIC_URL when it is set', () => {
-    vi.stubEnv('WAYPOINT_PUBLIC_URL', 'https://wp.shares.zrok.io');
+    vi.stubEnv('WAYPOINT_PUBLIC_URL', 'https://waypoint.example.com');
     try {
       const res = middleware(new NextRequest(new URL('/jobs', 'http://localhost:3118'), { headers: { host: 'localhost:3118' } }));
-      expect(res.headers.get('location')).toBe('https://wp.shares.zrok.io/login?next=%2Fjobs');
+      expect(res.headers.get('location')).toBe('https://waypoint.example.com/login?next=%2Fjobs');
     } finally {
       vi.unstubAllEnvs();
     }
@@ -64,9 +64,9 @@ describe('middleware', () => {
   });
 
   it('accepts the public URL', () => {
-    vi.stubEnv('WAYPOINT_PUBLIC_URL', 'https://wp.shares.zrok.io');
+    vi.stubEnv('WAYPOINT_PUBLIC_URL', 'https://waypoint.example.com');
     try {
-      const res = run('/api/countries', { method: 'POST', headers: { origin: 'https://wp.shares.zrok.io', host: 'localhost:3118' } });
+      const res = run('/api/countries', { method: 'POST', headers: { origin: 'https://waypoint.example.com', host: 'localhost:3118' } });
       expect(passes(res)).toBe(true);
     } finally {
       vi.unstubAllEnvs();
