@@ -37,7 +37,7 @@ export function DesignDemos({ sheetOpen = false }: { sheetOpen?: boolean }) {
             <Button confirm="Copied" onClick={async () => { await wait(200); setToast('Copied'); }}>Copy message</Button>
           </div>
           <div style={{ maxWidth: 420 }} className="ds-stack ds-form">
-            <Field label="Job link" hint="Paste a link from Greenhouse, Lever, Ashby or Workable." error={url.includes('careers') ? 'This board needs a link to one posting.' : undefined}>
+            <Field label="Job link" hint="Paste a link from Greenhouse, Lever, Ashby, Workable or Workday." error={url.includes('careers') ? 'This board needs a link to one posting.' : undefined}>
               {(c) => <input {...c} value={url} onChange={(e) => setUrl(e.target.value)} />}
             </Field>
             <Field label="Note to your contact" hint="Two or three sentences work best.">

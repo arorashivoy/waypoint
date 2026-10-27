@@ -35,6 +35,9 @@ describe('safeFetch: host list', () => {
     'https://boards.greenhouse.io/acme/jobs/1',
     'https://169.254.169.254/latest/meta-data',
     'https://boards-api.greenhouse.io.evil.example/x',
+    'https://acme.wd1.myworkdayjobs.com.evil.example/x',
+    'https://acme.myworkdayjobs.com/x',
+    'https://evil.example/acme.wd1.myworkdayjobs.com',
     'https://boards-api.greenhouse.io@evil.example/x',
     'https://boards-api.greenhouse.io:8443/x',
     'https://user:pw@boards-api.greenhouse.io/x',
@@ -51,6 +54,14 @@ describe('safeFetch: host list', () => {
     expect([...ALLOWED_HOSTS].sort()).toEqual(
       ['api.eu.lever.co', 'api.lever.co', 'api.ashbyhq.com', 'apply.workable.com', 'boards-api.eu.greenhouse.io', 'boards-api.greenhouse.io'].sort(),
     );
+  });
+});
+
+describe('safeFetch: Workday hosts', () => {
+  it('fetches a Workday careers host after the DNS check', async () => {
+    lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }] as never);
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    expect((await safeFetch('https://acme.wd12.myworkdayjobs.com/wday/cxs/acme/Site/job/X/Y_1')).status).toBe(200);
   });
 });
 

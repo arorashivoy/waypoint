@@ -26,7 +26,7 @@ export const POST = handle(async (req) => {
   const { id } = await enqueue({
     kind: 'paste',
     userId: user.id,
-    payload: { board: parsed.board, company: parsed.company, jobId: parsed.jobId, region: parsed.region },
+    payload: { board: parsed.board, company: parsed.company, jobId: parsed.jobId, region: parsed.region, workday: parsed.workday },
     dedupeKey: `paste:${user.id}:${parsed.board}:${parsed.jobId}`,
   });
   return NextResponse.json({ taskId: id });

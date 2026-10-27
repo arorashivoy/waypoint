@@ -28,6 +28,9 @@ describe('parsePastedUrl', () => {
     ['https://jobs.ashbyhq.com/acme/abc-123/application', { board: 'ashby', company: 'acme', jobId: 'abc-123', region: null }],
     ['https://apply.workable.com/acme/j/ABC123DEF/', { board: 'workable', company: 'acme', jobId: 'ABC123DEF', region: null }],
     ['https://apply.workable.com/acme/j/ABC123DEF/apply', { board: 'workable', company: 'acme', jobId: 'ABC123DEF', region: null }],
+    ['https://salesforce.wd12.myworkdayjobs.com/External_Career_Site/job/India---Hyderabad/Software-Engineering--MTS--Backend---Infra-_JR350272', { board: 'workday', company: 'salesforce', jobId: 'Software-Engineering--MTS--Backend---Infra-_JR350272', region: null, workday: { host: 'wd12', site: 'External_Career_Site', path: ['India---Hyderabad', 'Software-Engineering--MTS--Backend---Infra-_JR350272'] } }],
+    ['https://salesforce.wd12.myworkdayjobs.com/External_Career_Site/job/India---Hyderabad/Software-Engineering--MTS--Backend---Infra-_JR350272/apply', { board: 'workday', company: 'salesforce', jobId: 'Software-Engineering--MTS--Backend---Infra-_JR350272', region: null, workday: { host: 'wd12', site: 'External_Career_Site', path: ['India---Hyderabad', 'Software-Engineering--MTS--Backend---Infra-_JR350272'] } }],
+    ['https://salesforce.wd12.myworkdayjobs.com/en-US/External_Career_Site/job/India---Hyderabad/Software-Engineering--MTS--Backend---Infra-_JR350272?q=x', { board: 'workday', company: 'salesforce', jobId: 'Software-Engineering--MTS--Backend---Infra-_JR350272', region: null, workday: { host: 'wd12', site: 'External_Career_Site', path: ['India---Hyderabad', 'Software-Engineering--MTS--Backend---Infra-_JR350272'] } }],
     ['  HTTPS://Boards.Greenhouse.IO/acme/jobs/9  ', { board: 'greenhouse', company: 'acme', jobId: '9', region: null }],
   ])('reads %s', (url, want) => {
     expect(parsePastedUrl(url)).toEqual(want);
@@ -62,6 +65,13 @@ describe('parsePastedUrl', () => {
     'https://jobs.ashbyhq.com/acme/x/apply',
     'https://apply.workable.com/acme/jobs/ABC',
     'https://apply.workable.com/acme/j/ABC/other',
+    'https://salesforce.wd12.myworkdayjobs.com/Site',
+    'https://salesforce.wd12.myworkdayjobs.com/Site/jobs/Place/Title_JR1',
+    'https://salesforce.wd12.myworkdayjobs.com/Site/job/Place/..',
+    'https://salesforce.wd12.myworkdayjobs.com/Site/job/Pl%2Face/Title_JR1',
+    'https://evil.com/Site/job/Place/Title_JR1',
+    'https://salesforce.myworkdayjobs.com/Site/job/Place/Title_JR1',
+    'https://x.evil.wd12.myworkdayjobs.com.evil.com/Site/job/Place/Title_JR1',
     'https://jobs.lever.co/' + 'a'.repeat(101) + '/x',
     'javascript:alert(1)',
     'file:///etc/passwd',
@@ -76,8 +86,8 @@ describe('parsePastedUrl', () => {
     expect(parsePastedUrl('https://boards.greenhouse.io/acme/jobs/1?x=' + 'a'.repeat(2000))).toEqual({ error: PASTE_ERROR });
   });
 
-  it('names the four boards in the message', () => {
-    for (const b of ['Greenhouse', 'Lever', 'Ashby', 'Workable']) expect(PASTE_ERROR).toContain(b);
+  it('names the five boards in the message', () => {
+    for (const b of ['Greenhouse', 'Lever', 'Ashby', 'Workable', 'Workday']) expect(PASTE_ERROR).toContain(b);
   });
 });
 
@@ -89,6 +99,7 @@ describe('apiUrlFor', () => {
     ['https://jobs.eu.lever.co/acme/ab-12', 'https://api.eu.lever.co/v0/postings/acme/ab-12?mode=json'],
     ['https://jobs.ashbyhq.com/acme/ab-12', 'https://api.ashbyhq.com/posting-api/job-board/acme?includeCompensation=false'],
     ['https://apply.workable.com/acme/j/AB12', 'https://apply.workable.com/api/v1/widget/accounts/acme?details=true'],
+    ['https://salesforce.wd12.myworkdayjobs.com/External_Career_Site/job/India---Hyderabad/Software-Engineering--MTS--Backend---Infra-_JR350272/apply', 'https://salesforce.wd12.myworkdayjobs.com/wday/cxs/salesforce/External_Career_Site/job/India---Hyderabad/Software-Engineering--MTS--Backend---Infra-_JR350272'],
   ])('builds the API URL for %s', (url, want) => {
     expect(apiUrlFor(ok(url))).toBe(want);
   });
@@ -179,6 +190,34 @@ describe('paste handler', () => {
     respond(other);
     await pasteAndRun(c.user.id, c.cookie, `https://boards.greenhouse.io/${company}/jobs/${other.id}`);
     expect((await db.job.findUniqueOrThrow({ where: { id: own.jobId } })).pastedBy).toBe(c.user.id);
+  });
+
+  it('reads a Workday job from the detail answer', async () => {
+    const { user, cookie } = await makeUser();
+    const tenant = slug();
+    const id = `JR${Math.floor(Math.random() * 1e6)}`;
+    respond({
+      jobPostingInfo: {
+        title: 'Backend Engineer',
+        location: 'India, Hyderabad',
+        country: { descriptor: 'India', alpha2Code: 'IN' },
+        jobReqId: id,
+        startDate: '2026-10-01',
+        jobDescription: '<p>Build Java services.</p>',
+        externalUrl: `https://${tenant}.wd1.myworkdayjobs.com/Site/job/India-Hyderabad/Backend-Engineer_${id}`,
+      },
+      hiringOrganization: { name: 'Acme Test' },
+    });
+    const t = await pasteAndRun(user.id, cookie, `https://${tenant}.wd1.myworkdayjobs.com/Site/job/India-Hyderabad/Backend-Engineer_${id}/apply`);
+    expect(t.status).toBe('done');
+    expect(String(fetchMock.mock.calls.at(-1)![0])).toBe(`https://${tenant}.wd1.myworkdayjobs.com/wday/cxs/${tenant}/Site/job/India-Hyderabad/Backend-Engineer_${id}`);
+    expect(await db.job.findUnique({ where: { externalId: `workday:${tenant}:${id}` } })).toMatchObject({ role: 'Backend Engineer', cc: 'IN', company: 'Acme Test', source: 'Workday' });
+
+    // A closed job: Workday answers 404.
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 404 }));
+    const gone = await pasteAndRun(user.id, cookie, `https://${tenant}.wd1.myworkdayjobs.com/Site/job/India-Hyderabad/Closed_JR1`);
+    expect(gone.status).toBe('failed');
+    expect(gone.lastError).toContain('could not find this job on Workday');
   });
 
   it('picks the job from the list of an Ashby board and of a Workable board', async () => {

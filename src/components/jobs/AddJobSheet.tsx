@@ -61,7 +61,7 @@ export default function AddJobSheet({ open, onClose, opener, refresh, openJob, s
           add();
         }}
       >
-        <Field label="Job link" hint="Greenhouse, Lever, Ashby and Workable boards work.">
+        <Field label="Job link" hint="Greenhouse, Lever, Ashby, Workable and Workday boards work.">
           {(c) => <input {...c} type="url" data-autofocus placeholder="https://" maxLength={2000} value={url} onChange={(e) => setUrl(e.target.value)} />}
         </Field>
         {error && <ErrorNote live what="Waypoint could not add this job." fix={error} />}

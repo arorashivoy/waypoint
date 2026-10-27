@@ -256,6 +256,27 @@ async function smartrecruiters(e: { company: string; token: string }, ccs: strin
   return out;
 }
 
+/** One Workday posting as a `RawJob`. A fetched board and a pasted link both call this, so the same job gets the same `externalId`. */
+export function workdayJob(
+  info: any,
+  externalPath: string,
+  at: { tenant: string; host: string; site: string; company: string; cc: string; city: string; remote?: boolean },
+): RawJob {
+  return shape({
+    externalId: `workday:${at.tenant}:${info.jobReqId || externalPath}`,
+    source: 'Workday',
+    role: info.title,
+    company: at.company,
+    city: at.city,
+    cc: at.cc,
+    remote: at.remote,
+    url: info.externalUrl || `https://${at.tenant}.${at.host}.myworkdayjobs.com/${at.site}${externalPath}`,
+    description: stripHtml(info.jobDescription || ''),
+    // The list only says "Posted 3 Days Ago"; the detail has the date.
+    postedAt: posted(info.startDate),
+  });
+}
+
 /**
  * Workday. The token is `tenant|host|site`, all three read off the careers URL
  * `https://<tenant>.<host>.myworkdayjobs.com/<site>`.
@@ -318,18 +339,7 @@ async function workday(e: { company: string; token: string }, ccs: string[]): Pr
     const jobs = await mapLimit(hits.slice(0, PER_COUNTRY), 4, async (p: any) => {
       try {
         const info = (await getJson(`${api}${p.externalPath}`)).jobPostingInfo || {};
-        return shape({
-          externalId: `workday:${tenant}:${info.jobReqId || p.externalPath}`,
-          source: 'Workday',
-          role: info.title || p.title,
-          company: e.company,
-          city: cityAfterCountry(info.location || '', cc),
-          cc,
-          url: info.externalUrl || `${origin}/${site}${p.externalPath}`,
-          description: stripHtml(info.jobDescription || ''),
-          // The list only says "Posted 3 Days Ago"; the detail has the date.
-          postedAt: posted(info.startDate),
-        });
+        return workdayJob({ ...info, title: info.title || p.title }, p.externalPath, { tenant, host, site, company: e.company, cc, city: cityAfterCountry(info.location || '', cc) });
       } catch {
         return null;
       }

@@ -1,7 +1,7 @@
 import { promises as dns } from 'node:dns';
 import { isIP } from 'node:net';
 
-/** The public API hosts of the four boards. Nothing else can be fetched. */
+/** The public API hosts of the boards, except Workday (see below). Nothing else can be fetched. */
 export const ALLOWED_HOSTS: readonly string[] = [
   'boards-api.greenhouse.io',
   'boards-api.eu.greenhouse.io',
@@ -10,6 +10,9 @@ export const ALLOWED_HOSTS: readonly string[] = [
   'api.ashbyhq.com',
   'apply.workable.com',
 ];
+
+/** A Workday careers site has one host for each company: `<tenant>.<wdN>.myworkdayjobs.com`. */
+const ALLOWED_HOST_PATTERNS: readonly RegExp[] = [/^[a-z0-9-]{1,63}\.wd\d{1,3}\.myworkdayjobs\.com$/];
 
 const MAX_REDIRECTS = 3;
 const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
@@ -109,7 +112,8 @@ export function isRefusedAddress(address: string): boolean {
 async function check(url: URL, signal: AbortSignal): Promise<void> {
   if (url.protocol !== 'https:') throw new SafeFetchError('Waypoint only fetches https links.');
   if (url.username || url.password || url.port) throw new SafeFetchError('Waypoint does not fetch a link with a user name or a port.');
-  if (!ALLOWED_HOSTS.includes(url.hostname.toLowerCase())) throw new SafeFetchError('Waypoint does not fetch from this host.');
+  const hostname = url.hostname.toLowerCase();
+  if (!ALLOWED_HOSTS.includes(hostname) && !ALLOWED_HOST_PATTERNS.some((re) => re.test(hostname))) throw new SafeFetchError('Waypoint does not fetch from this host.');
   let found: { address: string }[];
   try {
     // The lookup is under the same time limit as the fetch.
