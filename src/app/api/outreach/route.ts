@@ -7,6 +7,7 @@ import { requireUser } from '@/lib/auth/guard';
 import { jobView } from '@/lib/analysis';
 import { isAlumniRequest } from '@/lib/match';
 import { INCOMING_MAX } from '@/lib/schemas';
+import { EMAIL, findRecruiter } from '@/lib/recruiter';
 import { enqueueOutreach, type OutreachPayload } from '@/lib/outreach';
 
 /**
@@ -36,6 +37,30 @@ export const POST = handle(async (req) => {
     const { routes } = await jobView(job, user.id);
     if (!routes[0]) return NextResponse.json({ error: `No 1st-degree connection at ${job.company} in your imported export.` }, { status: 404 });
     return queue({ action: 'referral' });
+  }
+
+  if (body.action === 'recruiter') {
+    // Hunter.io gives the address. Nothing is written to anyone: the row only keeps the person that was found.
+    const found = await findRecruiter(job.company);
+    await db.outreachEvent.create({
+      data: {
+        applicationId: app.id,
+        kind: 'recruiter',
+        contactName: found.name,
+        contactInit: found.name.split(' ').map((x) => x[0]).join('').slice(0, 2).toUpperCase(),
+        contactEmail: found.email,
+        org: `${job.company}, ${job.city}`,
+        reason: [found.position, `${found.confidence}% sure`].filter(Boolean).join(', '),
+      },
+    });
+    return NextResponse.json({ ok: true, ...found });
+  }
+
+  if (body.action === 'cold') {
+    const known = await db.outreachEvent.findFirst({ where: { applicationId: app.id, kind: 'recruiter' }, orderBy: { createdAt: 'desc' } });
+    const email = String(body.email || known?.contactEmail || '').trim();
+    if (!EMAIL.test(email) || email.length > 254) return NextResponse.json({ error: 'Type a valid email address for the recruiter.' }, { status: 400 });
+    return queue({ action: 'cold', email });
   }
 
   if (body.action === 'alumni') {

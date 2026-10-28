@@ -108,6 +108,43 @@ export function renderReferral(v: ReferralFill) {
   });
 }
 
+export type ColdEmailFill = {
+  firstName: string;
+  role: string;
+  company: string;
+  jobRef: string;
+  candidateName: string;
+  cv: string;
+} & Slots;
+
+export const COLD_EMAIL_TEMPLATE = `Hi {firstName},
+
+I am applying for {role} at {company}, and {hook}.
+
+{proof}
+
+The job link is {jobRef}, and {cv}. Could you tell me who reviews this role, or if I should apply in another way?
+
+Thank you for your time,
+{candidateName}`;
+
+export function renderColdEmail(v: ColdEmailFill): { subject: string; body: string } {
+  const highlight = span(v.highlight, 60);
+  return {
+    subject: `${span(v.role, 80)} at ${span(v.company, 60)}: ${span(v.candidateName, 60)}`,
+    body: fill(COLD_EMAIL_TEMPLATE, {
+      firstName: v.firstName,
+      role: v.role,
+      company: v.company,
+      jobRef: v.jobRef,
+      candidateName: v.candidateName,
+      cv: span(v.cv, 200),
+      hook: span(v.hook, 160),
+      proof: groundProof(v.proof, highlight, 300) + '.',
+    }),
+  };
+}
+
 /** LinkedIn rejects a connection note over this, with no partial send. */
 export const NOTE_LIMIT = 300;
 

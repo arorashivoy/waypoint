@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { copyText } from '../api';
 import { Button, ErrorNote, Field, Fold, WayIn } from '../ui';
 import { PartBack } from './PartBack';
+import { RecruiterEmail } from './RecruiterEmail';
 import { showSection } from './scroll';
 import type { JobDetailState, Part } from './types';
 
@@ -127,6 +128,7 @@ export function WayInSection({ d, open = false, onPart, onBack }: { d: JobDetail
               <p className="jd-hint">This drafts a message to {best.name} and builds your CV. It copies the message and opens their profile. You send it there.</p>
             </div>
           ) : null}
+          <RecruiterEmail d={d} />
           {d.wayError && <ErrorNote live what="The request did not work." fix={d.wayError} />}
         </div>
       </Fold>

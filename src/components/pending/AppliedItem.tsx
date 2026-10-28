@@ -6,6 +6,11 @@ export default function AppliedItem({ item }: { item: Item }) {
     <li className="pn-item pn-applied">
       <strong>{item.role}</strong>
       <span className="pn-role">{[item.company, item.city].filter(Boolean).join(', ')}</span>
+      {item.url && (
+        <span className="pn-when">
+          <a href={item.url} target="_blank" rel="noreferrer" aria-label={`The posting for ${item.role} at ${item.company}`}>The posting</a>
+        </span>
+      )}
       {item.cvUrl && (
         <span className="pn-when">
           <a href={item.cvUrl} target="_blank" rel="noreferrer" aria-label={`The CV ${item.company} read`}>The CV they read</a>

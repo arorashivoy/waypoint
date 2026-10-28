@@ -70,6 +70,29 @@ ${trusted(SLOT_TASK(25, 45))}
 Choose "highlight" from exactly these, and copy it verbatim: ${highlightChoices(who)}.
 `;
 
+export const COLD_SYSTEM = prompt`You pick the details that go into a fixed cold email from one candidate to a recruiter. ${GUARD_TEXT}`;
+
+export const coldPrompt = (who: ProfileSummary, job: { role: string; company: string; description: string }, contactName: string, fields: string[] = []) => prompt`
+${profileBlock(who)}
+
+The fields that the candidate chose to search in: ${fieldList(fields)}.
+
+The recruiter below does not know the candidate. The candidate will email them about the job below, after the candidate approves the email.
+
+${untrustedFields('recruiter', { name: contactName })}
+
+${untrustedFields('job board listing', { title: job.role, company: job.company })}
+
+${untrusted('job description', job.description)}
+
+The email body is already written and you are not producing it. Your two spans land in it like this:
+"I am applying for <role> at <company>, and {hook}.\n\n{proof}\n\nThe job link is <link>, and my CV is at <link>."
+— so "hook" completes the sentence "and ..." and "proof" stands alone as its own short paragraph.
+${trusted(SLOT_TASK(25, 45))}
+
+Choose "highlight" from exactly these, and copy it verbatim: ${highlightChoices(who)}.
+`;
+
 export const ALUMNI_SYSTEM = prompt`You pick the one detail that goes into a fixed LinkedIn connection note for one candidate. ${GUARD_TEXT}`;
 
 /**

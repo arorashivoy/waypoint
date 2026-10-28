@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, del, draftCopyOpen, patch, post } from '../api';
-import { cvResult, messageResult, parser, referralResult, wordingResult } from '../task-results';
+import { cvResult, emailResult, messageResult, parser, referralResult, wordingResult } from '../task-results';
 import { runTask } from '../tasks';
 import { suggestBlockedNote } from './CvSection';
+import { gmailCompose } from './gmail';
 import type { Cv, CvBusy, JobDetailState, JobView, Wording } from './types';
 
 
@@ -16,7 +17,7 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
   const { claude, refresh, setToast } = opts;
   const [job, setJob] = useState<JobView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'send' | 'alumni' | null>(null);
+  const [busy, setBusy] = useState<'send' | 'alumni' | 'recruiter' | 'email' | null>(null);
   const [blocked, setBlocked] = useState(false);
   const [cv, setCv] = useState<Cv | null>(null);
   const [cvBusy, setCvBusy] = useState<CvBusy>(null);
@@ -108,6 +109,56 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
     }
   }, [id, job, refresh, setToast]);
 
+  const findRecruiter = useCallback(async () => {
+    setBusy('recruiter');
+    setWayError(null);
+    try {
+      const r = await post<{ name: string; email: string; position: string; confidence: number }>('/api/outreach', { jobId: id, action: 'recruiter' });
+      if (shown.current !== id) return;
+      setJob((cur) => cur && { ...cur, recruiter: { name: r.name, email: r.email, why: [r.position, `${r.confidence}% sure`].filter(Boolean).join(', ') }, coldEmail: null });
+    } catch (e) {
+      if (shown.current === id) setWayError((e as Error).message);
+    } finally {
+      if (shown.current === id) setBusy(null);
+    }
+  }, [id]);
+
+  const draftEmail = useCallback(async (email: string) => {
+    setBusy('email');
+    setWayError(null);
+    try {
+      const res = await runTask(() => post<{ taskId: string }>('/api/outreach', { jobId: id, action: 'cold', email }), { parse: parser(emailResult) });
+      if (shown.current !== id) return;
+      setJob((cur) => cur && { ...cur, coldEmail: { id: res.id, name: res.name, email: res.email, subject: res.subject, body: res.body, approved: false } });
+      // The draft built and uploaded the CV, so the CV section now has a file to show.
+      api<JobView>(`/api/jobs/${id}`).then((j) => { if (shown.current === id) { setCv(j.cv); setCvRev((r) => r + 1); } }).catch(() => {});
+    } catch (e) {
+      if (shown.current === id) setWayError((e as Error).message);
+    } finally {
+      if (shown.current === id) setBusy(null);
+    }
+  }, [id]);
+
+  const approveEmail = useCallback(async (v: { email: string; subject: string; body: string }) => {
+    const draft = job?.coldEmail;
+    if (!draft) return;
+    setWayError(null);
+    try {
+      await patch(`/api/outreach/${draft.id}`, { email: v.email, subject: v.subject, body: v.body, handled: true });
+    } catch (e) {
+      if (shown.current === id) setWayError((e as Error).message);
+      throw e;
+    }
+    if (shown.current !== id) return;
+    setJob((cur) => cur && cur.coldEmail && { ...cur, coldEmail: { ...cur.coldEmail, ...v, approved: true } });
+    // The text is on the clipboard too, for the case that Gmail drops it from a long link.
+    navigator.clipboard?.writeText(v.body).catch(() => {});
+    const tab = window.open(gmailCompose(v), '_blank');
+    if (tab) tab.opener = null;
+    setBlocked(!tab);
+    setToast(tab ? `Approved. Gmail is open with the email to ${draft.name}. Press Send there.` : `Approved. The browser blocked the new tab, so use "Open in Gmail" in your way in.`);
+  }, [id, job, setToast]);
+
   const markApplied = useCallback(async () => {
     if (!job) return;
     const next = !job.isApplied;
@@ -172,6 +223,6 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
   return {
     error: null,
     retry,
-    state: { job, cv, wording, busy, cvBusy, cvError, blocked, wayError, applyError, cvRev, claudeNote: suggestBlockedNote(claude), findContact, findAlumni, markApplied, generate, refine, reset, suggest, decide, original, setToast },
+    state: { job, cv, wording, busy, cvBusy, cvError, blocked, wayError, applyError, cvRev, claudeNote: suggestBlockedNote(claude), findContact, findAlumni, findRecruiter, draftEmail, approveEmail, markApplied, generate, refine, reset, suggest, decide, original, setToast },
   };
 }

@@ -356,6 +356,10 @@ model OutreachEvent {
   contactName   String?
   contactInit   String?
   contactUrl    String?
+  // For kind "recruiter" and kind "email": the address from the Hunter search, and the subject of the cold email.
+  // For kind "email", `handled` is true once the user approved the email.
+  contactEmail  String?
+  subject       String?
   org           String?
   body          String   @default("")
   incoming      String?

@@ -10,19 +10,21 @@ import { alumniSearch, ALUMNI_REASON } from '@/lib/match';
 import { askJson, credentialFor } from '@/lib/claude';
 import { askJsonCached } from '@/lib/cache';
 import { DraftReply, HookReply, INCOMING_MAX, SlotsReply } from '@/lib/schemas';
-import { alumniHookBudget, MIN_HOOK, renderAlumniNote, renderReferral, resolveHighlight, type Slots } from '@/lib/templates';
-import { ALUMNI_SYSTEM, alumniPrompt, PROMPT_VERSIONS, REFERRAL_SYSTEM, referralPrompt, REPLY_SYSTEM, replyPrompt } from '@/lib/prompts';
+import { alumniHookBudget, MIN_HOOK, renderAlumniNote, renderColdEmail, renderReferral, resolveHighlight, type Slots } from '@/lib/templates';
+import { ALUMNI_SYSTEM, alumniPrompt, COLD_SYSTEM, coldPrompt, PROMPT_VERSIONS, REFERRAL_SYSTEM, referralPrompt, REPLY_SYSTEM, replyPrompt } from '@/lib/prompts';
 import { checkForInjection } from '@/lib/injection';
 import { resumeOffer } from '@/lib/resume';
 import { publishCv, type Published } from '@/lib/cv';
 import { getSettings } from '@/lib/settings';
 
 export type OutreachPayload = {
-  action: 'referral' | 'note' | 'reply';
+  action: 'referral' | 'note' | 'reply' | 'cold';
   applicationId: string;
   /** The person who accepted the alumni note (action `referral` only). */
   name?: string;
   profileUrl?: string | null;
+  /** The recruiter to email (action `cold` only). The user can edit the address before this. */
+  email?: string;
   /** The message of the contact (action `reply` only). */
   incoming?: string;
 };
@@ -159,6 +161,38 @@ export async function runOutreach(userId: string, p: OutreachPayload): Promise<R
       data: { applicationId: app.id, kind: 'request', contactName: name, contactInit: init, contactUrl, org: eventOrg(job), body: message, reason, handled: true },
     });
     return { ok: true, copy: message, open: contactUrl, name, resume: resumeView(resume, driveReason) };
+  }
+
+  if (p.action === 'cold') {
+    const profile = await profileSummary(userId);
+    const recruiter = await db.outreachEvent.findFirst({ where: { applicationId: app.id, kind: 'recruiter' }, orderBy: { createdAt: 'desc' } });
+    const name = recruiter?.contactName || 'there';
+    const email = p.email ?? recruiter?.contactEmail;
+    if (!email) throw new TaskFatal('Find the recruiter email first.');
+    const { resume } = await publishCv(app, job, { compile: false });
+    const cred = await credentialFor(userId);
+    const candidates = [...profile.projects.map((x) => x.title), ...profile.positions.map((x) => x.title)].filter(Boolean);
+    const slots: Slots =
+      !cred
+        ? { highlight: candidates[0] || '', hook: 'it lines up closely with what I build today', proof: `I ${profile.headline.toLowerCase()}` }
+        : await askJsonCached('cold', PROMPT_VERSIONS.cold, { system: COLD_SYSTEM, prompt: coldPrompt(profile, job, name, settings.fields), schema: SlotsReply, effort: 'low' }, { userId, kind: 'cold' });
+    const { subject, body } = renderColdEmail({
+      firstName: name.split(' ')[0],
+      role: job.role,
+      company: job.company,
+      jobRef: job.url || '[JOB ID]',
+      candidateName: profile.name,
+      highlight: resolveHighlight(slots.highlight, candidates),
+      hook: slots.hook,
+      proof: slots.proof,
+      cv: resumeOffer(resume),
+    });
+    // A new draft replaces the open one. Nothing is sent: the user approves it first, and then sends it from Gmail.
+    await db.outreachEvent.deleteMany({ where: { applicationId: app.id, kind: 'email', handled: false } });
+    const event = await db.outreachEvent.create({
+      data: { applicationId: app.id, kind: 'email', contactName: name, contactInit: name.split(' ').map((x) => x[0]).join('').slice(0, 2).toUpperCase(), contactEmail: email, subject, org: eventOrg(job), body, reason: 'Cold email to a recruiter' },
+    });
+    return { ok: true, id: event.id, name, email, subject, body };
   }
 
   if (p.action === 'note') {

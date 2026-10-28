@@ -191,9 +191,11 @@ export async function buildPending(userId: string) {
     .filter((a) => a.status === 'applied')
     .map((a) => ({
       id: a.id,
+      jobId: a.jobId,
       role: a.job.role,
       company: a.job.company,
       city: a.job.city,
+      url: a.job.url,
       cvUrl: a.cvUrl,
       cvLead: a.cvLead,
       cvSentAt: a.cvSentAt ? a.cvSentAt.toISOString() : null,

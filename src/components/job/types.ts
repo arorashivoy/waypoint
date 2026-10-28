@@ -36,6 +36,10 @@ export type Wording = {
 
 export type Route = { name: string; init: string; role: string; why: string; best: boolean };
 
+export type Recruiter = { name: string; email: string; why: string | null };
+
+export type ColdEmail = { id: string; name: string; email: string; subject: string; body: string; approved: boolean };
+
 export type Referral = { copy: string; open: string | null; name: string; alumni?: boolean };
 
 /** What GET /api/jobs/<id> sends. */
@@ -64,6 +68,8 @@ export type JobView = {
   analysing: string | null;
   warning: string | null;
   referral: Referral | null;
+  recruiter: Recruiter | null;
+  coldEmail: ColdEmail | null;
   alumni: { school: string; url: string } | null;
   wording: Wording | null;
   isSent: boolean;
@@ -78,7 +84,7 @@ export interface JobDetailState {
   job: JobView;
   cv: Cv | null;
   wording: Wording | null;
-  busy: 'send' | 'alumni' | null;
+  busy: 'send' | 'alumni' | 'recruiter' | 'email' | null;
   cvBusy: CvBusy;
   /** The error of a CV action, shown next to the button. */
   cvError: string | null;
@@ -94,6 +100,11 @@ export interface JobDetailState {
   claudeNote: string | null;
   findContact: () => Promise<void>;
   findAlumni: () => Promise<void>;
+  findRecruiter: () => Promise<void>;
+  /** Drafts the cold email for the recruiter. `email` is the address that the user typed. */
+  draftEmail: (email: string) => Promise<void>;
+  /** Saves the email as the user edited it, marks it approved, and returns it. Nothing is sent. */
+  approveEmail: (v: { email: string; subject: string; body: string }) => Promise<void>;
   markApplied: () => Promise<void>;
   generate: () => Promise<boolean>;
   refine: (message: string) => Promise<boolean>;

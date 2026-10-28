@@ -17,7 +17,7 @@ const data = (o: Partial<PendingData> = {}): PendingData => ({
   ],
   awaiting: [{ id: 'a1', jobId: 'j1', ...person, sentAt: '2026-10-18T10:00:00.000Z', when: 'Sent yesterday', why: '', contactUrl: 'https://x.test/search', alumni: true }],
   auto: [{ id: 's1', init: 'MB', who: 'Mia Berg', org: 'Norrvik', quote: 'Which visa?', sent: 'No visa needed.', why: 'It was on file.', handled: false, contactUrl: null }],
-  appliedList: [{ id: 'p1', role: 'Data Engineer', company: 'Brightwell', city: 'Lisbon', cvUrl: 'https://x.test/cv', cvLead: 'Spark', cvSentAt: '2026-10-19T10:00:00.000Z', cvSent: '1 d ago' }],
+  appliedList: [{ id: 'p1', jobId: 'j1', url: 'https://x.test/job', role: 'Data Engineer', company: 'Brightwell', city: 'Lisbon', cvUrl: 'https://x.test/cv', cvLead: 'Spark', cvSentAt: '2026-10-19T10:00:00.000Z', cvSent: '1 d ago' }],
   ...o,
 } as PendingData);
 

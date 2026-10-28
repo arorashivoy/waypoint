@@ -50,6 +50,8 @@ async function detail(jobId: string, userId: string, analysing: string | null) {
   });
 
   const referral = await db.outreachEvent.findFirst({ where: { applicationId: app.id, kind: 'request' }, orderBy: { createdAt: 'desc' } });
+  const recruiter = await db.outreachEvent.findFirst({ where: { applicationId: app.id, kind: 'recruiter' }, orderBy: { createdAt: 'desc' } });
+  const email = await db.outreachEvent.findFirst({ where: { applicationId: app.id, kind: 'email' }, orderBy: { createdAt: 'desc' } });
   const { school } = await profileSummary(userId);
   // The claim labels, so the screen shows "Java" and not the slug "java".
   const labels = new Map(((await claimsFor(userId))?.claims ?? []).map((c) => [c.slug, c.label]));
@@ -78,6 +80,9 @@ async function detail(jobId: string, userId: string, analysing: string | null) {
     // So the message can be copied again after a reload, or when the browser
     // blocked the clipboard the first time.
     referral: referral && { copy: referral.body, open: referral.contactUrl, name: referral.contactName, alumni: isAlumniRequest(referral) },
+    // The recruiter that Hunter.io found, and the cold email for them. The email waits for the approval of the user.
+    recruiter: recruiter && { name: recruiter.contactName, email: recruiter.contactEmail, why: recruiter.reason },
+    coldEmail: email && { id: email.id, name: email.contactName, email: email.contactEmail, subject: email.subject, body: email.body, approved: email.handled },
     // The fallback when `routes` is empty. Null without a school on the
     // profile, since there is nobody to call a fellow alumnus.
     alumni: school && { school: school.short, url: alumniSearch(school, fresh.company) },

@@ -254,7 +254,8 @@ registerHandler('github-import', z.object({ username: z.string().max(100), repo:
 registerHandler(
   'outreach',
   z.object({
-    action: z.enum(['referral', 'note', 'reply']),
+    action: z.enum(['referral', 'note', 'reply', 'cold']),
+    email: z.string().max(254).optional(),
     applicationId: z.string().max(64),
     name: z.string().max(120).optional(),
     profileUrl: z.string().max(500).nullable().optional(),

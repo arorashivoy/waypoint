@@ -28,7 +28,7 @@ export function cacheKey(version: string, system: string, prompt: string, model 
 
 /** Kinds are for pruning and for keeping the reply path out; they are not part
  *  of the key, so mislabelling costs a statistic, never a wrong answer. */
-export type CacheKind = 'job-check' | 'analysis' | 'note' | 'referral' | 'resume-import' | 'github-import' | 'refine' | 'resume-suggest' | 'cv-write';
+export type CacheKind = 'job-check' | 'analysis' | 'note' | 'referral' | 'cold' | 'resume-import' | 'github-import' | 'refine' | 'resume-suggest' | 'cv-write';
 
 /** Concurrent callers with the same key share one in-flight call, so a refresh
  *  that queues two copies of the same advert side by side still asks once. */

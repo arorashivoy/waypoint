@@ -109,6 +109,8 @@ const view = (o: Partial<JobView> = {}): JobView => ({
   analysing: null,
   warning: null,
   referral: null,
+  recruiter: null,
+  coldEmail: null,
   alumni: null,
   wording: null,
   isSent: false,
@@ -132,6 +134,9 @@ const state = (job: JobView, o: Partial<JobDetailState> = {}): JobDetailState =>
   claudeNote: null,
   findContact: vi.fn(async () => {}),
   findAlumni: vi.fn(async () => {}),
+  findRecruiter: vi.fn(async () => {}),
+  draftEmail: vi.fn(async () => {}),
+  approveEmail: vi.fn(async () => {}),
   markApplied: vi.fn(async () => {}),
   generate: noop,
   refine: noop,
@@ -145,6 +150,23 @@ const state = (job: JobView, o: Partial<JobDetailState> = {}): JobDetailState =>
 
 const render = (job: JobView, o: Partial<JobDetailState> = {}, props: { part?: 'wayin' | 'cv' | null } = {}) =>
   renderToStaticMarkup(h(JobBody, { d: state(job, o), part: props.part ?? null, onPart: () => {}, onClose: () => {} }));
+
+describe('the recruiter email', () => {
+  it('shows the find button, also for a job that is marked as applied', () => {
+    const html = render(view({ isApplied: true }));
+    expect(html).toContain('Find the recruiter’s email');
+  });
+  it('shows the draft button once a recruiter is found', () => {
+    const html = render(view({ isApplied: true, recruiter: { name: 'Mia Fischer', email: 'mia@kestrel.test', why: 'Talent Acquisition, 92% sure' } }));
+    expect(html).toContain('Mia Fischer');
+    expect(html).toContain('Draft a cold email');
+  });
+  it('shows the approve button for a draft that is not approved', () => {
+    const html = render(view({ recruiter: { name: 'Mia Fischer', email: 'mia@kestrel.test', why: null }, coldEmail: { id: 'e1', name: 'Mia Fischer', email: 'mia@kestrel.test', subject: 'Subject', body: 'Body', approved: false } }));
+    expect(html).toContain('Approve and open Gmail');
+    expect(html).not.toContain('Open in Gmail');
+  });
+});
 
 describe('the job detail', () => {
   it('shows header, fit, way in, CV and apply bar in this order', () => {

@@ -66,3 +66,6 @@ export const parser = <T>(schema: z.ZodType<T>) => (raw: unknown): T => {
   if (!r.success) throw new Error('The task gave a result that Waypoint cannot read. Try again; if it fails again, tell the admin.');
   return r.data;
 };
+
+/** A cold email draft for a recruiter. */
+export const emailResult = z.looseObject({ id: text, name: text, email: text, subject: text, body: text });
