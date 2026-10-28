@@ -34,6 +34,9 @@ export type Wording = {
   keywords: { inResume: string[]; missingWithEvidence: string[] };
 };
 
+/** The questions of the employer form, the answers that Claude wrote (and the user edited), and the chat that changed them. */
+export type Answers = { questions: string; text: string; chat: ChatTurn[]; updatedAt: string };
+
 export type Route = { name: string; init: string; role: string; why: string; best: boolean };
 
 export type Referral = { copy: string; open: string | null; name: string; alumni?: boolean };
@@ -66,10 +69,13 @@ export type JobView = {
   referral: Referral | null;
   alumni: { school: string; url: string } | null;
   wording: Wording | null;
+  answers: Answers | null;
   isSent: boolean;
   isApplied: boolean;
   cv: Cv | null;
 };
+
+export type AnswersBusy = 'answer' | 'refine' | null;
 
 export type CvBusy = 'generate' | 'refine' | 'reset' | 'suggest' | null;
 
@@ -80,6 +86,10 @@ export interface JobDetailState {
   wording: Wording | null;
   busy: 'send' | 'alumni' | null;
   cvBusy: CvBusy;
+  answers: Answers | null;
+  answersBusy: AnswersBusy;
+  /** The error of an answers action, shown next to the button. */
+  answersError: string | null;
   /** The error of a CV action, shown next to the button. */
   cvError: string | null;
   /** True when the browser blocked the new tab. */
@@ -102,7 +112,13 @@ export interface JobDetailState {
   decide: (bulletId: string, action: 'accept' | 'reject') => Promise<boolean>;
   /** Keeps the user's own text for one written line, and builds the CV again. */
   original: (id: string) => Promise<boolean>;
+  /** Asks Claude to answer the questions. Returns true when the answer is saved. */
+  answer: (questions: string) => Promise<boolean>;
+  /** Asks Claude to change the answer. Returns true when the new answer is saved. */
+  refineAnswers: (message: string) => Promise<boolean>;
+  /** Saves a change that the user made by hand. */
+  saveAnswers: (text: string) => Promise<boolean>;
   setToast: (s: string) => void;
 }
 
-export type Part = 'wayin' | 'cv';
+export type Part = 'wayin' | 'cv' | 'answers';

@@ -21,6 +21,8 @@ import { CV_MESSAGE_MAX, NO_RESUME, CvError, cvView, publishCv, readSteer, refin
 import { log } from '@/lib/log';
 import { PasteTaskPayload, PasteUserError, pasteJob } from '@/lib/sources/paste';
 import { runOutreach } from '@/lib/outreach';
+import { runAnswers } from '@/lib/answers';
+import { QUESTIONS_MAX } from '@/lib/answers-limits';
 import { INCOMING_MAX } from '@/lib/schemas';
 import { claimsFor, isAdmin } from '@/lib/user';
 import { TaskDeferred, TaskFatal } from '@/lib/tasks/worker';
@@ -271,6 +273,28 @@ registerHandler(
     } catch (e) {
       // The user must read these two errors. A retry cannot change them.
       if (e instanceof CvError || e instanceof NoCredentialError) throw new TaskFatal(e.message);
+      throw e;
+    }
+  },
+);
+
+// The questions of an application form, or a change request. Recorded exception: the payload holds the text of the user,
+// and the questions are third-party text. The handler checks the text again, because the payload is not the route.
+// The maintenance task deletes finished tasks after TASK_KEEP_DAYS. No log line holds this text.
+registerHandler(
+  'answers',
+  z.object({
+    applicationId: z.string().max(64),
+    action: z.enum(['answer', 'refine']),
+    text: z.string().max(QUESTIONS_MAX),
+  }),
+  async (payload, task) => {
+    const userId = task.userId;
+    if (!userId) return { skipped: 'no-user' };
+    try {
+      return await runAnswers(userId, payload, task.id);
+    } catch (e) {
+      if (e instanceof NoCredentialError) throw new TaskFatal(e.message);
       throw e;
     }
   },

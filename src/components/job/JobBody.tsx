@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { AnswersSection } from './AnswersSection';
 import { ApplyBar } from './ApplyBar';
 import { CvSection } from './CvSection';
 import { FitSection } from './FitSection';
@@ -9,7 +10,7 @@ import type { JobDetailState, Part } from './types';
 import { WayInSection } from './WayInSection';
 
 /**
- * The detail of one job, in this order: header, fit, your way in, your CV, the apply bar.
+ * The detail of one job, in this order: header, fit, your way in, your CV, application questions, the apply bar.
  * Under 640 px a `part` shows one section on its own screen. CSS does this with `data-part`,
  * so the markup is the same on every device.
  */
@@ -36,6 +37,7 @@ export function JobBody({ d, part, onPart, onClose }: { d: JobDetailState; part:
           <FitSection job={d.job} />
           <WayInSection d={d} open={part === 'wayin'} onPart={onPart} onBack={back} />
           <CvSection d={d} open={part === 'cv'} onPart={onPart} onBack={back} />
+          <AnswersSection d={d} open={part === 'answers'} onPart={onPart} onBack={back} />
         </div>
       </div>
       <ApplyBar url={d.job.url} applied={d.job.isApplied} error={d.applyError} onApply={d.markApplied} />

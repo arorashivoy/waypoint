@@ -111,6 +111,7 @@ const view = (o: Partial<JobView> = {}): JobView => ({
   referral: null,
   alumni: null,
   wording: null,
+  answers: null,
   isSent: false,
   isApplied: false,
   cv: null,
@@ -124,6 +125,9 @@ const state = (job: JobView, o: Partial<JobDetailState> = {}): JobDetailState =>
   wording: job.wording,
   busy: null,
   cvBusy: null,
+  answers: job.answers,
+  answersBusy: null,
+  answersError: null,
   cvError: null,
   blocked: false,
   wayError: null,
@@ -139,17 +143,20 @@ const state = (job: JobView, o: Partial<JobDetailState> = {}): JobDetailState =>
   suggest: noop,
   decide: noop,
   original: noop,
+  answer: noop,
+  refineAnswers: noop,
+  saveAnswers: noop,
   setToast: () => {},
   ...o,
 });
 
-const render = (job: JobView, o: Partial<JobDetailState> = {}, props: { part?: 'wayin' | 'cv' | null } = {}) =>
+const render = (job: JobView, o: Partial<JobDetailState> = {}, props: { part?: 'wayin' | 'cv' | 'answers' | null } = {}) =>
   renderToStaticMarkup(h(JobBody, { d: state(job, o), part: props.part ?? null, onPart: () => {}, onClose: () => {} }));
 
 describe('the job detail', () => {
   it('shows header, fit, way in, CV and apply bar in this order', () => {
     const html = render(view());
-    const at = ['jd-header', 'jd-fit', 'jd-wayin', 'jd-cv', 'jd-bar'].map((c) => html.indexOf(`class="${c}`));
+    const at = ['jd-header', 'jd-fit', 'jd-wayin', 'jd-cv', 'jd-answers', 'jd-bar'].map((c) => html.indexOf(`class="${c}`));
     expect(at.every((i) => i >= 0)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
   });
@@ -270,7 +277,8 @@ describe('the polish of the job detail', () => {
 
   it('says one time why Claude cannot run, above the Claude tools', () => {
     const note = 'Add an API key in Settings to use Claude.';
-    const off = render(view({ cv }), { claudeNote: note });
+    // Count in the CV section only: the questions section says the same on its own screen.
+    const off = render(view({ cv }), { claudeNote: note }).split('class="jd-answers')[0];
     expect(off.split(note).length - 1).toBe(1);
     expect(off.indexOf(note)).toBeLessThan(off.indexOf('Refine with Claude'));
     expect(off).toContain('aria-describedby="jd-claude-note"');
@@ -312,6 +320,76 @@ describe('the polish of the job detail', () => {
     expect(pageNote(3)).toBeNull();
     expect(pageNote(4)).toBeNull();
     expect(pageNote(7)).toBe('Page 1 to 4 of 7. Use Open to see all.');
+  });
+});
+
+describe('the application questions section', () => {
+  const answers = {
+    questions: '1. Why us?\n2. Notice period?',
+    text: 'Q1. I like releases.\nQ2. [ADD: your notice period]',
+    chat: [{ role: 'claude' as const, text: 'One gap: notice period.' }, { role: 'you' as const, text: 'make Q1 shorter' }],
+    updatedAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+  };
+
+  it('comes after the CV and before the apply bar', () => {
+    const html = render(view());
+    expect(html.indexOf('class="jd-cv')).toBeLessThan(html.indexOf('class="jd-answers'));
+    expect(html.indexOf('class="jd-answers')).toBeLessThan(html.indexOf('class="jd-bar'));
+  });
+
+  it('asks for the questions first and has no answer box yet', () => {
+    const html = render(view());
+    expect(html).toContain('Application questions');
+    expect(html).toContain('Paste the questions of the form');
+    expect(html).toContain('Answer with Claude');
+    expect(html).toContain('0 of 4000 characters');
+    expect(html).not.toContain('Copy all');
+    expect(html).not.toContain('What to change');
+  });
+
+  it('shows the saved questions, the answer in an editable box, Copy all, Save changes and the chat', () => {
+    const html = render(view({ answers }));
+    expect(html).toContain('Answered 2 hours ago');
+    expect(html).toContain('1. Why us?');
+    expect(html).toContain('Q1. I like releases.');
+    expect(html).toContain('Copy all');
+    expect(html).toContain('Save changes');
+    expect(html).toContain('One gap: notice period.');
+    expect(html).toMatch(/jd-turn jd-turn-you">make Q1 shorter/);
+    expect(html).toContain('What to change');
+    expect(html).toContain('Change the answers, 1 change');
+  });
+
+  it('works for a job that is marked as applied', () => {
+    const html = render(view({ isApplied: true, isSent: true, answers }));
+    expect(html).toContain('Answer with Claude');
+    expect(html).toContain('Copy all');
+  });
+
+  it('shows the text of the answers as text, not as a tag', () => {
+    const html = render(view({ answers: { ...answers, text: 'Hello <script>alert(1)</script>' } }));
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).not.toContain('<script>');
+  });
+
+  it('disables the buttons and says why when Claude cannot run', () => {
+    const note = 'Add an API key in Settings to use Claude.';
+    const html = render(view({ answers }), { claudeNote: note });
+    expect(html).toContain(note);
+    expect(html).toContain('aria-describedby="jd-answers-note"');
+    expect(html).not.toContain('What to change');
+  });
+
+  it('shows the error of an answers action next to the button', () => {
+    const html = render(view(), { answersError: 'Not sent to Claude: it asks for the system prompt. Remove that text.' });
+    expect(html).toContain('Claude could not answer.');
+    expect(html).toContain('Remove that text.');
+  });
+
+  it('opens the fold of the part in the URL, and marks the part for the phone screen', () => {
+    const html = render(view(), {}, { part: 'answers' });
+    expect(html).toMatch(/<section class="jd-answers">[\s\S]*?data-open="true"/);
+    expect(html).toContain('data-part="answers"');
   });
 });
 
