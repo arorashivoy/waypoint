@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, del, draftCopyOpen, patch, post } from '../api';
-import { cvResult, emailResult, messageResult, parser, referralResult, wordingResult } from '../task-results';
+import { answersResult, cvResult, emailResult, messageResult, parser, referralResult, wordingResult } from '../task-results';
 import { runTask } from '../tasks';
 import { suggestBlockedNote } from './CvSection';
 import { gmailCompose } from './gmail';
-import type { Cv, CvBusy, JobDetailState, JobView, Wording } from './types';
+import type { Answers, AnswersBusy, Cv, CvBusy, JobDetailState, JobView, Wording } from './types';
 
 
 /**
@@ -22,6 +22,9 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
   const [cv, setCv] = useState<Cv | null>(null);
   const [cvBusy, setCvBusy] = useState<CvBusy>(null);
   const [wording, setWording] = useState<Wording | null>(null);
+  const [answers, setAnswers] = useState<Answers | null>(null);
+  const [answersBusy, setAnswersBusy] = useState<AnswersBusy>(null);
+  const [answersError, setAnswersError] = useState<string | null>(null);
   const [cvError, setCvError] = useState<string | null>(null);
   const [wayError, setWayError] = useState<string | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
@@ -37,6 +40,9 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
     setBlocked(false);
     setCv(null);
     setWording(null);
+    setAnswers(null);
+    setAnswersBusy(null);
+    setAnswersError(null);
     setCvBusy(null);
     setCvError(null);
     setWayError(null);
@@ -47,6 +53,7 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
         setJob(j);
         setCv(j.cv);
         setWording(j.wording ?? null);
+        setAnswers(j.answers ?? null);
         // The worker reads the job. The screen shows the estimate until the task ends, then loads the job again.
         if (!j.analysing) return;
         try {
@@ -218,11 +225,41 @@ export function useJobDetail(id: string, opts: { claude: { mode: string; cliOff?
     }
   }, [cvCall, id]);
 
+  const answersCall = useCallback(async (kind: Exclude<AnswersBusy, null>, start: () => Promise<{ taskId: string }>) => {
+    const forId = id;
+    setAnswersBusy(kind);
+    setAnswersError(null);
+    try {
+      const fresh = await runTask(start, { parse: parser(answersResult) });
+      if (shown.current === forId) setAnswers(fresh as Answers);
+      return true;
+    } catch (e) {
+      if (shown.current === forId) setAnswersError((e as Error).message);
+      return false;
+    } finally {
+      if (shown.current === forId) setAnswersBusy(null);
+    }
+  }, [id]);
+  const answer = useCallback((questions: string) => answersCall('answer', () => post<{ taskId: string }>(`/api/jobs/${id}/answers`, { action: 'answer', text: questions })), [answersCall, id]);
+  const refineAnswers = useCallback((message: string) => answersCall('refine', () => post<{ taskId: string }>(`/api/jobs/${id}/answers`, { action: 'refine', text: message })), [answersCall, id]);
+  const saveAnswers = useCallback(async (text: string) => {
+    const forId = id;
+    setAnswersError(null);
+    try {
+      const saved = await patch<Answers>(`/api/jobs/${id}/answers`, { text });
+      if (shown.current === forId) setAnswers((cur) => cur && { ...cur, text: saved.text, updatedAt: saved.updatedAt });
+      return true;
+    } catch (e) {
+      if (shown.current === forId) setAnswersError((e as Error).message);
+      return false;
+    }
+  }, [id]);
+
   const retry = () => setTries((n) => n + 1);
   if (!job) return { state: null, error: loadError, retry };
   return {
     error: null,
     retry,
-    state: { job, cv, wording, busy, cvBusy, cvError, blocked, wayError, applyError, cvRev, claudeNote: suggestBlockedNote(claude), findContact, findAlumni, findRecruiter, draftEmail, approveEmail, markApplied, generate, refine, reset, suggest, decide, original, setToast },
+    state: { job, cv, wording, answers, answersBusy, answersError, busy, cvBusy, cvError, blocked, wayError, applyError, cvRev, claudeNote: suggestBlockedNote(claude), findContact, findAlumni, findRecruiter, draftEmail, approveEmail, markApplied, generate, refine, reset, suggest, decide, original, answer, refineAnswers, saveAnswers, setToast },
   };
 }

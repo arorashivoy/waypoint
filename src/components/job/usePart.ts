@@ -5,7 +5,7 @@ import type { Part } from './types';
 
 const readPart = (): Part | null => {
   const p = new URLSearchParams(window.location.search).get('part');
-  return p === 'wayin' || p === 'cv' ? p : null;
+  return p === 'wayin' || p === 'cv' || p === 'answers' ? p : null;
 };
 
 /**

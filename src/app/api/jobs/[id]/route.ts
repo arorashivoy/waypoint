@@ -11,6 +11,7 @@ import { queueJobAnalysis } from '@/lib/queue';
 import { alumniSearch, isAlumniRequest } from '@/lib/match';
 import { checkForInjection, INJECTION_WARNING } from '@/lib/injection';
 import { readChat } from '@/lib/cv';
+import { readAnswers } from '@/lib/answers';
 import { claimsFor } from '@/lib/user';
 import { wordingView } from '@/lib/resume/suggest';
 
@@ -88,6 +89,8 @@ async function detail(jobId: string, userId: string, analysing: string | null) {
     alumni: school && { school: school.short, url: alumniSearch(school, fresh.company) },
     // The wording suggestions and the keyword report, computed in code from the stored rows.
     wording: await wordingView(userId, fresh),
+    // The questions of the employer form and the answers. Null until the user pastes questions.
+    answers: await readAnswers(app.id),
     isSent: app.status !== 'draft',
     isApplied: app.status === 'applied',
     // What was last generated, without rebuilding it: opening a job must not

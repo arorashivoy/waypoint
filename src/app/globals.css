@@ -1076,9 +1076,9 @@ button { cursor: pointer; }
   .jd-bar .jd-bar-open { display: none; }
   .jd-bar .ui-btn { flex: 1; }
 
-  /* A part (way in, CV) fills the screen. Its fold head gives way to a "‹ Back" row. */
+  /* A part (way in, CV, application questions) fills the screen. Its fold head gives way to a "‹ Back" row. */
   .jd[data-part] .jd-header, .jd[data-part] .jd-fit, .jd[data-part] .jd-bar { display: none; }
-  .jd[data-part='wayin'] .jd-cv, .jd[data-part='cv'] .jd-wayin { display: none; }
+  .jd[data-part]:not([data-part='wayin']) .jd-wayin, .jd[data-part]:not([data-part='cv']) .jd-cv, .jd[data-part]:not([data-part='answers']) .jd-answers { display: none; }
   .jd[data-part] .jd-main { padding-top: 0; }
   .jd[data-part] .jd-back { display: flex; align-items: center; gap: var(--s3); min-height: 56px; padding-top: env(safe-area-inset-top); }
   .jd[data-part] .jd-back h2 { font-size: var(--t-20); }

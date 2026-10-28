@@ -63,6 +63,9 @@ export const RefineReply = z.object({
   reply: z.string(),
 });
 
+/** The reply of "Application questions": the full text of the answers, and a short note for the candidate. */
+export const AnswersReply = z.object({ answers: z.string(), note: z.string() });
+
 export const DraftReply = z.object({ draft: z.string(), certain: z.boolean(), reason: z.string() });
 
 export type JobCheckReplyT = z.infer<typeof JobCheckReply>;
@@ -70,3 +73,4 @@ export type SlotsReplyT = z.infer<typeof SlotsReply>;
 export type HookReplyT = z.infer<typeof HookReply>;
 export type RefineReplyT = z.infer<typeof RefineReply>;
 export type DraftReplyT = z.infer<typeof DraftReply>;
+export type AnswersReplyT = z.infer<typeof AnswersReply>;

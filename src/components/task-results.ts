@@ -56,6 +56,9 @@ export const cvResult = z.looseObject({
 });
 export const wordingResult = z.looseObject({ suggestions: wording.suggestions, keywords: wording.keywords });
 
+/** The saved state of "Application questions". */
+export const answersResult = z.looseObject({ questions: text, text, chat: z.array(chatTurn), updatedAt: text });
+
 export const importResult = z.looseObject({ drafts: z.number(), dropped: z.number(), hidden: z.number() });
 export const githubResult = z.looseObject({ drafts: z.number(), dropped: z.number() });
 export const replyResult = z.looseObject({ certain: z.boolean() });

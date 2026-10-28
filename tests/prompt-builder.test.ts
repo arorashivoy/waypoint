@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { AskRequest } from '@/lib/claude/types';
 import {
   alumniPrompt,
+  answersPrompt,
   jobCheckPrompt,
   jobCheckSystem,
   profile,
@@ -88,13 +89,15 @@ describe('prompt builder', () => {
       replyPrompt(who, job, 'EVIL_NAME', 'EVIL_MSG', { ccs: ['EVIL_CC'], visaStatus: 'EVIL_VISA' }),
       resumeImportPrompt('EVIL_TEXT'),
       suggestPrompt([{ id: 'p/b', position: 'EVIL_POS', text: 'EVIL_TEXT' }], [{ slug: 's', label: 'EVIL_LABEL', proofs: ['EVIL_PROOF'] }], { role: 'EVIL_ROLE', company: 'EVIL_CO', description: 'EVIL_DESC' }),
+      answersPrompt({ who, visaStatus: 'EVIL_VISA', job, questions: 'EVIL_Q', change: { current: 'EVIL_CUR', history: [{ role: 'claude', text: 'EVIL_NOTE' }, { role: 'you', text: 'EVIL_YOU' }], asked: 'EVIL_ASK' } }),
+      answersPrompt({ who, visaStatus: 'EVIL_VISA', job, questions: 'EVIL_Q' }),
       githubPrompt({ name: 'EVIL_REPO', description: null, topics: [] } as never, [], 'EVIL_README'),
     ];
     for (const p of all) expect(outside(p)).not.toMatch(/EVIL_/);
   });
 
   it('has a version for every prompt', () => {
-    expect(Object.keys(PROMPT_VERSIONS).sort()).toEqual(['cold', 'cv-write', 'github-import', 'job-check', 'note', 'referral', 'refine', 'reply', 'resume-import', 'resume-suggest']);
+    expect(Object.keys(PROMPT_VERSIONS).sort()).toEqual(['answers', 'cold', 'cv-write', 'github-import', 'job-check', 'note', 'referral', 'refine', 'reply', 'resume-import', 'resume-suggest']);
   });
 });
 
