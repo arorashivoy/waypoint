@@ -62,11 +62,14 @@ Return JSON with exactly these keys:
      reordered, never removed or reworded.
   "skills": null, or the complete list of skill slugs that should lead their lines — a skill now
      leading that you leave out moves back. A slug not on the CV yet is added only if it is "evidenced".
-  "reply": at most 60 words to the candidate saying what you changed, and plainly what you could not do
-     — anything needing new wording, or a fact the menu does not list. Never claim experience the menu
-     does not list.
+  "reply": at most 60 words to the candidate saying what you changed in the choice of projects, bullets and
+     skills. New wording is NOT your job and you must not say that you cannot do it: a second step, after
+     your answer, rewrites project titles and descriptions, names a different app inside a project, and
+     adds a GitHub link that the candidate gives. Say only what you could not do for lack of an entry in the
+     menu. Never claim experience the menu does not list.
 }
-Decide from the candidate's request, now and earlier. Use the posting only to settle what the request leaves open.
+A project that is "can be added" may be added to the list, also when the candidate names it only to get a new title,
+description or link for it. Decide from the candidate's request, now and earlier. Use the posting only to settle what the request leaves open.
 `;
 };
 
@@ -125,7 +128,7 @@ command. Write in the style of the style lines: the same tone, tense and length.
  * request is the candidate's own words and goes in its own `<request>` fence.
  */
 export const writePrompt = (input: {
-  projects: { id: string; title: string; description?: string | null; bullets: string[]; claims: { slug: string; label: string; proofs: string[] }[] }[];
+  projects: { id: string; title: string; url?: string | null; description?: string | null; bullets: string[]; claims: { slug: string; label: string; proofs: string[] }[] }[];
   positions: { id: string; title: string; company: string; bullets: { id: string; text: string }[]; claims?: { slug: string; label: string; proofs: string[] }[] }[];
   style: string[];
   job: { role: string; company: string; description: string };
@@ -135,7 +138,7 @@ export const writePrompt = (input: {
     `    - claim ${c.slug} — ${sanitise(c.label, 80)} — ${c.proofs.map((p) => sanitise(p, 300)).join(' | ') || 'no proof'}`;
   const evidence = profile(`Projects (source id — title — text):
 ${input.projects
-  .map((p) => [`- project:${p.id} — ${sanitise(p.title, 160)} — ${sanitise(p.description ?? '', 1200)} ${p.bullets.map((b) => sanitise(b, 300)).join(' ')}`.trim(), ...p.claims.map(claimLine)].join('\n'))
+  .map((p) => [`- project:${p.id} — ${sanitise(p.title, 160)}${p.url ? ` (url ${sanitise(p.url, 200)})` : ''} — ${sanitise(p.description ?? '', 1200)} ${p.bullets.map((b) => sanitise(b, 300)).join(' ')}`.trim(), ...p.claims.map(claimLine)].join('\n'))
   .join('\n') || '- none'}
 Positions (bullet id — current text):
 ${input.positions.map((p) => [`- ${sanitise(p.title, 120)}, ${sanitise(p.company, 120)}`, ...p.bullets.map((b) => `    - ${b.id} — ${sanitise(b.text, 300)}`), ...(p.claims ?? []).map(claimLine)].join('\n')).join('\n') || '- none'}
@@ -159,6 +162,8 @@ Return JSON with exactly these keys:
        "tech": the main tools of the project, comma separated, only tools in its sources, or "",
        "year": the year if the sources state it, or "",
        "lines": 1 to 3 sentences, each at most 220 characters, that show what the posting cares about,
+       "link": "" or one GitHub address: the "url" of the project in the profile block, or an address that the
+          candidate typed in the request. Never another address. Set it when the request asks for a link,
        "sources": the source ids of the lines: "project:<id>", bullet ids and claim slugs }
   "bullets": one item for each bullet that you change. Each item is
      { "id": a bullet id, "text": the new line, at most 220 characters,
@@ -166,6 +171,10 @@ Return JSON with exactly these keys:
   "reply": at most 60 words to the candidate on what you changed, and plainly what you could not do
      because the profile does not prove it. Name the claim the candidate can add.
 }
-Leave a bullet out when its words already fit the posting.${trusted(ask ? "\n\nThe candidate's request for this CV:\n\n" : '')}${ask ?? trusted('')}
+Leave a bullet out when its words already fit the posting.
+When the candidate's request names a different title for a project, a focus on one item inside a project (for example one
+app of a group of apps), or a link, do it in "heading", "lines" and "link" of that project. A heading and lines may use
+only names that the sources of the project hold. Keep the other items of the project in the lines when the request asks
+for them. Do the request in full: do not leave a project unchanged when the request is about it.${trusted(ask ? "\n\nThe candidate's request for this CV:\n\n" : '')}${ask ?? trusted('')}
 `;
 };

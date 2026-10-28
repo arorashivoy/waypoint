@@ -39,6 +39,6 @@ describe('the cv-write prompt', () => {
   });
 
   it('has a version', () => {
-    expect(PROMPT_VERSIONS['cv-write']).toBe('cv-write-1');
+    expect(PROMPT_VERSIONS['cv-write']).toBe('cv-write-2');
   });
 });

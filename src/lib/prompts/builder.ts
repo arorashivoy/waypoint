@@ -153,10 +153,10 @@ export const PROMPT_VERSIONS: Record<PromptName, string> = {
   'job-check': 'job-check-3',
   referral: 'v3',
   note: 'v3',
-  refine: 'v3',
+  refine: 'v4',
   reply: 'v2',
   'resume-import': 'v1',
   'github-import': 'v1',
   'resume-suggest': 'resume-suggest-1',
-  'cv-write': 'cv-write-1',
+  'cv-write': 'cv-write-2',
 };
