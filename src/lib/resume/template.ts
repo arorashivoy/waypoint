@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import type { Claim, ClaimsDoc } from '../claims';
 import { profileVersion } from '../profile/store';
 import { userDir } from '../user-files';
-import type { EvidencePick, Steer } from '../resume';
+import { hrefOf, type EvidencePick, type Steer } from '../resume';
 import { DEPTH_WEIGHT } from './depth';
 import type { Written } from './written';
 
@@ -200,6 +200,7 @@ export function renderTemplate(doc: ClaimsDoc, steer: Steer, order: Order, writt
     return [
       `{\\bf ${e(w?.heading || p.title)}}${p.org?.trim() ? ` \\hfill {\\em ${e(p.org)}}` : ''}`,
       ...(text?.trim() ? [`\\par ${e(text)}`] : []),
+      ...(w?.link && hrefOf(w.link) ? [`\\par ${hrefOf(w.link)}`] : []),
       ...(bullets.length ? ['\\begin{itemize}\\itemsep 0pt \\topsep 0pt', ...bullets.map((b) => `\\item ${e(b)}`), '\\end{itemize}'] : []),
       '\\par\\smallskip',
       '',

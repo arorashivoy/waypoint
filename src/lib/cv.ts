@@ -173,7 +173,7 @@ export async function writeCv(app: Application, job: Job, request?: string): Pro
     doc.claims.filter((c) => c.evidence.some((e) => target(e.target))).map((c) => ({ slug: c.slug, label: c.label, proofs: c.evidence.flatMap((e) => (e.proof ? [e.proof] : [])) }));
   const projects = ids.flatMap((id) => {
     const p = doc.targets.projects.find((x) => x.id === id);
-    return p ? [{ id, title: p.title, description: p.description, bullets: p.bullets ?? [], claims: claimsOf((t) => t === `project:${id}`) }] : [];
+    return p ? [{ id, title: p.title, url: p.url, description: p.description, bullets: p.bullets ?? [], claims: claimsOf((t) => t === `project:${id}`) }] : [];
   });
   const positions = doc.targets.positions.map((p) => ({
     id: p.id,
@@ -192,7 +192,7 @@ export async function writeCv(app: Application, job: Job, request?: string): Pro
     { userId: app.userId, kind: 'cv-write' },
     { perUser: true },
   );
-  const written = checkWritten(out, doc, lines ? { bulletText: lines } : {});
+  const written = checkWritten(out, doc, { ...(lines ? { bulletText: lines } : {}), request });
   // A new request that rewords a line he kept as original asks again for that line, so the keep ends.
   const keep = request ? (steer.keep ?? []).filter((id) => !written.bullets[id] && !written.projects[id]) : steer.keep;
   await db.application.update({ where: { id: app.id }, data: { cvSteer: JSON.stringify({ ...steer, written, keep: keep?.length ? keep : undefined }) } });
@@ -302,7 +302,11 @@ export async function refineCv(app: Application, job: Job, request: string, task
   if (rejected.length) reply += ` (Ignored ${rejected.join(', ')}: not something claims.yml lets the CV carry.)`;
   if (written) {
     const n = Object.keys(written.bullets).length + Object.keys(written.projects).length;
+    const titled = Object.entries(written.projects).filter(([id, p]) => p.heading !== menu.projects.find((m) => m.id === id)?.title).map(([, p]) => p.heading);
+    const linked = Object.keys(written.projects).filter((id) => written.projects[id].link).map((id) => menu.projects.find((m) => m.id === id)?.title ?? id);
     if (n) reply += ` Reworded ${n} ${n === 1 ? 'line' : 'lines'}.`;
+    if (titled.length) reply += ` Titled: ${titled.join(', ')}.`;
+    if (linked.length) reply += ` Link added for ${linked.join(', ')}.`;
     for (const d of written.dropped.slice(0, 3)) reply += ` Not used: ${d.why}.`;
   }
   if (writeFailed) reply += ' Claude could not write new words this time. Ask again to retry.';

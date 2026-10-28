@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ClaimsDoc } from '../claims';
+import { GITHUB_URL } from '../resume';
 import { checkSuggestion } from './check';
 
 /**
@@ -17,7 +18,7 @@ export const MAX_PROJECT_LINES = 3;
 
 export const WriteReply = z.object({
   projects: z
-    .array(z.object({ id: z.string(), heading: z.string(), tech: z.string(), year: z.string(), lines: z.array(z.string()).max(MAX_PROJECT_LINES), sources: z.array(z.string()) }))
+    .array(z.object({ id: z.string(), heading: z.string(), tech: z.string(), year: z.string(), lines: z.array(z.string()).max(MAX_PROJECT_LINES), link: z.string().optional(), sources: z.array(z.string()) }))
     .max(MAX_WRITTEN_PROJECTS),
   bullets: z.array(z.object({ id: z.string(), text: z.string(), sources: z.array(z.string()) })).max(MAX_WRITTEN_BULLETS),
   reply: z.string(),
@@ -25,11 +26,11 @@ export const WriteReply = z.object({
 export type WriteReplyT = z.infer<typeof WriteReply>;
 
 export type WrittenBullet = { text: string; old: string; sources: string[] };
-export type WrittenProject = { heading: string; tech: string; year: string; lines: string[]; old: string; sources: string[] };
+export type WrittenProject = { heading: string; tech: string; year: string; lines: string[]; old: string; sources: string[]; link?: string };
 export type Written = { bullets: Record<string, WrittenBullet>; projects: Record<string, WrittenProject>; dropped: { id: string; why: string }[] };
 
 /** The lines of the CV as it is now, for each bullet id. An own .tex gives the line of the file. */
-type Opts = { bulletText?: Map<string, string> };
+type Opts = { bulletText?: Map<string, string>; /** The words of the user in Refine with Claude. A link is allowed only when these words hold it. */ request?: string };
 
 const empty = (): Written => ({ bullets: {}, projects: {}, dropped: [] });
 
@@ -78,6 +79,24 @@ function passes(text: string, own: string, src: { text: string[]; proofs: string
   return checkSuggestion({ bulletId: '', text, claims: [] }, { sourceText: [own, ...src.text].join('\n'), proofs: src.proofs, skills });
 }
 
+/**
+ * The link of a project. It is a GitHub address, and it is either the `url` of the project in the profile or an address
+ * that the user typed in the request. The model cannot make an address of its own: it can only choose between these two.
+ */
+function linkOf(link: string | undefined, own: string | null | undefined, request: string | undefined): string | undefined {
+  const url = (link ?? '').trim();
+  if (!GITHUB_URL.test(url)) return undefined;
+  const typed = (request ?? '').match(/https:\/\/github\.com\/[A-Za-z0-9._\/-]+/g) ?? [];
+  const bare = (u: string) => u.replace(/\/$/, '').replace(/[.,;]+$/, '').toLowerCase();
+  return [own ?? '', ...typed].some((u) => u && bare(u) === bare(url)) ? url.replace(/\/$/, '') : undefined;
+}
+
+/** The words of an entry as he wrote them: its text without the title line and the links, or its description. */
+function bodyOf(p: { title: string; description?: string | null; tex?: string | null; bullets?: string[] }): string {
+  const rest = (p.tex ?? '').split('\n').slice(1).join('\n').replace(/\\href\{[^{}]*\}\{[^{}]*\}/g, ' ');
+  return plain(rest) || p.description?.trim() || (p.bullets ?? []).join(' ') || p.title;
+}
+
 /** Checks a reply of the model. Only the lines that pass are kept. */
 export function checkWritten(reply: WriteReplyT, doc: ClaimsDoc, opts: Opts = {}): Written {
   const out = empty();
@@ -107,17 +126,26 @@ export function checkWritten(reply: WriteReplyT, doc: ClaimsDoc, opts: Opts = {}
       if (r.ok) lines.push(line);
       else out.dropped.push({ id: p.id, why: r.why });
     }
-    if (!lines.length) continue;
     // A heading, a tech list or a year that says more than the sources is replaced, not the whole entry.
     const field = (v: string, fallback: string) => {
       const t = v.trim();
-      return t && passes(t, own, src, skills).ok ? t : fallback;
+      if (!t) return fallback;
+      const r = passes(t, own, src, skills);
+      if (!r.ok) out.dropped.push({ id: p.id, why: r.why });
+      return r.ok ? t : fallback;
     };
+    const heading = field(p.heading, profile.title);
+    const tech = field(p.tech, '');
+    const year = field(p.year, '');
+    const link = linkOf(p.link, profile.url, opts.request);
+    // An entry can change in its heading or its link only. Its lines then stay as his words.
+    if (!lines.length && heading === profile.title && !link) continue;
     out.projects[p.id] = {
-      heading: field(p.heading, profile.title),
-      tech: field(p.tech, ''),
-      year: field(p.year, ''),
-      lines,
+      heading,
+      tech,
+      year,
+      lines: lines.length ? lines : [bodyOf(profile)],
+      ...(link ? { link } : {}),
       old: profile.description?.trim() || (profile.bullets ?? []).join(' ') || profile.title,
       sources: [...new Set(p.sources)],
     };
@@ -141,5 +169,7 @@ export function effectiveWritten(w: Written | undefined, doc: ClaimsDoc, keep: s
     doc,
     opts,
   );
+  // The link was checked against the request when it was written. Today only its shape is checked again.
+  for (const [id, p] of Object.entries(w.projects ?? {})) if (p.link && GITHUB_URL.test(p.link) && again.projects[id]) again.projects[id].link = p.link;
   return { ...again, dropped: [] };
 }

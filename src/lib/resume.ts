@@ -305,15 +305,24 @@ export function projectShape(tex: string): Shape {
  * One project entry in the shape of the CV. Only code writes this LaTeX: each value goes through
  * `escapeLatex`, so a value from the model or the profile cannot hold a macro.
  */
-export function renderEntry(shape: Shape, p: { heading: string; tech: string; year: string; body: string }, own: OwnParts = { tech: '', year: '', links: [] }): string {
+export function renderEntry(shape: Shape, p: { heading: string; tech: string; year: string; body: string; link?: string }, own: OwnParts = { tech: '', year: '', links: [] }): string {
   // A written value is escaped. A value from his own entry is his LaTeX already and goes in as it is.
   const techTex = p.tech.trim() ? escapeLatex(p.tech) : own.tech;
   const yearTex = p.year.trim() ? escapeLatex(p.year) : own.year;
   const tech = shape.tech && techTex ? ` --- ${techTex}` : '';
   const year = shape.year && yearTex ? ` \\hfill ${yearTex}` : '';
-  const links = own.links.map((l) => `\n${shape.indent}${l}`).join('');
+  // A link that the user asked for goes first. His own link to the same address is not written twice.
+  const asked = p.link ? hrefOf(p.link) : null;
+  const links = [...(asked ? [asked] : []), ...own.links.filter((l) => !asked || !p.link || !l.includes(`{${p.link}}`))].map((l) => `\n${shape.indent}${l}`).join('');
   return `\\item \\textbf{${escapeLatex(p.heading)}}${tech}${year} \\\\\n${shape.indent}${escapeLatex(p.body)}${links}`;
 }
+
+/** A GitHub address that is safe in LaTeX: https, github.com, and only the characters of a repository path. */
+export const GITHUB_URL = /^https:\/\/github\.com\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)?\/?$/;
+
+/** The `\href` for a checked GitHub address. The address has no special LaTeX character, and the shown text is escaped. */
+export const hrefOf = (url: string): string | null =>
+  GITHUB_URL.test(url) ? `\\href{${url}}{${escapeLatex(url.replace(/^https:\/\//, '').replace(/\/$/, ''))}}` : null;
 
 /** The parts of his own entry that a written entry keeps: the tools, the year and the links, as his LaTeX. */
 export type OwnParts = { tech: string; year: string; links: string[] };
@@ -411,7 +420,7 @@ export function tailorTex(tex: string, doc: ClaimsDoc, ranked: EvidencePick[], m
   /** The entry of a project in the shape of this CV, from its written lines. */
   const writtenRaw = (id: string, own?: string) => {
     const w = written.projects[id];
-    return w ? renderEntry(shape, { heading: w.heading, tech: w.tech, year: w.year, body: w.lines.join(' ') }, own ? ownParts(own) : undefined) : null;
+    return w ? renderEntry(shape, { heading: w.heading, tech: w.tech, year: w.year, body: w.lines.join(' '), link: w.link }, own ? ownParts(own) : undefined) : null;
   };
   const rows = cv.rows.map((r) => ({ ...r, raw: writtenRaw(r.id, r.raw) ?? r.raw, score: score(r.id), onCv: true }));
 
@@ -854,7 +863,8 @@ export async function resumeMenu(doc: ClaimsDoc, userId: string): Promise<Resume
       onCv: onCv.has(p.id),
       // An unmappable projects section is left alone by `tailorTex`, so no
       // project can be steered into it either.
-      usable: !('why' in cv) && (onCv.has(p.id) || (!!p.tex && checkOwnTex(p.tex).ok)),
+      // The owner's rule (2026-10-23): any project with a description can go on the CV, as an entry that code writes.
+      usable: !('why' in cv) && (onCv.has(p.id) || (!!p.tex && checkOwnTex(p.tex).ok) || !!p.description?.trim()),
     })),
     bullets: doc.targets.positions.flatMap((p) => (p.bullets || []).map((b) => ({ id: `${p.id}/${b.id}`, position: `${p.title}, ${p.company}`, match: b.match }))),
     skills: doc.claims

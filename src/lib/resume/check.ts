@@ -53,7 +53,7 @@ export const RESUME_VERBS = new Set(
   cut debugged delivered deployed designed developed drove enabled engineered established evaluated extended fixed founded generated
   handled implemented improved increased integrated introduced launched led maintained managed migrated mentored modelled modeled
   monitored optimised optimized organised organized owned planned prototyped reduced refactored released replaced researched resolved
-  reviewed scaled shipped simplified solved streamlined supported tested trained wrote ran parsed used applied worked`.split(/\s+/),
+  reviewed scaled shipped published also including includes featuring alongside plus with covers spanning simplified solved streamlined supported tested trained wrote ran parsed used applied worked`.split(/\s+/),
 );
 
 /** Number words. Each one in a suggestion must be in the bullet or the proofs, as a digit run must. */

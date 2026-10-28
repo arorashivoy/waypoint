@@ -20,6 +20,12 @@ const doc: ClaimsDoc = {
         id: 'claude-code-skills',
         title: 'Claude Code engineering skills',
         description: 'Wrote Claude Code skills that capture release test evidence and check production configuration drift.',
+        url: 'https://github.com/test/skills',
+      },
+      {
+        id: 'apps',
+        title: 'Android coursework apps',
+        description: 'Three Kotlin apps: StareDown (face detection), FlightStatus (REST client) and JourneyTracker.',
       },
     ],
     educations: [],
@@ -160,5 +166,42 @@ describe('the line check and language names', () => {
 
   it('still refuses C when the sources have only C++', () => {
     expect(line(['Order book engine in C.']).dropped[0]?.why).toMatch(/"C"/);
+  });
+});
+
+describe('checkWritten, retitle and link', () => {
+  const apps = (over: object) => reply({ projects: [{ id: 'apps', heading: 'StareDown', tech: '', year: '', lines: [], sources: ['project:apps'], ...over }] });
+
+  it('keeps a new heading when no line changes', () => {
+    const w = checkWritten(apps({}), doc);
+    expect(w.projects.apps.heading).toBe('StareDown');
+    expect(w.projects.apps.lines).toEqual([expect.stringContaining('StareDown (face detection)')]);
+  });
+
+  it('does not lose a heading when a line fails the check', () => {
+    const w = checkWritten(apps({ lines: ['Also shipped on Kubernetes'] }), doc);
+    expect(w.projects.apps.heading).toBe('StareDown');
+    expect(w.dropped.length).toBeGreaterThan(0);
+  });
+
+  it('accepts a first word such as Also or Published', () => {
+    const w = checkWritten(apps({ lines: ['Also built FlightStatus and JourneyTracker'] }), doc);
+    expect(w.projects.apps.lines).toEqual(['Also built FlightStatus and JourneyTracker']);
+  });
+
+  it('accepts a GitHub address that the user typed in the request', () => {
+    const w = checkWritten(apps({ link: 'https://github.com/someone/strikeout' }), doc, { request: 'add the link https://github.com/someone/strikeout' });
+    expect(w.projects.apps.link).toBe('https://github.com/someone/strikeout');
+  });
+
+  it('accepts the url of the project in the profile', () => {
+    const w = checkWritten(reply({ projects: [{ id: 'claude-code-skills', heading: 'Claude Code engineering skills', tech: '', year: '', lines: ['Wrote Claude Code skills'], link: 'https://github.com/test/skills', sources: ['project:claude-code-skills'] }] }), doc);
+    expect(w.projects['claude-code-skills'].link).toBe('https://github.com/test/skills');
+  });
+
+  it('refuses an address that the user did not type, and one that is not on github.com', () => {
+    expect(checkWritten(apps({ link: 'https://github.com/evil/repo' }), doc, { request: 'retitle it' }).projects.apps.link).toBeUndefined();
+    expect(checkWritten(apps({ link: 'https://evil.test/a' }), doc, { request: 'https://evil.test/a' }).projects.apps.link).toBeUndefined();
+    expect(checkWritten(apps({ link: 'https://github.com/a/b}\\input{x' }), doc, { request: 'https://github.com/a/b}\\input{x' }).projects.apps.link).toBeUndefined();
   });
 });
