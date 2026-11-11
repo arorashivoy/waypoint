@@ -5,8 +5,8 @@ vi.mock('@/lib/claude/cli', async (orig) => ({ ...(await orig<typeof import('@/l
 
 import { clearState, setState } from '@/lib/app-state';
 import { db } from '@/lib/db';
-import { cliBinary, parseCliReply, selfTestVerdict } from '@/lib/claude/cli';
-import { cliDisabled, runCliSelfTestAtStart } from '@/lib/claude/selftest';
+import { CliError, CliPolicyError, cliBinary, parseCliReply, selfTestFailure, selfTestVerdict } from '@/lib/claude/cli';
+import { cliDisabled, retestCliWhenOff, runCliSelfTestAtStart } from '@/lib/claude/selftest';
 
 const fixture = JSON.parse(readFileSync('tests/fixtures/cli-reply.json', 'utf8'));
 
@@ -109,3 +109,117 @@ describe('runCliSelfTestAtStart', () => {
     expect(await cliDisabled()).toEqual({ reason: 'keep', at: '2026-01-01T00:00:00.000Z' });
   });
 });
+
+describe('a fail that is not a verdict', () => {
+  const timeout = async () => ({ ok: false as const, why: 'claude took longer than 30000 ms', retry: true });
+
+  it('marks a time-out for a later test', async () => {
+    expect(await runCliSelfTestAtStart(timeout)).toMatchObject({ ran: true, ok: false });
+    expect(await cliDisabled()).toMatchObject({ retry: true, fails: 1 });
+  });
+
+  it('starts the count again at each worker start', async () => {
+    await setState('cliDisabled', { reason: 'old', at: '2026-01-01T00:00:00.000Z', retry: true, fails: 7 });
+    await runCliSelfTestAtStart(timeout);
+    expect(await cliDisabled()).toMatchObject({ retry: true, fails: 1 });
+  });
+
+  it('does not mark a verdict about the tools', async () => {
+    await runCliSelfTestAtStart(canary({ result: '.mcp-empty.json' }));
+    expect((await cliDisabled())?.retry).toBeUndefined();
+  });
+
+  it('does not mark an error that the test throws', async () => {
+    await runCliSelfTestAtStart(() => Promise.reject(new Error('broken')));
+    expect((await cliDisabled())?.retry).toBeUndefined();
+  });
+});
+
+describe('retestCliWhenOff', () => {
+  const at = '2026-01-01T00:00:00.000Z';
+  const after = (ms: number) => new Date(Date.parse(at) + ms);
+  const pass = async () => ({ ok: true as const });
+  const timeout = async () => ({ ok: false as const, why: 'claude took longer than 30000 ms', retry: true });
+
+  it('does nothing while CLI mode is on', async () => {
+    const test = vi.fn(pass);
+    expect(await retestCliWhenOff(test, undefined, after(3_600_000))).toEqual({ ran: false });
+    expect(test).not.toHaveBeenCalled();
+  });
+
+  it('never tests again after a verdict about the tools or the model', async () => {
+    await setState('cliDisabled', { reason: 'tools are on', at });
+    const test = vi.fn(pass);
+    expect(await retestCliWhenOff(test, undefined, after(86_400_000))).toEqual({ ran: false });
+    expect(test).not.toHaveBeenCalled();
+    expect(await cliDisabled()).toEqual({ reason: 'tools are on', at });
+  });
+
+  it('waits 1 minute after each of the first 2 fails', async () => {
+    await setState('cliDisabled', { reason: 'slow', at, retry: true, fails: 1 });
+    const test = vi.fn(timeout);
+    expect(await retestCliWhenOff(test, undefined, after(59_000))).toEqual({ ran: false });
+    expect(test).not.toHaveBeenCalled();
+    expect(await retestCliWhenOff(test, undefined, after(60_000))).toMatchObject({ ran: true, ok: false });
+    const off = await cliDisabled();
+    expect(off).toMatchObject({ retry: true, fails: 2 });
+    expect(off!.at).toBe(after(60_000).toISOString());
+  });
+
+  it('waits 10 minutes from the third fail', async () => {
+    await setState('cliDisabled', { reason: 'slow', at, retry: true, fails: 3 });
+    const test = vi.fn(timeout);
+    expect(await retestCliWhenOff(test, undefined, after(599_000))).toEqual({ ran: false });
+    expect(await retestCliWhenOff(test, undefined, after(600_000))).toMatchObject({ ran: true, ok: false });
+    expect(test).toHaveBeenCalledTimes(1);
+    expect(await cliDisabled()).toMatchObject({ retry: true, fails: 4 });
+  });
+
+  it('turns CLI mode on when the later test passes', async () => {
+    await setState('cliDisabled', { reason: 'slow', at, retry: true, fails: 1 });
+    expect(await retestCliWhenOff(pass, undefined, after(60_000))).toEqual({ ran: true, ok: true });
+    expect(await cliDisabled()).toBeNull();
+  });
+
+  it('stops the later tests when a later test gives a verdict about the tools', async () => {
+    await setState('cliDisabled', { reason: 'slow', at, retry: true, fails: 1 });
+    await retestCliWhenOff(canary({ result: '.mcp-empty.json' }), undefined, after(60_000));
+    const off = await cliDisabled();
+    expect(off?.reason).toMatch(/tools are on/);
+    expect(off?.retry).toBeUndefined();
+  });
+
+  it('does not throw when the database fails', async () => {
+    const spy = vi.spyOn(db.appState, 'findUnique').mockRejectedValueOnce(new Error('database is locked'));
+    try {
+      expect(await retestCliWhenOff(pass, undefined, after(60_000))).toEqual({ ran: false });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('which fails can pass later', () => {
+  it('a time-out or a failed call is not a verdict', () => {
+    expect(selfTestFailure(new Error('claude took longer than 30000 ms'))).toEqual({ ok: false, why: 'claude took longer than 30000 ms', retry: true });
+    expect(selfTestFailure(new CliError('claude exited 1: network')).retry).toBe(true);
+  });
+
+  it('a reply from another model or with more than 1 turn is a verdict', () => {
+    expect(selfTestFailure(new CliPolicyError('The CLI took 2 turns.')).retry).toBe(false);
+    expect(() => parseCliReply(JSON.stringify({ ...fixture, num_turns: 2 }), 'claude-sonnet-5')).toThrow(CliPolicyError);
+    expect(() => parseCliReply(JSON.stringify({ ...fixture, modelUsage: { 'claude-opus-5-5': {} } }), 'claude-sonnet-5')).toThrow(CliPolicyError);
+  });
+
+  it('a named file or a denied tool call is a verdict', () => {
+    expect(selfTestVerdict('.mcp-empty.json', 0)).toMatchObject({ ok: false });
+    expect(selfTestVerdict('.mcp-empty.json', 0)).not.toHaveProperty('retry');
+    expect(selfTestVerdict('NONE', 1)).not.toHaveProperty('retry');
+  });
+
+  it('an answer that is not NONE, with no sign of a tool, can pass later', () => {
+    expect(selfTestVerdict('<invoke name="Bash">ls -A /tmp/x</invoke>', 0)).toMatchObject({ ok: false, retry: true });
+    expect(selfTestVerdict('NONE', 0)).toEqual({ ok: true });
+  });
+});
+

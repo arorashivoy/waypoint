@@ -10,6 +10,7 @@ import {
   requeueStale,
   USER_ERROR,
 } from '@/lib/tasks/queue';
+import { queueDailyRefresh } from '@/lib/tasks/auto-refresh';
 import { log, scrub } from '@/lib/log';
 
 /** A handler throws this to run the task again later. The deferral uses no attempt. */
@@ -42,6 +43,7 @@ export const limitFor = (kind: string): number => LIMIT_MS[kind] ?? TASK_LIMIT_M
 const MAX_ERROR_LENGTH = 500;
 const REQUEUE_MS = 60_000;
 const MAINTENANCE_MS = 3_600_000;
+const DAILY_CHECK_MS = 60_000;
 
 /** The text of any thrown value. `String()` can throw, for example on an object with no prototype. */
 function errorText(err: unknown): string {
@@ -165,6 +167,7 @@ export async function startWorker(opts: {
   const beatTimer = setInterval(() => void beatNow(), beatMs);
   let lastRequeue = 0;
   let lastMaintenance = 0;
+  let lastDaily = 0;
   try {
     while (!signal.aborted) {
       try {
@@ -176,6 +179,12 @@ export async function startWorker(opts: {
         if (!scope && t - lastMaintenance >= MAINTENANCE_MS) {
           lastMaintenance = t;
           await enqueue({ kind: 'maintenance', userId: null, payload: {}, dedupeKey: 'maintenance' });
+        }
+        // The refresh of the day. The check is one read of one row, so one check each minute is cheap.
+        if (!scope && t - lastDaily >= DAILY_CHECK_MS) {
+          lastDaily = t;
+          const users = await queueDailyRefresh(new Date());
+          if (users) log.info({ users }, 'queued the refresh of the day');
         }
         if ((await runOnce(new Date(), scope)) === 'idle') await sleep(idleMs, signal);
       } catch (err) {

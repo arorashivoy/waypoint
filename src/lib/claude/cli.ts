@@ -22,6 +22,8 @@ import { RefusalError, type Usage } from './types';
  */
 
 export class CliError extends Error {}
+/** The reply broke a rule of a call with no tools: another model answered, or the call took more than 1 turn. */
+export class CliPolicyError extends CliError {}
 
 const AUTH_HINT = /(not logged in|login|log in|logged out|not authenticated|unauthenticated|unauthorized|expired|invalid_token|401)/i;
 const QUOTA_HINT = /(rate[_ -]?limit|rate limited|too many requests|quota|usage[_ -]?limit|out of credit|429)/i;
@@ -92,9 +94,9 @@ export function parseCliReply(stdout: string, model: string): CliReply {
 
   const ran = Object.keys(r.modelUsage || {});
   const other = ran.filter((m) => m !== model);
-  if (other.length) throw new CliError(`The CLI used ${other.join(', ')}. Waypoint sends calls only to ${model}.`);
-  if (!ran.includes(model)) throw new CliError(`The CLI reply does not show ${model}.`);
-  if (r.num_turns !== 1) throw new CliError(`The CLI took ${r.num_turns} turns. A call with no tools takes 1 turn.`);
+  if (other.length) throw new CliPolicyError(`The CLI used ${other.join(', ')}. Waypoint sends calls only to ${model}.`);
+  if (!ran.includes(model)) throw new CliPolicyError(`The CLI reply does not show ${model}.`);
+  if (r.num_turns !== 1) throw new CliPolicyError(`The CLI took ${r.num_turns} turns. A call with no tools takes 1 turn.`);
 
   const u = r.modelUsage[model] || {};
   return {
@@ -162,31 +164,53 @@ export async function askCli(system: string, prompt: string, model: string = MOD
   }
 }
 
+/** `retry` marks a fail that is not a verdict about the tools or the model. CLI mode is off after
+ *  each fail. Only a fail with `retry` gets a later test in the same run of the worker. */
+export type SelfTestVerdict = { ok: true } | { ok: false; why: string; retry?: boolean };
+
 /** The self-test passes only if the model saw no files (no tool ran) and the
  *  CLI denied no tool call. The work folder holds .mcp-empty.json, so a run
  *  with tools would name it. */
-export function selfTestVerdict(text: string, denials: number): { ok: true } | { ok: false; why: string } {
+export function selfTestVerdict(text: string, denials: number): SelfTestVerdict {
   if (denials > 0) return { ok: false, why: `The CLI denied ${denials} tool call(s), so the model tried to use a tool.` };
   if (/mcp-empty/i.test(text)) return { ok: false, why: 'The model listed a file in the work folder, so tools are on.' };
-  if (!/^\s*NONE\s*\.?\s*$/i.test(text)) return { ok: false, why: `The self-test answer was not NONE: ${text.slice(0, 200)}` };
+  // No tool ran and no file is named, so this answer is not a sign of tools. It is also not a pass:
+  // CLI mode stays off, and the worker tests again later.
+  if (!/^\s*NONE\s*\.?\s*$/i.test(text)) return { ok: false, why: `The self-test answer was not NONE: ${text.slice(0, 200)}`, retry: true };
   return { ok: true };
+}
+
+/**
+ * The verdict for a canary call that threw. A time-out, a failed process or a CLI error gives
+ * no reply to check, so it says nothing about the tools, and the worker tests again later
+ * (`retry`). A reply from another model, or with more than 1 turn, is a verdict.
+ */
+export function selfTestFailure(e: unknown): { ok: false; why: string; retry: boolean } {
+  return { ok: false, why: e instanceof Error ? e.message : String(e), retry: !(e instanceof CliPolicyError) };
 }
 
 /** The canary needs one short answer. It must not hold the worker start for the full CLI limit. */
 export const SELFTEST_TIMEOUT_MS = 30_000;
 
+export const SELFTEST_SYSTEM = 'You are a self-test. Answer in one word.';
+/**
+ * The canary prompt. With no tools, claude-sonnet-5-5 answered the shorter prompt ("List the
+ * names of the files... If you cannot see any files, answer exactly NONE.") with a tool call
+ * written as text or ran out of time, so the canary failed in 6 of 6 tries (CLI 2.1.321,
+ * 2026-11-10). This prompt says what to do with no tool, and passed in 4 of 4 tries. With tools
+ * on, the model still lists the folder with a tool (2 turns, names .mcp-empty.json), so the
+ * canary still fails then (3 of 3 tries by hand).
+ */
+export const SELFTEST_PROMPT =
+  'List the names of the files in your current working folder. Use a tool only if you have one. Do not write a tool call as text. If you have no tool, or you cannot see any files, answer exactly NONE.';
+
 /** One canary call. parseCliReply refuses the reply if a tool ran (more than
  *  1 turn) or another model answered. selfTestVerdict checks the answer. */
-export async function cliSelfTest(signal?: AbortSignal): Promise<{ ok: true } | { ok: false; why: string }> {
+export async function cliSelfTest(signal?: AbortSignal): Promise<SelfTestVerdict> {
   try {
-    const r = await askCli(
-      'You are a self-test. Answer in one word.',
-      'List the names of the files in your current working folder. If you cannot see any files, answer exactly NONE.',
-      MODEL,
-      { timeoutMs: SELFTEST_TIMEOUT_MS, signal },
-    );
+    const r = await askCli(SELFTEST_SYSTEM, SELFTEST_PROMPT, MODEL, { timeoutMs: SELFTEST_TIMEOUT_MS, signal });
     return selfTestVerdict(r.text, r.denials);
   } catch (e) {
-    return { ok: false, why: (e as Error).message };
+    return selfTestFailure(e);
   }
 }

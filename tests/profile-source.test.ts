@@ -39,7 +39,8 @@ describe('the profile source', () => {
   });
 
   it('has no runtime code that reads claims.yml', () => {
-    const readers = files('src').filter((f) => f !== join('src', 'lib', 'claims.ts') && /CLAIMS_PATH|loadClaims|claimsFailure/.test(readFileSync(f, 'utf8')));
+    // Only source files count. A backup copy next to the source is not runtime code.
+    const readers = files('src').filter((f) => /\.tsx?$/.test(f) && f !== join('src', 'lib', 'claims.ts') && /CLAIMS_PATH|loadClaims|claimsFailure/.test(readFileSync(f, 'utf8')));
     expect(readers).toEqual([]);
   });
 });

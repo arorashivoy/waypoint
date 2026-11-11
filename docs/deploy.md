@@ -88,9 +88,18 @@ use `scripts/deploy.sh` for each update (step 10).
    - **`lmodern`.** The template CV needs it (see the `apt install` line above). Without it, the
      letters fi, ff and fl are lost in the text of the PDF.
    - **The CLI canary.** When the worker starts, it runs a short Claude CLI check with a 30 s limit.
-     On a slow start of the Pi, the check can time out. A time-out counts as a fail, and CLI mode
-     stays off until the next start. This is safe. If the CLI is still off after a start, restart the
-     worker again (`systemctl --user restart waypoint-worker`).
+     A fail turns CLI mode off, and only a check that passes turns it on. This is safe.
+     There are 2 types of fail. If the check gives no verdict (a time-out on a slow start of the Pi,
+     a failed call, an answer that is not `NONE`), the worker runs the check again: after 1 minute
+     for the first 2 fails, then every 10 minutes. No restart is necessary. If the check shows that
+     a tool ran or that another model answered, CLI mode stays off until the next start of the
+     worker. Read the reason in `/api/health` and in the worker log before you restart the worker
+     (`systemctl --user restart waypoint-worker`).
+   - **The refresh of the day.** The worker queues one refresh for each active user each day, at
+     07:00 India time or later (`AUTO_REFRESH_HOUR` in `src/lib/tasks/auto-refresh.ts`). It is the
+     task of the Refresh button, so it sends a maximum of 25 new jobs to Claude. If the worker is
+     off at 07:00, the refresh runs when the worker starts on the same day. The first start after
+     this deploy runs it one time, if the time is after 07:00.
    - **Device checks.** After a deploy that changes the screens, run `npm run test:e2e` on the Pi.
      The iPhone and iPad profiles run in WebKit there. Then do the manual checklist on a real
      iPhone and iPad. Both are in `docs/devices.md`.

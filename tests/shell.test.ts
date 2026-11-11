@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { NAV, navAction, readLocation, writeLocation } from '@/components/shell/nav';
-import { claudeLine, taskLine } from '@/components/shell/task';
+import { claudeLine, claudeOffNote, taskLine } from '@/components/shell/task';
 
 describe('NAV', () => {
   it('has exactly Jobs, Pending, Profile and Settings, in this order', () => {
@@ -113,5 +113,27 @@ describe('claudeLine', () => {
     expect(claudeLine('own')).toBe('Claude: your API key');
     expect(claudeLine('shared')).toBe('Claude: the shared key');
     expect(claudeLine('cli')).toBe('Claude: the admin subscription');
+  });
+});
+
+describe('claudeOffNote', () => {
+  it('shows nothing while Claude works or when the user has no CLI', () => {
+    expect(claudeOffNote(null)).toBeNull();
+    expect(claudeOffNote({ cliOff: false })).toBeNull();
+    expect(claudeOffNote({})).toBeNull();
+  });
+
+  it('says that Waypoint tests again when the fail can pass later', () => {
+    expect(claudeOffNote({ cliOff: true, cliRetest: true })).toEqual({
+      what: 'Claude is off.',
+      fix: 'The Claude CLI failed its self-test. Waypoint tests it again in 10 minutes or less. Until then, new jobs get no analysis from Claude.',
+    });
+  });
+
+  it('tells the admin to restart the worker when the fail stays', () => {
+    expect(claudeOffNote({ cliOff: true })).toEqual({
+      what: 'Claude is off.',
+      fix: 'The Claude CLI failed its self-test. Read the reason on the admin health page, then restart the worker.',
+    });
   });
 });

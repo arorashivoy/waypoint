@@ -15,7 +15,7 @@ import Rail from './shell/Rail';
 import Sidebar from './shell/Sidebar';
 import TabBar from './shell/TabBar';
 import TopBar from './shell/TopBar';
-import { claudeLine, taskLine } from './shell/task';
+import { claudeLine, claudeOffNote, taskLine } from './shell/task';
 import { saveCountry } from './settings/countries';
 import { openSection } from './settings/model';
 import { useCollapsed, useLocation } from './shell/useShell';
@@ -84,7 +84,7 @@ function Shell({ setToast, onTask }: { setToast: (s: string) => void; onTask: (s
     ? { what: 'Claude authentication failed.', fix: state.claude.authFailure.message as string }
     : state.claude?.quotaFailure
       ? { what: 'Claude is out of usage.', fix: state.claude.quotaFailure.message as string }
-      : null;
+      : claudeOffNote(state.claude);
 
   return (
     <div className="sh" data-collapsed={collapsed} data-place={loc.view} data-job={jobOpen ? 'open' : 'none'}>

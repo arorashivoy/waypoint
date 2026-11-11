@@ -10,7 +10,7 @@ import { checkEvidence, checkReply, citableClaims, fieldChoices, jobCheckProfile
 import { getSettings } from './settings';
 import { CV_COUNTRY_RULES, FIELD_QUERIES } from './countries';
 import { type ClaimsDoc } from './claims';
-import { claimsInPosting, projectPicks, rankEvidence, type ProjectPick } from './resume';
+import { claimsInJob, claimsKey, postingStamp, projectPicks, rankEvidence, type ProjectPick } from './resume';
 import { fieldFromText, levelFromPosting, requiredYears } from './sources/geo';
 
 /** What is stored: the checked reply, and who made it. The score is computed on every read. */
@@ -71,10 +71,25 @@ function strongFields(doc: ClaimsDoc | null, saved: string[]): string[] {
 /** What claims.yml and the Settings of the user say about fit in each field. Scoring it runs the
  *  claim graph once per field, so it is built once per load and shared by every job
  *  in the list, not recomputed per job. */
-type Fit = { claims: ClaimsDoc | null; strong: string[]; picks: ProjectPick[]; visaStatus: string };
+type Fit = { claims: ClaimsDoc | null; claimsKey: string; strong: string[]; picks: ProjectPick[]; visaStatus: string };
 
 function fitFromClaims(claims: ClaimsDoc | null, settings: { fields: string[]; visaStatus: string }): Fit {
-  return { claims, strong: strongFields(claims, settings.fields), picks: projectPicks(claims), visaStatus: settings.visaStatus.trim() };
+  return { claims, claimsKey: claims ? claimsKey(claims) : '', strong: strongFields(claims, settings.fields), picks: projectPicks(claims), visaStatus: settings.visaStatus.trim() };
+}
+
+/** The field of a posting from its words. Kept until the role or the description changes: the
+ *  scan of 400 postings costs about 100 ms on the Pi. */
+const postingFields = new Map<string, { stamp: string; field: string }>();
+const MAX_POSTING_FIELDS = 5000;
+
+function fieldOf(job: Job, stamp: string): string {
+  let seen = postingFields.get(job.id);
+  if (!seen || seen.stamp !== stamp) {
+    if (postingFields.size >= MAX_POSTING_FIELDS) postingFields.clear();
+    seen = { stamp, field: fieldFromText(`${job.role}\n${job.description}`) };
+    postingFields.set(job.id, seen);
+  }
+  return seen.field;
 }
 
 /** Keyword overlap, used when Claude is not reachable so the app still works. */
@@ -85,7 +100,9 @@ function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileS
     ...profile.skills,
   ].join(' ').toLowerCase();
 
-  const field = fieldFromText(`${job.role}\n${job.description}`);
+  // One stamp for the 2 memories below. It changes when the role or the description changes.
+  const stamp = postingStamp(job);
+  const field = fieldOf(job, stamp);
 
   // Deliberately narrow patterns. An earlier, looser set matched words that
   // appear in any corporate posting — "platform", "systems", "optimization" —
@@ -109,7 +126,7 @@ function heuristicAnalysis(job: Job, profile: Awaited<ReturnType<typeof profileS
     field === 'Other'
       ? [{ text: 'A software engineering role', ok: false }]
       : claims
-      ? claimsInPosting(claims, `${job.role}\n${job.description}`).slice(0, 5).map((r) => ({ text: r.t, ok: r.ok, slug: r.slug }))
+      ? claimsInJob(claims, fit.claimsKey, job, stamp).slice(0, 5).map((r) => ({ text: r.t, ok: r.ok, slug: r.slug }))
       : candidates
           .filter(([, re]) => re.test(job.description) || re.test(job.role))
           .slice(0, 5)

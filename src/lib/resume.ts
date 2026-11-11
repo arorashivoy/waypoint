@@ -113,9 +113,40 @@ const norm = (s: string) =>
 /** Word-boundary match over normalised text, so "ROS" does not fire on
  *  "across" and "C" does not fire on everything. */
 function mentions(haystack: string, term: string): boolean {
-  const t = norm(term);
-  if (t.length < 2) return false;
-  return new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9])`).test(haystack);
+  const m = matcherOf(term);
+  if (m === null) return false;
+  // Most terms are not in a posting at all. A match needs the first word of the term as a full
+  // word of the text, so one look in the set of words refuses most terms. The pattern, which
+  // decides, then runs only for the few terms that can match.
+  if (m.first !== null && !wordsOf(haystack).has(m.first)) return false;
+  return haystack.includes(m.t) && m.re.test(haystack);
+}
+
+/** The words of the text that was checked last. One posting is checked against many terms. */
+let lastWords: { text: string; words: Set<string> } = { text: '', words: new Set() };
+
+function wordsOf(haystack: string): Set<string> {
+  if (lastWords.text !== haystack) lastWords = { text: haystack, words: new Set(haystack.split(/[^a-z0-9]+/)) };
+  return lastWords.words;
+}
+
+/** The pattern of each term, compiled one time. The Jobs list checks about 250 terms against
+ *  each of 400 postings, and a new pattern for each check took 2 s on the Pi. `first` is the
+ *  first run of letters and digits in the term. */
+type Matcher = { t: string; first: string | null; re: RegExp };
+const matchers = new Map<string, Matcher | null>();
+const MAX_MATCHERS = 20_000;
+
+function matcherOf(term: string): Matcher | null {
+  let m = matchers.get(term);
+  if (m === undefined) {
+    const t = norm(term);
+    m = t.length < 2 ? null : { t, first: t.match(/[a-z0-9]+/)?.[0] ?? null, re: new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9])`) };
+    // The terms come from the profiles of the users, so the map stays small. The limit is for safety only.
+    if (matchers.size >= MAX_MATCHERS) matchers.clear();
+    matchers.set(term, m);
+  }
+  return m;
 }
 
 
@@ -205,6 +236,51 @@ export function claimsInPosting(doc: ClaimsDoc, postingText: string): { slug: st
   return doc.claims
     .filter((c) => (c.kind === 'skill' || c.kind === 'language') && [c.label, ...c.aliases].some((t) => mentions(text, t)))
     .map((c) => ({ slug: c.slug, t: c.label, ok: c.evidence.some((e) => e.depth !== 'mentioned') }));
+}
+
+type PostingClaim = ReturnType<typeof claimsInPosting>[number];
+
+/** A short key for all that `claimsInPosting` reads from a profile. 2 copies of the same claims
+ *  give the same key. A change of a term or of the proof of a skill gives a new key. */
+export function claimsKey(doc: ClaimsDoc): string {
+  const used = doc.claims
+    .filter((c) => c.kind === 'skill' || c.kind === 'language')
+    .map((c) => [c.slug, c.label, c.aliases, c.evidence.some((e) => e.depth !== 'mentioned')]);
+  return createHash('sha256').update(JSON.stringify(used)).digest('base64');
+}
+
+// The match of 1 posting takes about 2 ms on the Pi, and the Jobs list has 400 postings on each
+// load. The result depends only on the posting and on the claims, so it stays in memory until
+// one of them changes. The first map has an entry for each profile, the second for each job.
+const MAX_PROFILES = 16;
+const MAX_JOBS = 5000;
+const matched = new Map<string, Map<string, { stamp: string; found: PostingClaim[] }>>();
+
+/** A stamp of the words of a posting. A memory of a result for a job compares it, so an edit
+ *  of the role or the description always gives a new result, also when the length stays the same. */
+export function postingStamp(job: { role: string; description: string }): string {
+  return createHash('sha1').update(job.role).update('\n').update(job.description).digest('base64');
+}
+
+/** `claimsInPosting` for the role and the description of a job, with a memory. `key` is `claimsKey(doc)`. */
+export function claimsInJob(doc: ClaimsDoc, key: string, job: { id: string; role: string; description: string }, stamp = postingStamp(job)): PostingClaim[] {
+  let jobs = matched.get(key);
+  if (jobs) {
+    // Move this profile to the end, so the profile that was not used for the longest time goes first.
+    matched.delete(key);
+  } else {
+    jobs = new Map();
+    if (matched.size >= MAX_PROFILES) matched.delete(matched.keys().next().value!);
+  }
+  matched.set(key, jobs);
+
+  let seen = jobs.get(job.id);
+  if (!seen || seen.stamp !== stamp) {
+    if (jobs.size >= MAX_JOBS) jobs.clear();
+    seen = { stamp, found: claimsInPosting(doc, `${job.role}\n${job.description}`) };
+    jobs.set(job.id, seen);
+  }
+  return seen.found;
 }
 
 export type ProjectPick = { role: string; lead: string; then: string };

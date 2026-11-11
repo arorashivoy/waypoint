@@ -79,6 +79,9 @@ describe('credentialFor', () => {
     const s = await claudeStatus(admin.id);
     expect(s.mode).toBe('none');
     expect(s.detail).toMatch(/failed its self-test/);
+    expect(s).toMatchObject({ cliOff: true, cliRetest: false });
+    vi.mocked(cliDisabled).mockResolvedValue({ reason: 'slow', at: '2026-10-17T10:00:00.000Z', retry: true, fails: 1 });
+    expect(await claudeStatus(admin.id)).toMatchObject({ mode: 'none', cliOff: true, cliRetest: true });
     vi.mocked(cliDisabled).mockResolvedValue(null);
     expect(await credentialFor(admin.id)).toEqual({ kind: 'cli' });
     expect((await claudeStatus(admin.id)).mode).toBe('cli');

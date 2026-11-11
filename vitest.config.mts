@@ -18,6 +18,12 @@ export default defineConfig({
     // Test-only values, so modules that call env() load in unit tests.
     env: {
       WAYPOINT_SECRET_KEY: 'BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=',
+      // Prisma reads the .env of the checkout into the test process. An empty value here
+      // stays, so the public URL and the Turnstile keys of a live copy cannot change the
+      // result of a test. A test that needs one of them sets it with vi.stubEnv.
+      WAYPOINT_PUBLIC_URL: '',
+      WAYPOINT_TURNSTILE_SECRET: '',
+      WAYPOINT_TURNSTILE_SITE_KEY: '',
     },
   },
 });

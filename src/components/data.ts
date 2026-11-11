@@ -127,7 +127,7 @@ export function useProfile() {
 }
 
 export type SessionRow = { id: string; current: boolean; userAgent: string | null; createdAt: string; lastSeenAt: string };
-export type ClaudeStatus = { mode: 'own' | 'shared' | 'cli' | 'none'; detail: string; keyHint: string | null; sharedAvailable: boolean; capUsd: number; sharedSpentUsd: number; capReached: boolean; resetsAt: string; cliOff?: boolean };
+export type ClaudeStatus = { mode: 'own' | 'shared' | 'cli' | 'none'; detail: string; keyHint: string | null; sharedAvailable: boolean; capUsd: number; sharedSpentUsd: number; capReached: boolean; resetsAt: string; cliOff?: boolean; cliRetest?: boolean };
 export type FailedBoard = { board: string; status: string; fetchedAt: string; error: string | null };
 export type SearchSettings = { fields: string[]; visaStatus: string; fieldChoices: string[] };
 export type UserRow = { id: string; email: string; name: string; role: string; disabled: boolean; createdAt: string; lastSeenAt: string | null; sharedSpentUsd: number };
